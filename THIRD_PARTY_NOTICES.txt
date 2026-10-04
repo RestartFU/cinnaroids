@@ -3387,8 +3387,9 @@ published-package provenance in their licenses/<name-version>/ directories.
 Build dependencies are included; their presence does not imply that their
 code is linked into the distributed WASM component.
 
-Cinnabar mod-api 0.1.3 — upstream license not declared
-Source and pinned revision: licenses/mod-api-0.1.3/UPSTREAM_SOURCE.txt.
+Cinnabar mod-api 0.1.4 — upstream license not declared
+Source and pinned revision: licenses/mod-api-0.1.4/UPSTREAM_SOURCE.txt.
+SDK revision: 7da8eac26deccbd0205059c1abecbe7a4702d2b0.
 The selected upstream package/workspace has no declared license and no
 root LICENSE or COPYING file. No license has been inferred or added.
 

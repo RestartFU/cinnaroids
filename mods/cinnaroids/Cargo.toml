@@ -14,7 +14,7 @@ resolver = "3"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-mod-api = { git = "https://github.com/bedrock-mc/cinnabar", rev = "385821098c39a44292b6e326c05867121a9d14bd" }
+mod-api = { git = "https://github.com/bedrock-mc/cinnabar", rev = "7da8eac26deccbd0205059c1abecbe7a4702d2b0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

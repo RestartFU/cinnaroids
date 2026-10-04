@@ -25,6 +25,10 @@ Completed local checks:
 - The real packaged WASM component passed a host execution probe within
   the 100,000-fuel callback budget, with no WASI imports.
 
+Upstream PR #88 was squash-merged into dev at 7da8eac26deccbd0205059c1abecbe7a4702d2b0.
+All six required CI jobs passed on the reviewed PR head 38582109.
+The module SDK and packaged host use that merged dev commit.
+
 Native GPU previews were inspected at 1280x720/GUI 2 and 2559x1439/GUI 3
 in dark mode, plus 1920x1080/GUI 4 in light mode, DPI 1. Compact cards,
 sharp text, clipping, layering, and colors passed inspection. Live tabs,
