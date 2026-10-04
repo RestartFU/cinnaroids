@@ -1,0 +1,4 @@
+License files retrieved unchanged from the exact published crate VCS commit
+identified by that crate's .cargo_vcs_info.json:
+
+https://raw.githubusercontent.com/fast/stacksafe/a5c029b7d3a5fe6771ecd79266b6e21313cfa174/LICENSE

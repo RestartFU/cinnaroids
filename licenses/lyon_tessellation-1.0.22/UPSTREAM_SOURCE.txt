@@ -1,0 +1,5 @@
+License files retrieved unchanged from the exact published crate VCS commit
+identified by that crate's .cargo_vcs_info.json:
+
+https://raw.githubusercontent.com/nical/lyon/b456b143215a1942a617c4672776b68b9a30feee/LICENSE-APACHE
+https://raw.githubusercontent.com/nical/lyon/b456b143215a1942a617c4672776b68b9a30feee/LICENSE-MIT

@@ -1,0 +1,32 @@
+Cinnabar clicker visual references
+================================
+
+The mark.svg and cinnabar-mark.svg assets are independently drawn C monograms
+created for this app. They do not contain copied logos or pixel data.
+The cinnabar-icon.png and cinnabar.ico files are raster conversions of the
+independently drawn cinnabar-mark.svg. The ICO contains 16, 32, 48, 64, 128
+and 256 pixel images.
+
+The minimize.svg, maximize.svg,
+restore.svg, and close.svg files are original 16x16 line icons for the regular
+top-right window controls. They contain no copied platform artwork.
+
+Design inspiration: the vermilion and coral palette of the Cinnabar project's
+red title art and cube icon, combined with the user's initial dark sidebar
+screenshot. Version 1.4.0 uses neutral charcoal or white surfaces, a single
+coral accent, two tabs and regular top-right window controls. Backgrounds are
+rendered by GPUI with native Windows acrylic. No Apple artwork or system
+assets are included.
+
+Reference repository: https://github.com/bedrock-mc/cinnabar/
+Inspected commit: bcf245974d6ba81f093141898defb5fb2c13b348
+Reference files: assets/branding/title.png, packaging/icons/cinnabar.svg,
+THIRD_PARTY_NOTICES.md.
+
+The repository's notices describe its launcher title and panorama as original
+art generated for Cinnabar. No license granting reuse of those branding assets
+was found, so neither is included in this distribution. No game resources are
+included.
+
+This is an independent external clicker app. It is not the Bedrock game client
+distributed by bedrock-mc/cinnabar and is not affiliated with its maintainers.

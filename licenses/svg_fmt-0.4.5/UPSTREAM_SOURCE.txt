@@ -1,0 +1,4 @@
+License files retrieved unchanged from the exact published crate VCS commit
+identified by that crate's .cargo_vcs_info.json:
+
+https://raw.githubusercontent.com/nical/rust_debug/93f414cd572b5c2781df93dbdc068ed13443d05a/LICENSE

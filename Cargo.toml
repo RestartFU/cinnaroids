@@ -1,0 +1,20 @@
+[package]
+name = "cinnabar-clicker"
+version = "1.4.0"
+edition = "2024"
+license = "MIT"
+description = "System-wide desktop clicker with a Rust GPUI interface"
+
+[dependencies]
+gpui = { version = "=0.2.2", default-features = false, features = ["windows-manifest"] }
+raw-window-handle = "=0.6.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_LibraryLoader", "Win32_System_Threading"] }
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+strip = true
+opt-level = 2

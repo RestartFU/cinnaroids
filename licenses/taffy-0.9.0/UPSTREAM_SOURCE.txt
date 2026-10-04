@@ -1,0 +1,4 @@
+License files retrieved unchanged from the exact published crate VCS commit
+identified by that crate's .cargo_vcs_info.json:
+
+https://raw.githubusercontent.com/DioxusLabs/taffy/599b1b7d7410d97e13bafc4c01fbe6d7a9cf060a/LICENSE.md

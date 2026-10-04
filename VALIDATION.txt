@@ -1,0 +1,53 @@
+Cinnabar clicker 1.4.0 — Windows x64
+
+Built from Rust source with GPUI 0.2.2 and Rust 1.93.1.
+Release build uses a statically linked MSVC runtime.
+
+Passed:
+- Sixteen unit/worker/settings/capture tests, with mocked input, including
+  native-backend reentry, cancellation during input delivery, toggle consumption,
+  release timing, legacy accent removal, dark-mode migration and explicit
+  light-mode persistence.
+  No generated desktop clicks.
+- cargo clippy --release --all-targets --locked -- -D warnings
+- Rust formatting.
+- Clicker and Preferences passed native checks in dark and light themes.
+  Twelve restored-window geometry checks confirmed no gap between the visible
+  DWM top edge and the client top, initially, after resize, and after restore.
+- Eighty title-drag/control/content checks and ninety-six native resize edge
+  and corner checks passed. Maximize and restore passed in all four variants;
+  each dedicated GPUI smoke process exited 0. No desktop input generated.
+- Native DWM corner preference ROUND and absence of a custom window region
+  previously verified for the unchanged corner configuration in v1.3.1.
+- Four own-client frame buffers visually inspected at 680x481 pixels. Both
+  pages fit without clipping. All four corner pixels are painted neutral gray:
+  dark BGRA [24,24,24,250], light [227,227,227,237]. The purple background,
+  decorative glows, Overview, sidebar and slogans are absent.
+  The distributed previews show the app's render target; they exclude native
+  DWM compositor clipping, including rounded outer corners.
+
+Windows owns the perimeter. The client fills its full rectangle without a
+separate 22-pixel curve or duplicate border. Windows 11 corner rounding is a
+compositor preference and can remain rectangular when maximized/snapped or
+unsupported. The border-color suppression attribute is setter-only; no border
+color readback is claimed.
+
+An app-owned native subclass removes GPUI's small restored-window top inset
+after the native border is suppressed. It retains side/bottom resize insets
+and maximized geometry, forwards normal messages, and detaches at destruction.
+The first frame refresh is posted after GPUI window registration to keep its
+viewport size synchronized. A painted four-logical-pixel band above the drag
+area keeps the top edge available for native resizing.
+
+The final executable uses the original unmodified GPUI dependency source.
+No temporary frame-buffer capture hook is included in the final build.
+Native Windows acrylic is enabled behind translucent glass surfaces. Its
+appearance depends on Windows transparency settings and graphics support.
+No generated mouse clicks were sent to the desktop during validation.
+Input generation retains the v1.2.1 behavior. The unused Overview reset-count
+API was removed; count assertions remain available to tests. The most recent
+explicit native
+lifecycle attempt could not start: F10 was already registered by another
+application (Windows error 1409). Native hook lifecycle previously passed
+on v1.1.0; live input compatibility remains unverified.
+Live game acceptance has not been tested.

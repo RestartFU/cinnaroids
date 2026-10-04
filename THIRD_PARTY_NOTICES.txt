@@ -1,0 +1,3372 @@
+Cinnabar clicker — Third-party notices
+====================================
+
+This application uses GPUI and other Rust packages. Its own source and
+independently drawn branding assets are covered by the root LICENSE.txt.
+Upstream package licenses and notices are retained under
+licenses/<name-version>/. Files are copied unchanged from exact locally
+downloaded crate versions. Where a crate omitted standalone license files,
+some were retrieved from the exact published crate VCS commit; their source
+URLs are recorded in the corresponding UPSTREAM_SOURCE.txt.
+
+This inventory covers every external package in Cargo.lock, including
+optional dependencies, build tools, and dependencies for other platforms.
+An entry in this inventory does not imply that package is linked into the
+Windows executable. Refer to Cargo.toml for enabled application features.
+License expressions, authors, and repositories below come from each exact
+published crate Cargo.toml; copyright holders are not inferred from authors.
+
+Direct dependencies (resolved versions)
+--------------------------------------
+embed-resource 3.0.11 — MIT
+gpui 0.2.2 — Apache-2.0
+raw-window-handle 0.6.2 — MIT OR Apache-2.0 OR Zlib
+serde 1.0.229 — MIT OR Apache-2.0
+serde_json 1.0.151 — MIT OR Apache-2.0
+windows-sys 0.61.2 — MIT OR Apache-2.0
+
+Full Cargo.lock package inventory
+---------------------------------
+
+adler2 2.0.1
+License: 0BSD OR MIT OR Apache-2.0
+Repository: https://github.com/oyvindln/adler2
+Published authors: Jonas Schievink <jonasschievink@gmail.com>; oyvindln <oyvindln@users.noreply.github.com>
+Retained files: licenses/adler2-2.0.1/LICENSE-0BSD, licenses/adler2-2.0.1/LICENSE-APACHE, licenses/adler2-2.0.1/LICENSE-MIT
+
+aes 0.8.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/block-ciphers
+Published authors: RustCrypto Developers
+Retained files: licenses/aes-0.8.4/LICENSE-APACHE, licenses/aes-0.8.4/LICENSE-MIT
+
+aho-corasick 1.1.5
+License: Unlicense OR MIT
+Repository: https://github.com/BurntSushi/aho-corasick
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/aho-corasick-1.1.5/COPYING, licenses/aho-corasick-1.1.5/LICENSE-MIT, licenses/aho-corasick-1.1.5/UNLICENSE
+
+aligned 0.4.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-embedded-community/aligned
+Retained files: licenses/aligned-0.4.3/LICENSE-APACHE, licenses/aligned-0.4.3/LICENSE-MIT
+
+aligned-vec 0.6.4
+License: MIT
+Repository: https://github.com/sarah-ek/aligned-vec/
+Published authors: sarah <>
+Retained files: licenses/aligned-vec-0.6.4/LICENSE
+
+anyhow 1.0.104
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/anyhow
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/anyhow-1.0.104/LICENSE-APACHE, licenses/anyhow-1.0.104/LICENSE-MIT
+
+ar_archive_writer 0.5.3
+License: Apache-2.0 WITH LLVM-exception
+Repository: https://github.com/rust-lang/ar_archive_writer
+Retained files: licenses/ar_archive_writer-0.5.3/LICENSE.txt
+
+arbitrary 1.4.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-fuzz/arbitrary/
+Published authors: The Rust-Fuzz Project Developers; Nick Fitzgerald <fitzgen@gmail.com>; Manish Goregaokar <manishsmail@gmail.com>; Simonas Kazlauskas <arbitrary@kazlauskas.me>; Brian L. Troutwine <brian@troutwine.us>; Corey Farwell <coreyf@rwell.org>
+Retained files: licenses/arbitrary-1.4.2/LICENSE-APACHE, licenses/arbitrary-1.4.2/LICENSE-MIT
+
+arg_enum_proc_macro 0.3.4
+License: MIT
+Repository: https://github.com/lu-zero/arg_enum_proc_macro
+Published authors: Luca Barbato <lu_zero@gentoo.org>
+Retained files: licenses/arg_enum_proc_macro-0.3.4/LICENSE
+
+arrayref 0.3.9
+License: BSD-2-Clause
+Repository: https://github.com/droundy/arrayref
+Published authors: David Roundy <roundyd@physics.oregonstate.edu>
+Retained files: licenses/arrayref-0.3.9/LICENSE
+
+arrayvec 0.7.8
+License: MIT OR Apache-2.0
+Repository: https://github.com/bluss/arrayvec
+Published authors: bluss
+Retained files: licenses/arrayvec-0.7.8/LICENSE-APACHE, licenses/arrayvec-0.7.8/LICENSE-MIT
+
+as-slice 0.2.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/japaric/as-slice
+Published authors: Jorge Aparicio <jorge@japaric.io>; Emil Fresk <emil.fresk@gmail.com>
+Retained files: licenses/as-slice-0.2.1/LICENSE-APACHE, licenses/as-slice-0.2.1/LICENSE-MIT
+
+ashpd 0.12.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+async-broadcast 0.7.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/smol-rs/async-broadcast
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Yoshua Wuyts <yoshuawuyts@gmail.com>; Zeeshan Ali Khan <zeeshanak@gnome.org>
+Retained files: licenses/async-broadcast-0.7.2/LICENSE-APACHE, licenses/async-broadcast-0.7.2/LICENSE-MIT
+
+async-channel 1.9.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-channel
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-channel-1.9.0/LICENSE-APACHE, licenses/async-channel-1.9.0/LICENSE-MIT
+
+async-channel 2.5.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-channel
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-channel-2.5.0/LICENSE-APACHE, licenses/async-channel-2.5.0/LICENSE-MIT
+
+async-compression 0.4.50
+License: MIT OR Apache-2.0
+Repository: https://github.com/Nullus157/async-compression
+Published authors: Wim Looman <wim@nemo157.com>; Allen Bui <fairingrey@gmail.com>
+Retained files: licenses/async-compression-0.4.50/LICENSE-APACHE, licenses/async-compression-0.4.50/LICENSE-MIT
+
+async-executor 1.14.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-executor
+Published authors: Stjepan Glavina <stjepang@gmail.com>; John Nunley <dev@notgull.net>
+Retained files: licenses/async-executor-1.14.0/LICENSE-APACHE, licenses/async-executor-1.14.0/LICENSE-MIT
+
+async-fs 2.2.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-fs
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-fs-2.2.0/LICENSE-APACHE, licenses/async-fs-2.2.0/LICENSE-MIT
+
+async-global-executor 2.4.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/Keruspe/async-global-executor
+Published authors: Marc-Antoine Perennou <Marc-Antoine@Perennou.com>
+Retained files: licenses/async-global-executor-2.4.1/LICENSE-APACHE, licenses/async-global-executor-2.4.1/LICENSE-MIT
+
+async-io 2.6.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-io
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-io-2.6.0/LICENSE-APACHE, licenses/async-io-2.6.0/LICENSE-MIT
+
+async-lock 3.4.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-lock
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-lock-3.4.2/LICENSE-APACHE, licenses/async-lock-3.4.2/LICENSE-MIT
+
+async-net 2.0.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-net
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-net-2.0.0/LICENSE-APACHE, licenses/async-net-2.0.0/LICENSE-MIT
+
+async-process 2.5.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-process
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-process-2.5.0/LICENSE-APACHE, licenses/async-process-2.5.0/LICENSE-MIT
+
+async-recursion 1.2.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+async-signal 0.2.14
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+async-std 1.13.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/async-rs/async-std
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Yoshua Wuyts <yoshuawuyts@gmail.com>; Friedel Ziegelmayer <me@dignifiedquire.com>; Contributors to async-std
+Retained files: licenses/async-std-1.13.2/LICENSE-APACHE, licenses/async-std-1.13.2/LICENSE-MIT
+
+async-task 4.7.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/async-task
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/async-task-4.7.1/LICENSE-APACHE, licenses/async-task-4.7.1/LICENSE-MIT
+
+async-trait 0.1.92
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+async_zip 0.0.17
+License: MIT
+Repository: https://github.com/Majored/rs-async-zip
+Published authors: Harry [hello@majored.pw]
+Retained files: licenses/async_zip-0.0.17/LICENSE
+
+atomic 0.5.3
+License: Apache-2.0/MIT
+Repository: https://github.com/Amanieu/atomic-rs
+Published authors: Amanieu d'Antras <amanieu@gmail.com>
+Retained files: licenses/atomic-0.5.3/LICENSE-APACHE, licenses/atomic-0.5.3/LICENSE-MIT
+
+atomic-waker 1.1.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/atomic-waker
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Contributors to futures-rs
+Retained files: licenses/atomic-waker-1.1.2/LICENSE-APACHE, licenses/atomic-waker-1.1.2/LICENSE-MIT, licenses/atomic-waker-1.1.2/LICENSE-THIRD-PARTY
+
+autocfg 1.5.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/cuviper/autocfg
+Published authors: Josh Stone <cuviper@gmail.com>
+Retained files: licenses/autocfg-1.5.1/LICENSE-APACHE, licenses/autocfg-1.5.1/LICENSE-MIT
+
+av-scenechange 0.14.1
+License: MIT
+Repository: https://github.com/rust-av/av-scenechange
+Published authors: Josh Holmer <jholmer.in@gmail.com>
+Retained files: licenses/av-scenechange-0.14.1/LICENSE
+
+av1-grain 0.2.5
+License: BSD-2-Clause
+Repository: https://github.com/rust-av/av1-grain
+Retained files: licenses/av1-grain-0.2.5/LICENSE
+
+avif-serialize 0.8.9
+License: BSD-3-Clause
+Repository: https://github.com/kornelski/avif-serialize
+Published authors: Kornel Lesiński <kornel@geekhood.net>
+Retained files: licenses/avif-serialize-0.8.9/LICENSE
+
+base64 0.22.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/marshallpierce/rust-base64
+Published authors: Marshall Pierce <marshall@mpierce.org>
+Retained files: licenses/base64-0.22.1/LICENSE-APACHE, licenses/base64-0.22.1/LICENSE-MIT
+
+bindgen 0.71.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+bit-set 0.8.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/contain-rs/bit-set
+Published authors: Alexis Beingessner <a.beingessner@gmail.com>
+Retained files: licenses/bit-set-0.8.0/LICENSE-APACHE, licenses/bit-set-0.8.0/LICENSE-MIT
+
+bit-vec 0.8.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/contain-rs/bit-vec
+Published authors: Alexis Beingessner <a.beingessner@gmail.com>
+Retained files: licenses/bit-vec-0.8.0/LICENSE-APACHE, licenses/bit-vec-0.8.0/LICENSE-MIT
+
+bit_field 0.10.3
+License: Apache-2.0/MIT
+Repository: https://github.com/phil-opp/rust-bit-field
+Published authors: Philipp Oppermann <dev@phil-opp.com>
+Retained files: licenses/bit_field-0.10.3/LICENSE-APACHE, licenses/bit_field-0.10.3/LICENSE-MIT
+
+bitflags 1.3.2
+License: MIT/Apache-2.0
+Repository: https://github.com/bitflags/bitflags
+Published authors: The Rust Project Developers
+Retained files: licenses/bitflags-1.3.2/LICENSE-APACHE, licenses/bitflags-1.3.2/LICENSE-MIT
+
+bitflags 2.13.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/bitflags/bitflags
+Published authors: The Rust Project Developers
+Retained files: licenses/bitflags-2.13.2/LICENSE-APACHE, licenses/bitflags-2.13.2/LICENSE-MIT
+
+bitstream-io 4.10.0
+License: MIT/Apache-2.0
+Repository: https://github.com/tuffy/bitstream-io
+Published authors: Brian Langenberger <bjl@usa.net>
+Retained files: licenses/bitstream-io-4.10.0/LICENSE-APACHE, licenses/bitstream-io-4.10.0/LICENSE-MIT
+
+block 0.1.6
+License: MIT
+Repository: http://github.com/SSheldon/rust-block
+Published authors: Steven Sheldon
+Retained files: none present in the exact local crate source
+
+block-buffer 0.10.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/utils
+Published authors: RustCrypto Developers
+Retained files: licenses/block-buffer-0.10.4/LICENSE-APACHE, licenses/block-buffer-0.10.4/LICENSE-MIT
+
+block-buffer 0.12.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/utils
+Published authors: RustCrypto Developers
+Retained files: licenses/block-buffer-0.12.1/LICENSE-APACHE, licenses/block-buffer-0.12.1/LICENSE-MIT
+
+block-padding 0.3.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+blocking 1.7.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/blocking
+Retained files: licenses/blocking-1.7.0/LICENSE-APACHE, licenses/blocking-1.7.0/LICENSE-MIT
+
+bstr 1.13.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/BurntSushi/bstr
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/bstr-1.13.1/COPYING, licenses/bstr-1.13.1/LICENSE-APACHE, licenses/bstr-1.13.1/LICENSE-MIT
+
+built 0.8.1
+License: MIT
+Repository: https://github.com/lukaslueg/built
+Published authors: Lukas Lueg <lukas.lueg@gmail.com>
+Retained files: licenses/built-0.8.1/LICENSE
+
+bumpalo 3.20.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/fitzgen/bumpalo
+Published authors: Nick Fitzgerald <fitzgen@gmail.com>
+Retained files: licenses/bumpalo-3.20.3/LICENSE-APACHE, licenses/bumpalo-3.20.3/LICENSE-MIT
+
+bytemuck 1.25.2
+License: Zlib OR Apache-2.0 OR MIT
+Repository: https://github.com/Lokathor/bytemuck
+Published authors: Lokathor <zefria@gmail.com>
+Retained files: licenses/bytemuck-1.25.2/LICENSE-APACHE, licenses/bytemuck-1.25.2/LICENSE-MIT, licenses/bytemuck-1.25.2/LICENSE-ZLIB
+
+byteorder-lite 0.1.0
+License: Unlicense OR MIT
+Repository: https://github.com/image-rs/byteorder-lite
+Retained files: licenses/byteorder-lite-0.1.0/LICENSE-MIT, licenses/byteorder-lite-0.1.0/UNLICENSE
+
+bytes 1.12.1
+License: MIT
+Repository: https://github.com/tokio-rs/bytes
+Published authors: Carl Lerche <me@carllerche.com>; Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/bytes-1.12.1/LICENSE
+
+calloop 0.13.0
+License: MIT
+Repository: https://github.com/Smithay/calloop
+Published authors: Elinor Berger <elinor@safaradeg.net>
+Retained files: licenses/calloop-0.13.0/LICENSE.txt
+
+cbc 0.1.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+cbindgen 0.28.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+cc 1.6.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/cc-rs
+Retained files: licenses/cc-1.6.0/LICENSE-APACHE, licenses/cc-1.6.0/LICENSE-MIT
+
+cexpr 0.6.0
+License: Apache-2.0/MIT
+Repository: https://github.com/jethrogb/rust-cexpr
+Published authors: Jethro Beekman <jethro@jbeekman.nl>
+Retained files: licenses/cexpr-0.6.0/LICENSE-APACHE, licenses/cexpr-0.6.0/LICENSE-MIT
+
+cfg-if 1.0.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/cfg-if
+Published authors: Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/cfg-if-1.0.5/LICENSE-APACHE, licenses/cfg-if-1.0.5/LICENSE-MIT
+
+cfg_aliases 0.2.2
+License: MIT
+Repository: https://github.com/katharostech/cfg_aliases
+Published authors: Zicklag <zicklag@katharostech.com>
+Retained files: licenses/cfg_aliases-0.2.2/LICENSE, licenses/cfg_aliases-0.2.2/NOTICES.md
+
+cgl 0.3.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+chacha20 0.10.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/stream-ciphers
+Published authors: RustCrypto Developers
+Retained files: licenses/chacha20-0.10.2/LICENSE-APACHE, licenses/chacha20-0.10.2/LICENSE-MIT
+
+cipher 0.4.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/traits
+Published authors: RustCrypto Developers
+Retained files: licenses/cipher-0.4.4/LICENSE-APACHE, licenses/cipher-0.4.4/LICENSE-MIT
+
+clang-sys 1.9.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+cocoa 0.26.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+cocoa-foundation 0.2.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+codespan-reporting 0.12.0
+License: Apache-2.0
+Repository: https://github.com/brendanzab/codespan
+Published authors: Brendan Zabarauskas <bjzaba@yahoo.com.au>
+Retained files: licenses/codespan-reporting-0.12.0/LICENSE
+
+color_quant 1.1.0
+License: MIT
+Repository: https://github.com/image-rs/color_quant.git
+Published authors: nwin <nwin@users.noreply.github.com>
+Retained files: licenses/color_quant-1.1.0/LICENSE
+
+command-fds 0.3.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+compression-codecs 0.4.45
+License: MIT OR Apache-2.0
+Repository: https://github.com/Nullus157/async-compression
+Published authors: Wim Looman <wim@nemo157.com>; Allen Bui <fairingrey@gmail.com>
+Retained files: licenses/compression-codecs-0.4.45/LICENSE-APACHE, licenses/compression-codecs-0.4.45/LICENSE-MIT
+
+compression-core 0.4.33
+License: MIT OR Apache-2.0
+Repository: https://github.com/Nullus157/async-compression
+Published authors: Wim Looman <wim@nemo157.com>; Allen Bui <fairingrey@gmail.com>
+Retained files: licenses/compression-core-0.4.33/LICENSE-APACHE, licenses/compression-core-0.4.33/LICENSE-MIT
+
+concurrent-queue 2.5.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/concurrent-queue
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Taiki Endo <te316e89@gmail.com>; John Nunley <dev@notgull.net>
+Retained files: licenses/concurrent-queue-2.5.0/LICENSE-APACHE, licenses/concurrent-queue-2.5.0/LICENSE-MIT
+
+const-oid 0.10.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/RustCrypto/formats
+Published authors: RustCrypto Developers
+Retained files: licenses/const-oid-0.10.2/LICENSE-APACHE, licenses/const-oid-0.10.2/LICENSE-MIT
+
+convert_case 0.4.0
+License: MIT
+Repository: https://github.com/rutrum/convert-case
+Published authors: David Purdum <purdum41@gmail.com>
+Retained files: none present in the exact local crate source
+
+core-foundation 0.10.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+core-foundation 0.9.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/core-foundation-rs
+Published authors: The Servo Project Developers
+Retained files: licenses/core-foundation-0.9.4/LICENSE-APACHE, licenses/core-foundation-0.9.4/LICENSE-MIT
+
+core-foundation-sys 0.8.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/core-foundation-rs
+Published authors: The Servo Project Developers
+Retained files: licenses/core-foundation-sys-0.8.7/LICENSE-APACHE, licenses/core-foundation-sys-0.8.7/LICENSE-MIT
+
+core-graphics 0.24.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+core-graphics-types 0.1.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/core-foundation-rs
+Published authors: The Servo Project Developers
+Retained files: licenses/core-graphics-types-0.1.3/LICENSE-APACHE, licenses/core-graphics-types-0.1.3/LICENSE-MIT
+
+core-graphics-types 0.2.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/core-foundation-rs
+Published authors: The Servo Project Developers
+Retained files: licenses/core-graphics-types-0.2.0/LICENSE-APACHE, licenses/core-graphics-types-0.2.0/LICENSE-MIT
+
+core-graphics2 0.4.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+core-text 21.0.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+core-video 0.4.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+core_detect 1.0.0
+License: MIT/Apache-2.0
+Repository: https://github.com/thomcc/core_detect
+Published authors: Thom Chiovoloni <chiovolonit@gmail.com>
+Retained files: licenses/core_detect-1.0.0/LICENSE-APACHE, licenses/core_detect-1.0.0/LICENSE-MIT
+
+core_maths 0.1.1
+License: MIT
+Repository: https://github.com/robertbastian/core_maths
+Published authors: Robert Bastian <me@robertbastian.dev
+Retained files: licenses/core_maths-0.1.1/LICENSE
+
+cpufeatures 0.2.17
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/utils
+Published authors: RustCrypto Developers
+Retained files: licenses/cpufeatures-0.2.17/LICENSE-APACHE, licenses/cpufeatures-0.2.17/LICENSE-MIT
+
+cpufeatures 0.3.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/utils
+Published authors: RustCrypto Developers
+Retained files: licenses/cpufeatures-0.3.1/LICENSE-APACHE, licenses/cpufeatures-0.3.1/LICENSE-MIT
+
+crc32fast 1.5.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/srijs/rust-crc32fast
+Published authors: Sam Rijs <srijs@airpost.net>; Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/crc32fast-1.5.2/LICENSE-APACHE, licenses/crc32fast-1.5.2/LICENSE-MIT
+
+crossbeam-deque 0.8.8
+License: MIT OR Apache-2.0
+Repository: https://github.com/crossbeam-rs/crossbeam
+Retained files: licenses/crossbeam-deque-0.8.8/LICENSE-APACHE, licenses/crossbeam-deque-0.8.8/LICENSE-MIT
+
+crossbeam-epoch 0.9.21
+License: MIT OR Apache-2.0
+Repository: https://github.com/crossbeam-rs/crossbeam
+Retained files: licenses/crossbeam-epoch-0.9.21/LICENSE-APACHE, licenses/crossbeam-epoch-0.9.21/LICENSE-MIT
+
+crossbeam-queue 0.3.14
+License: MIT OR Apache-2.0
+Repository: https://github.com/crossbeam-rs/crossbeam
+Retained files: licenses/crossbeam-queue-0.3.14/LICENSE-APACHE, licenses/crossbeam-queue-0.3.14/LICENSE-MIT
+
+crossbeam-utils 0.8.23
+License: MIT OR Apache-2.0
+Repository: https://github.com/crossbeam-rs/crossbeam
+Retained files: licenses/crossbeam-utils-0.8.23/LICENSE-APACHE, licenses/crossbeam-utils-0.8.23/LICENSE-MIT
+
+crunchy 0.2.4
+License: MIT
+Repository: https://github.com/eira-fransham/crunchy
+Published authors: Eira Fransham <jackefransham@gmail.com>
+Retained files: licenses/crunchy-0.2.4/LICENSE
+
+crypto-common 0.1.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/traits
+Published authors: RustCrypto Developers
+Retained files: licenses/crypto-common-0.1.7/LICENSE-APACHE, licenses/crypto-common-0.1.7/LICENSE-MIT
+
+crypto-common 0.2.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/traits
+Published authors: RustCrypto Developers
+Retained files: licenses/crypto-common-0.2.2/LICENSE-APACHE, licenses/crypto-common-0.2.2/LICENSE-MIT
+
+ctor 0.4.3
+License: Apache-2.0 OR MIT
+Repository: https://github.com/mmastrac/rust-ctor
+Published authors: Matt Mastracci <matthew@mastracci.com>
+Retained files: licenses/ctor-0.4.3/LICENSE-APACHE, licenses/ctor-0.4.3/LICENSE-MIT
+
+ctor-proc-macro 0.0.6
+License: Apache-2.0 OR MIT
+Repository: https://github.com/mmastrac/rust-ctor
+Published authors: Matt Mastracci <matthew@mastracci.com>
+Retained files: licenses/ctor-proc-macro-0.0.6/LICENSE-APACHE, licenses/ctor-proc-macro-0.0.6/LICENSE-MIT
+
+data-url 0.3.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-url
+Published authors: Simon Sapin <simon.sapin@exyr.org>
+Retained files: licenses/data-url-0.3.2/LICENSE-APACHE, licenses/data-url-0.3.2/LICENSE-MIT
+
+deflate64 0.1.12
+License: MIT
+Repository: https://github.com/anatawa12/deflate64-rs
+Published authors: anatawa12 <anatawa12@icloud.com>
+Retained files: licenses/deflate64-0.1.12/LICENSE
+
+derive_more 0.99.20
+License: MIT
+Repository: https://github.com/JelteF/derive_more
+Published authors: Jelte Fennema <github-tech@jeltef.nl>
+Retained files: licenses/derive_more-0.99.20/LICENSE
+
+digest 0.10.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/traits
+Published authors: RustCrypto Developers
+Retained files: licenses/digest-0.10.7/LICENSE-APACHE, licenses/digest-0.10.7/LICENSE-MIT
+
+digest 0.11.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/traits
+Published authors: RustCrypto Developers
+Retained files: licenses/digest-0.11.3/LICENSE-APACHE, licenses/digest-0.11.3/LICENSE-MIT
+
+dirs 4.0.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/soc/dirs-rs
+Published authors: Simon Ochsenreither <simon@ochsenreither.de>
+Retained files: licenses/dirs-4.0.0/LICENSE-APACHE, licenses/dirs-4.0.0/LICENSE-MIT
+
+dirs-sys 0.3.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/dirs-dev/dirs-sys-rs
+Published authors: Simon Ochsenreither <simon@ochsenreither.de>
+Retained files: licenses/dirs-sys-0.3.7/LICENSE-APACHE, licenses/dirs-sys-0.3.7/LICENSE-MIT
+
+displaydoc 0.2.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/yaahc/displaydoc
+Published authors: Jane Lusby <jlusby@yaah.dev>
+Retained files: licenses/displaydoc-0.2.7/LICENSE-APACHE, licenses/displaydoc-0.2.7/LICENSE-MIT
+
+dtor 0.0.6
+License: Apache-2.0 OR MIT
+Repository: https://github.com/mmastrac/rust-ctor
+Published authors: Matt Mastracci <matthew@mastracci.com>
+Retained files: licenses/dtor-0.0.6/LICENSE-APACHE, licenses/dtor-0.0.6/LICENSE-MIT, licenses/dtor-0.0.6/UPSTREAM_SOURCE.txt
+
+dtor-proc-macro 0.0.5
+License: Apache-2.0 OR MIT
+Repository: https://github.com/mmastrac/rust-ctor
+Published authors: Matt Mastracci <matthew@mastracci.com>
+Retained files: licenses/dtor-proc-macro-0.0.5/LICENSE-APACHE, licenses/dtor-proc-macro-0.0.5/LICENSE-MIT, licenses/dtor-proc-macro-0.0.5/UPSTREAM_SOURCE.txt
+
+dunce 1.0.5
+License: CC0-1.0 OR MIT-0 OR Apache-2.0
+Repository: https://gitlab.com/kornelski/dunce
+Published authors: Kornel <kornel@geekhood.net>
+Retained files: licenses/dunce-1.0.5/LICENSE
+
+dyn-clone 1.0.20
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/dyn-clone
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/dyn-clone-1.0.20/LICENSE-APACHE, licenses/dyn-clone-1.0.20/LICENSE-MIT
+
+either 1.18.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rayon-rs/either
+Retained files: licenses/either-1.18.0/LICENSE-APACHE, licenses/either-1.18.0/LICENSE-MIT
+
+embed-resource 3.0.11
+License: MIT
+Repository: https://github.com/nabijaczleweli/rust-embed-resource
+Published authors: наб <nabijaczleweli@nabijaczleweli.xyz>; Cat Plus Plus <piotrlegnica@piotrl.pl>; Liigo <liigo@qq.com>; azyobuzin <azyobuzin@users.sourceforge.jp>; Peter Atashian <retep998@gmail.com>; pravic <ehysta@gmail.com>; Gabriel Majeri <gabriel.majeri6@gmail.com>; SonnyX; Johan Andersson <repi@repi.se>; Jordan Poles <jpdev.noreply@gmail.com>; MSxDOS <melcodos@gmail.com>; Jim McGrath <jimmc2@gmail.com>; roblabla <unfiltered@roblab.la>; Jasper Bekkers <jasper@traverseresearch.nl>; Richard Markiewicz <rmarkiewicz@devolutions.net>; Emerson de Freitas Barcelos <emersonfxbx@gmail.com>; Li Keqing <me@kaze.ai>; Alexis Bourget <alexis.bourget@gmail.com>; Michael Farrell <micolous+git@gmail.com>; Jacob Okamoto <oko@oko.io>; Marijn Suijten <marijn@traverseresearch.nl>; Lucas Nogueira <lucas@tauri.app>; CharlesChen0823 <yongchen0823@gmail.com>; Daniel Schaefer <dhs@frame.work>; Rene Leonhardt; ssrlive; Kan-Ru Chen <kanru@kanru.info>; Tony <legendmastertony@gmail.com>; Berrysoft <Strawberry_Str@hotmail.com>; Marcus Ahlberg <marcus.ahlberg@kvaser.com>
+Retained files: licenses/embed-resource-3.0.11/LICENSE
+
+encoding_rs 0.8.42
+License: (Apache-2.0 OR MIT) AND BSD-3-Clause
+Repository: https://github.com/hsivonen/encoding_rs
+Published authors: Henri Sivonen <hsivonen@hsivonen.fi>
+Retained files: licenses/encoding_rs-0.8.42/COPYRIGHT, licenses/encoding_rs-0.8.42/LICENSE-APACHE, licenses/encoding_rs-0.8.42/LICENSE-MIT, licenses/encoding_rs-0.8.42/LICENSE-WHATWG
+
+endi 1.1.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+enumflags2 0.7.12
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+enumflags2_derive 0.7.12
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+equator 0.4.2
+License: MIT
+Repository: https://github.com/sarah-ek/equator/
+Published authors: sarah <>
+Retained files: licenses/equator-0.4.2/LICENSE
+
+equator-macro 0.4.2
+License: MIT
+Repository: https://github.com/sarah-ek/equator/
+Published authors: sarah <>
+Retained files: licenses/equator-macro-0.4.2/LICENSE
+
+equivalent 1.0.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/indexmap-rs/equivalent
+Retained files: licenses/equivalent-1.0.2/LICENSE-APACHE, licenses/equivalent-1.0.2/LICENSE-MIT
+
+erased-serde 0.4.10
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/erased-serde
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/erased-serde-0.4.10/LICENSE-APACHE, licenses/erased-serde-0.4.10/LICENSE-MIT
+
+errno 0.3.14
+License: MIT OR Apache-2.0
+Repository: https://github.com/lambda-fairy/rust-errno
+Published authors: Chris Wong <lambda.fairy@gmail.com>; Dan Gohman <dev@sunfishcode.online>
+Retained files: licenses/errno-0.3.14/LICENSE-APACHE, licenses/errno-0.3.14/LICENSE-MIT
+
+etagere 0.2.15
+License: MIT/Apache-2.0
+Repository: https://github.com/nical/etagere
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/etagere-0.2.15/LICENSE-APACHE, licenses/etagere-0.2.15/LICENSE-MIT
+
+euclid 0.22.14
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/euclid
+Published authors: The Servo Project Developers
+Retained files: licenses/euclid-0.22.14/COPYRIGHT, licenses/euclid-0.22.14/LICENSE-APACHE, licenses/euclid-0.22.14/LICENSE-MIT
+
+event-listener 2.5.3
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/event-listener
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/event-listener-2.5.3/LICENSE-APACHE, licenses/event-listener-2.5.3/LICENSE-MIT
+
+event-listener 5.4.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/event-listener
+Published authors: Stjepan Glavina <stjepang@gmail.com>; John Nunley <dev@notgull.net>
+Retained files: licenses/event-listener-5.4.2/LICENSE-APACHE, licenses/event-listener-5.4.2/LICENSE-MIT
+
+event-listener-strategy 0.5.4
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/event-listener-strategy
+Published authors: John Nunley <dev@notgull.net>
+Retained files: licenses/event-listener-strategy-0.5.4/LICENSE-APACHE, licenses/event-listener-strategy-0.5.4/LICENSE-MIT
+
+exr 1.74.2
+License: BSD-3-Clause
+Repository: https://github.com/johannesvollmer/exrs
+Published authors: johannesvollmer <contact@johannesvollmer.com>
+Retained files: licenses/exr-1.74.2/LICENSE.md
+
+fastrand 1.9.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/fastrand
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/fastrand-1.9.0/LICENSE-APACHE, licenses/fastrand-1.9.0/LICENSE-MIT
+
+fastrand 2.5.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/fastrand
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/fastrand-2.5.0/LICENSE-APACHE, licenses/fastrand-2.5.0/LICENSE-MIT
+
+fax 0.2.7
+License: MIT
+Repository: https://github.com/pdf-rs/fax
+Published authors: Sebastian K <s3bk@protonmail.com>
+Retained files: licenses/fax-0.2.7/LICENSE
+
+fdeflate 0.3.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/fdeflate
+Published authors: The image-rs Developers
+Retained files: licenses/fdeflate-0.3.7/LICENSE-APACHE, licenses/fdeflate-0.3.7/LICENSE-MIT
+
+filetime 0.2.29
+License: MIT/Apache-2.0
+Repository: https://github.com/alexcrichton/filetime
+Published authors: Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/filetime-0.2.29/LICENSE-APACHE, licenses/filetime-0.2.29/LICENSE-MIT
+
+find-msvc-tools 0.1.14
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/cc-rs
+Retained files: licenses/find-msvc-tools-0.1.14/LICENSE-APACHE, licenses/find-msvc-tools-0.1.14/LICENSE-MIT
+
+flate2 1.1.10
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/flate2-rs
+Published authors: Alex Crichton <alex@alexcrichton.com>; Josh Triplett <josh@joshtriplett.org>
+Retained files: licenses/flate2-1.1.10/LICENSE-APACHE, licenses/flate2-1.1.10/LICENSE-MIT
+
+float-cmp 0.9.0
+License: MIT
+Repository: https://github.com/mikedilger/float-cmp
+Published authors: Mike Dilger <mike@mikedilger.com>
+Retained files: licenses/float-cmp-0.9.0/LICENSE
+
+float_next_after 1.0.0
+License: MIT
+Repository: https://gitlab.com/bronsonbdevost/next_afterf
+Published authors: Bronson Brown-deVost <bronsonbdevost@gmail.com>
+Retained files: licenses/float_next_after-1.0.0/LICENSE
+
+flume 0.11.1
+License: Apache-2.0/MIT
+Repository: https://github.com/zesterer/flume
+Published authors: Joshua Barretto <joshua.s.barretto@gmail.com>
+Retained files: licenses/flume-0.11.1/LICENSE-APACHE, licenses/flume-0.11.1/LICENSE-MIT
+
+fnv 1.0.7
+License: Apache-2.0 / MIT
+Repository: https://github.com/servo/rust-fnv
+Published authors: Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/fnv-1.0.7/LICENSE-APACHE, licenses/fnv-1.0.7/LICENSE-MIT
+
+foldhash 0.1.5
+License: Zlib
+Repository: https://github.com/orlp/foldhash
+Published authors: Orson Peters <orsonpeters@gmail.com>
+Retained files: licenses/foldhash-0.1.5/LICENSE
+
+fontconfig-parser 0.5.8
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+fontdb 0.23.0
+License: MIT
+Repository: https://github.com/RazrFalcon/fontdb
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/fontdb-0.23.0/LICENSE, licenses/fontdb-0.23.0/tests/fonts/LICENSE.txt
+
+foreign-types 0.5.0
+License: MIT/Apache-2.0
+Repository: https://github.com/sfackler/foreign-types
+Published authors: Steven Fackler <sfackler@gmail.com>
+Retained files: licenses/foreign-types-0.5.0/LICENSE-APACHE, licenses/foreign-types-0.5.0/LICENSE-MIT
+
+foreign-types-macros 0.2.4
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+foreign-types-shared 0.3.1
+License: MIT/Apache-2.0
+Repository: https://github.com/sfackler/foreign-types
+Published authors: Steven Fackler <sfackler@gmail.com>
+Retained files: licenses/foreign-types-shared-0.3.1/LICENSE-APACHE, licenses/foreign-types-shared-0.3.1/LICENSE-MIT
+
+form_urlencoded 1.2.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-url
+Published authors: The rust-url developers
+Retained files: licenses/form_urlencoded-1.2.2/LICENSE-APACHE, licenses/form_urlencoded-1.2.2/LICENSE-MIT
+
+futf 0.1.5
+License: MIT / Apache-2.0
+Repository: https://github.com/servo/futf
+Published authors: Keegan McAllister <kmcallister@mozilla.com>
+Retained files: licenses/futf-0.1.5/LICENSE-APACHE, licenses/futf-0.1.5/LICENSE-MIT
+
+futures 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-0.3.34/LICENSE-APACHE, licenses/futures-0.3.34/LICENSE-MIT
+
+futures-channel 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-channel-0.3.34/LICENSE-APACHE, licenses/futures-channel-0.3.34/LICENSE-MIT
+
+futures-core 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-core-0.3.34/LICENSE-APACHE, licenses/futures-core-0.3.34/LICENSE-MIT
+
+futures-executor 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-executor-0.3.34/LICENSE-APACHE, licenses/futures-executor-0.3.34/LICENSE-MIT
+
+futures-io 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-io-0.3.34/LICENSE-APACHE, licenses/futures-io-0.3.34/LICENSE-MIT
+
+futures-lite 1.13.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/futures-lite
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Contributors to futures-rs
+Retained files: licenses/futures-lite-1.13.0/LICENSE-APACHE, licenses/futures-lite-1.13.0/LICENSE-MIT, licenses/futures-lite-1.13.0/LICENSE-THIRD-PARTY
+
+futures-lite 2.6.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/futures-lite
+Published authors: Stjepan Glavina <stjepang@gmail.com>; Contributors to futures-rs
+Retained files: licenses/futures-lite-2.6.1/LICENSE-APACHE, licenses/futures-lite-2.6.1/LICENSE-MIT, licenses/futures-lite-2.6.1/LICENSE-THIRD-PARTY
+
+futures-macro 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-macro-0.3.34/LICENSE-APACHE, licenses/futures-macro-0.3.34/LICENSE-MIT
+
+futures-sink 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-sink-0.3.34/LICENSE-APACHE, licenses/futures-sink-0.3.34/LICENSE-MIT
+
+futures-task 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-task-0.3.34/LICENSE-APACHE, licenses/futures-task-0.3.34/LICENSE-MIT
+
+futures-util 0.3.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/futures-rs
+Retained files: licenses/futures-util-0.3.34/LICENSE-APACHE, licenses/futures-util-0.3.34/LICENSE-MIT
+
+generic-array 0.14.7
+License: MIT
+Repository: https://github.com/fizyk20/generic-array.git
+Published authors: Bartłomiej Kamiński <fizyk20@gmail.com>; Aaron Trent <novacrazy@gmail.com>
+Retained files: licenses/generic-array-0.14.7/LICENSE
+
+getrandom 0.2.17
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/getrandom
+Published authors: The Rand Project Developers
+Retained files: licenses/getrandom-0.2.17/LICENSE-APACHE, licenses/getrandom-0.2.17/LICENSE-MIT
+
+getrandom 0.3.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/getrandom
+Published authors: The Rand Project Developers
+Retained files: licenses/getrandom-0.3.4/LICENSE-APACHE, licenses/getrandom-0.3.4/LICENSE-MIT
+
+getrandom 0.4.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/getrandom
+Published authors: The Rand Project Developers
+Retained files: licenses/getrandom-0.4.3/LICENSE-APACHE, licenses/getrandom-0.4.3/LICENSE-MIT
+
+gif 0.14.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/image-gif
+Published authors: The image-rs Developers
+Retained files: licenses/gif-0.14.2/LICENSE-APACHE, licenses/gif-0.14.2/LICENSE-MIT
+
+glob 0.3.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/glob
+Published authors: The Rust Project Developers
+Retained files: licenses/glob-0.3.4/LICENSE-APACHE, licenses/glob-0.3.4/LICENSE-MIT
+
+globset 0.4.20
+License: Unlicense OR MIT
+Repository: https://github.com/BurntSushi/ripgrep/tree/master/crates/globset
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/globset-0.4.20/COPYING, licenses/globset-0.4.20/LICENSE-MIT, licenses/globset-0.4.20/UNLICENSE
+
+gloo-timers 0.3.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+gpui 0.2.2
+License: Apache-2.0
+Repository: https://github.com/zed-industries/zed
+Published authors: Nathan Sobo <nathan@zed.dev>
+Retained files: licenses/gpui-0.2.2/LICENSE-APACHE
+
+gpui-macros 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui-macros-0.2.2/LICENSE-APACHE
+
+gpui_collections 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_collections-0.2.2/LICENSE-APACHE
+
+gpui_derive_refineable 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_derive_refineable-0.2.2/LICENSE-APACHE
+
+gpui_http_client 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_http_client-0.2.2/LICENSE-APACHE
+
+gpui_media 0.2.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+gpui_perf 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_perf-0.2.2/LICENSE-APACHE
+
+gpui_refineable 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_refineable-0.2.2/LICENSE-APACHE
+
+gpui_semantic_version 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_semantic_version-0.2.2/LICENSE-APACHE
+
+gpui_sum_tree 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_sum_tree-0.2.2/LICENSE-APACHE
+
+gpui_util 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_util-0.2.2/LICENSE-APACHE
+
+gpui_util_macros 0.2.2
+License: Apache-2.0
+Retained files: licenses/gpui_util_macros-0.2.2/LICENSE-APACHE
+
+grid 0.18.0
+License: MIT
+Repository: https://github.com/becheran/grid
+Published authors: Armin Becher <armin.becher@gmai.com>
+Retained files: licenses/grid-0.18.0/LICENSE
+
+h2 0.4.19
+License: MIT
+Repository: https://github.com/hyperium/h2
+Published authors: Carl Lerche <me@carllerche.com>; Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/h2-0.4.19/LICENSE
+
+half 2.7.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/VoidStarKat/half-rs
+Published authors: Kathryn Long <squeeself@gmail.com>
+Retained files: licenses/half-2.7.1/LICENSE-APACHE, licenses/half-2.7.1/LICENSE-MIT
+
+hashbrown 0.15.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/hashbrown
+Published authors: Amanieu d'Antras <amanieu@gmail.com>
+Retained files: licenses/hashbrown-0.15.5/LICENSE-APACHE, licenses/hashbrown-0.15.5/LICENSE-MIT
+
+hashbrown 0.17.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/hashbrown
+Retained files: licenses/hashbrown-0.17.1/LICENSE-APACHE, licenses/hashbrown-0.17.1/LICENSE-MIT
+
+heck 0.4.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+heck 0.5.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/withoutboats/heck
+Retained files: licenses/heck-0.5.0/LICENSE-APACHE, licenses/heck-0.5.0/LICENSE-MIT
+
+hermit-abi 0.5.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+hex 0.4.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+hexf-parse 0.2.1
+License: CC0-1.0
+Repository: https://github.com/lifthrasiir/hexf
+Published authors: Kang Seonghoon <public+rust@mearie.org>
+Retained files: none present in the exact local crate source
+
+hkdf 0.12.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/KDFs/
+Published authors: RustCrypto Developers
+Retained files: licenses/hkdf-0.12.4/LICENSE-APACHE, licenses/hkdf-0.12.4/LICENSE-MIT
+
+hmac 0.12.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/MACs
+Published authors: RustCrypto Developers
+Retained files: licenses/hmac-0.12.1/LICENSE-APACHE, licenses/hmac-0.12.1/LICENSE-MIT
+
+home 0.5.12
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/cargo
+Published authors: Brian Anderson <andersrb@gmail.com>
+Retained files: licenses/home-0.5.12/LICENSE-APACHE, licenses/home-0.5.12/LICENSE-MIT
+
+http 1.5.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/hyperium/http
+Published authors: Alex Crichton <alex@alexcrichton.com>; Carl Lerche <me@carllerche.com>; Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/http-1.5.0/LICENSE-APACHE, licenses/http-1.5.0/LICENSE-MIT
+
+http-body 1.1.0
+License: MIT
+Repository: https://github.com/hyperium/http-body
+Published authors: Carl Lerche <me@carllerche.com>; Lucio Franco <luciofranco14@gmail.com>; Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/http-body-1.1.0/LICENSE
+
+http-body-util 0.1.5
+License: MIT
+Repository: https://github.com/hyperium/http-body
+Published authors: Carl Lerche <me@carllerche.com>; Lucio Franco <luciofranco14@gmail.com>; Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/http-body-util-0.1.5/LICENSE
+
+httparse 1.10.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/seanmonstar/httparse
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/httparse-1.10.1/LICENSE-APACHE, licenses/httparse-1.10.1/LICENSE-MIT
+
+hybrid-array 0.4.15
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/hybrid-array
+Published authors: RustCrypto Developers
+Retained files: licenses/hybrid-array-0.4.15/LICENSE-APACHE, licenses/hybrid-array-0.4.15/LICENSE-MIT
+
+hyper 1.11.1
+License: MIT
+Repository: https://github.com/hyperium/hyper
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/hyper-1.11.1/LICENSE
+
+hyper-rustls 0.27.10
+License: Apache-2.0 OR ISC OR MIT
+Repository: https://github.com/rustls/hyper-rustls
+Retained files: licenses/hyper-rustls-0.27.10/LICENSE-APACHE, licenses/hyper-rustls-0.27.10/LICENSE-ISC, licenses/hyper-rustls-0.27.10/LICENSE-MIT
+
+hyper-util 0.1.21
+License: MIT
+Repository: https://github.com/hyperium/hyper-util
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/hyper-util-0.1.21/LICENSE
+
+icu_collections 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_collections-2.3.0/LICENSE
+
+icu_locale_core 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_locale_core-2.3.0/LICENSE
+
+icu_normalizer 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_normalizer-2.3.0/LICENSE
+
+icu_normalizer_data 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_normalizer_data-2.3.0/LICENSE
+
+icu_properties 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_properties-2.3.0/LICENSE
+
+icu_properties_data 2.3.0
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_properties_data-2.3.0/LICENSE
+
+icu_provider 2.3.1
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/icu_provider-2.3.1/LICENSE
+
+idna 1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-url/
+Published authors: The rust-url developers
+Retained files: licenses/idna-1.1.0/LICENSE-APACHE, licenses/idna-1.1.0/LICENSE-MIT
+
+idna_adapter 1.2.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/hsivonen/idna_adapter
+Published authors: The rust-url developers
+Retained files: licenses/idna_adapter-1.2.2/LICENSE-APACHE, licenses/idna_adapter-1.2.2/LICENSE-MIT
+
+image 0.25.10
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/image
+Published authors: The image-rs Developers
+Retained files: licenses/image-0.25.10/LICENSE-APACHE, licenses/image-0.25.10/LICENSE-MIT
+
+image-webp 0.2.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/image-webp
+Retained files: licenses/image-webp-0.2.4/LICENSE-APACHE, licenses/image-webp-0.2.4/LICENSE-MIT
+
+imagesize 0.13.0
+License: MIT
+Repository: https://github.com/Roughsketch/imagesize
+Published authors: Maid Dog <maiddogsrl@gmail.com>
+Retained files: licenses/imagesize-0.13.0/LICENSE
+
+imgref 1.12.3
+License: CC0-1.0 OR Apache-2.0
+Repository: https://github.com/kornelski/imgref
+Published authors: Kornel Lesiński <kornel@geekhood.net>
+Retained files: licenses/imgref-1.12.3/LICENSE-APACHE, licenses/imgref-1.12.3/LICENSE-CC0
+
+indexmap 2.14.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/indexmap-rs/indexmap
+Retained files: licenses/indexmap-2.14.2/LICENSE-APACHE, licenses/indexmap-2.14.2/LICENSE-MIT
+
+inout 0.1.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/utils
+Published authors: RustCrypto Developers
+Retained files: licenses/inout-0.1.4/LICENSE-APACHE, licenses/inout-0.1.4/LICENSE-MIT
+
+instant 0.1.13
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+interpolate_name 0.2.4
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+inventory 0.3.24
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/inventory
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/inventory-0.3.24/LICENSE-APACHE, licenses/inventory-0.3.24/LICENSE-MIT
+
+io-surface 0.16.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+ipnet 2.12.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/krisprice/ipnet
+Published authors: Kris Price <kris@krisprice.nz>
+Retained files: licenses/ipnet-2.12.2/LICENSE-APACHE, licenses/ipnet-2.12.2/LICENSE-MIT
+
+itertools 0.13.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+itertools 0.14.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-itertools/itertools
+Published authors: bluss
+Retained files: licenses/itertools-0.14.0/LICENSE-APACHE, licenses/itertools-0.14.0/LICENSE-MIT
+
+itoa 1.0.18
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/itoa
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/itoa-1.0.18/LICENSE-APACHE, licenses/itoa-1.0.18/LICENSE-MIT
+
+jobserver 0.1.35
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/jobserver-rs
+Published authors: Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/jobserver-0.1.35/LICENSE-APACHE, licenses/jobserver-0.1.35/LICENSE-MIT
+
+js-sys 0.3.106
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+kurbo 0.11.3
+License: Apache-2.0 OR MIT
+Repository: https://github.com/linebender/kurbo
+Published authors: Raph Levien <raph.levien@gmail.com>
+Retained files: licenses/kurbo-0.11.3/LICENSE-APACHE, licenses/kurbo-0.11.3/LICENSE-MIT
+
+kv-log-macro 1.0.7
+License: MIT OR Apache-2.0
+Repository: https://github.com/yoshuawuyts/kv-log-macro
+Published authors: Yoshua Wuyts <yoshuawuyts@gmail.com>
+Retained files: licenses/kv-log-macro-1.0.7/LICENSE-APACHE, licenses/kv-log-macro-1.0.7/LICENSE-MIT
+
+lazy_static 1.5.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+leak 0.1.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+leaky-cow 0.1.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+lebe 0.5.3
+License: BSD-3-Clause
+Repository: https://github.com/johannesvollmer/lebe
+Published authors: johannesvollmer <contact@johannesvollmer.com>
+Retained files: licenses/lebe-0.5.3/LICENSE-BSD-3-Clause
+
+libc 0.2.190
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/libc
+Retained files: licenses/libc-0.2.190/LICENSE-APACHE, licenses/libc-0.2.190/LICENSE-MIT
+
+libfuzzer-sys 0.4.13
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+libloading 0.8.9
+License: ISC
+Repository: https://github.com/nagisa/rust_libloading/
+Published authors: Simonas Kazlauskas <libloading@kazlauskas.me>
+Retained files: licenses/libloading-0.8.9/LICENSE
+
+libm 0.2.16
+License: MIT
+Repository: https://github.com/rust-lang/compiler-builtins
+Published authors: Alex Crichton <alex@alexcrichton.com>; Amanieu d'Antras <amanieu@gmail.com>; Jorge Aparicio <japaricious@gmail.com>; Trevor Gross <tg@trevorgross.com>
+Retained files: licenses/libm-0.2.16/LICENSE.txt
+
+libredox 0.1.25
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+linux-raw-sys 0.12.1
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/sunfishcode/linux-raw-sys
+Published authors: Dan Gohman <dev@sunfishcode.online>
+Retained files: licenses/linux-raw-sys-0.12.1/COPYRIGHT, licenses/linux-raw-sys-0.12.1/LICENSE-APACHE, licenses/linux-raw-sys-0.12.1/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/linux-raw-sys-0.12.1/LICENSE-MIT
+
+linux-raw-sys 0.4.15
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/sunfishcode/linux-raw-sys
+Published authors: Dan Gohman <dev@sunfishcode.online>
+Retained files: licenses/linux-raw-sys-0.4.15/COPYRIGHT, licenses/linux-raw-sys-0.4.15/LICENSE-APACHE, licenses/linux-raw-sys-0.4.15/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/linux-raw-sys-0.4.15/LICENSE-MIT
+
+litemap 0.8.3
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/litemap-0.8.3/LICENSE
+
+lock_api 0.4.14
+License: MIT OR Apache-2.0
+Repository: https://github.com/Amanieu/parking_lot
+Published authors: Amanieu d'Antras <amanieu@gmail.com>
+Retained files: licenses/lock_api-0.4.14/LICENSE-APACHE, licenses/lock_api-0.4.14/LICENSE-MIT
+
+log 0.4.34
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/log
+Published authors: The Rust Project Developers
+Retained files: licenses/log-0.4.34/LICENSE-APACHE, licenses/log-0.4.34/LICENSE-MIT
+
+loop9 0.1.5
+License: MIT
+Repository: https://gitlab.com/kornelski/loop9.git
+Published authors: Kornel <kornel@geekhood.net>
+Retained files: licenses/loop9-0.1.5/LICENSE
+
+lru-slab 0.1.3
+License: MIT OR Apache-2.0 OR Zlib
+Repository: https://github.com/Ralith/lru-slab
+Published authors: Benjamin Saunders <ben.e.saunders@gmail.com>
+Retained files: licenses/lru-slab-0.1.3/LICENSE-APACHE, licenses/lru-slab-0.1.3/LICENSE-MIT, licenses/lru-slab-0.1.3/LICENSE-ZLIB
+
+lyon 1.0.19
+License: MIT OR Apache-2.0
+Repository: https://github.com/nical/lyon
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/lyon-1.0.19/LICENSE-APACHE, licenses/lyon-1.0.19/LICENSE-MIT, licenses/lyon-1.0.19/UPSTREAM_SOURCE.txt
+
+lyon_algorithms 1.0.21
+License: MIT OR Apache-2.0
+Repository: https://github.com/nical/lyon
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/lyon_algorithms-1.0.21/LICENSE-APACHE, licenses/lyon_algorithms-1.0.21/LICENSE-MIT, licenses/lyon_algorithms-1.0.21/UPSTREAM_SOURCE.txt
+
+lyon_geom 1.0.19
+License: MIT OR Apache-2.0
+Repository: https://github.com/nical/lyon
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/lyon_geom-1.0.19/LICENSE-APACHE, licenses/lyon_geom-1.0.19/LICENSE-MIT, licenses/lyon_geom-1.0.19/UPSTREAM_SOURCE.txt
+
+lyon_path 1.0.19
+License: MIT OR Apache-2.0
+Repository: https://github.com/nical/lyon
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/lyon_path-1.0.19/LICENSE-APACHE, licenses/lyon_path-1.0.19/LICENSE-MIT, licenses/lyon_path-1.0.19/UPSTREAM_SOURCE.txt
+
+lyon_tessellation 1.0.22
+License: MIT OR Apache-2.0
+Repository: https://github.com/nical/lyon
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/lyon_tessellation-1.0.22/LICENSE-APACHE, licenses/lyon_tessellation-1.0.22/LICENSE-MIT, licenses/lyon_tessellation-1.0.22/UPSTREAM_SOURCE.txt
+
+mac 0.1.1
+License: MIT/Apache-2.0
+Repository: https://github.com/reem/rust-mac.git
+Published authors: Jonathan Reem <jonathan.reem@gmail.com>
+Retained files: none present in the exact local crate source
+
+malloc_buf 0.0.6
+License: MIT
+Repository: https://github.com/SSheldon/malloc_buf
+Published authors: Steven Sheldon
+Retained files: none present in the exact local crate source
+
+maybe-rayon 0.1.1
+License: MIT
+Repository: https://github.com/shssoichiro/maybe-rayon
+Retained files: licenses/maybe-rayon-0.1.1/LICENSE
+
+md-5 0.10.6
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+memchr 2.8.3
+License: Unlicense OR MIT
+Repository: https://github.com/BurntSushi/memchr
+Published authors: Andrew Gallant <jamslam@gmail.com>; bluss
+Retained files: licenses/memchr-2.8.3/COPYING, licenses/memchr-2.8.3/LICENSE-MIT, licenses/memchr-2.8.3/UNLICENSE
+
+memmap2 0.9.11
+License: MIT OR Apache-2.0
+Repository: https://github.com/RazrFalcon/memmap2-rs
+Published authors: Dan Burkert <dan@danburkert.com>; Yevhenii Reizner <razrfalcon@gmail.com>; The Contributors
+Retained files: licenses/memmap2-0.9.11/LICENSE-APACHE, licenses/memmap2-0.9.11/LICENSE-MIT
+
+memoffset 0.9.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+metal 0.29.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+mime 0.3.17
+License: MIT OR Apache-2.0
+Repository: https://github.com/hyperium/mime
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/mime-0.3.17/LICENSE-APACHE, licenses/mime-0.3.17/LICENSE-MIT
+
+mime_guess 2.0.5
+License: MIT
+Repository: https://github.com/abonander/mime_guess
+Published authors: Austin Bonander <austin.bonander@gmail.com>
+Retained files: licenses/mime_guess-2.0.5/LICENSE
+
+minimal-lexical 0.2.1
+License: MIT/Apache-2.0
+Repository: https://github.com/Alexhuszagh/minimal-lexical
+Published authors: Alex Huszagh <ahuszagh@gmail.com>
+Retained files: licenses/minimal-lexical-0.2.1/LICENSE-APACHE, licenses/minimal-lexical-0.2.1/LICENSE-MIT, licenses/minimal-lexical-0.2.1/LICENSE.md
+
+miniz_oxide 0.8.9
+License: MIT OR Zlib OR Apache-2.0
+Repository: https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
+Published authors: Frommi <daniil.liferenko@gmail.com>; oyvindln <oyvindln@users.noreply.github.com>; Rich Geldreich richgel99@gmail.com
+Retained files: licenses/miniz_oxide-0.8.9/LICENSE, licenses/miniz_oxide-0.8.9/LICENSE-APACHE.md, licenses/miniz_oxide-0.8.9/LICENSE-MIT.md, licenses/miniz_oxide-0.8.9/LICENSE-ZLIB.md
+
+miniz_oxide 0.9.1
+License: MIT OR Zlib OR Apache-2.0
+Repository: https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
+Published authors: Frommi <daniil.liferenko@gmail.com>; oyvindln <oyvindln@users.noreply.github.com>; Rich Geldreich richgel99@gmail.com
+Retained files: licenses/miniz_oxide-0.9.1/LICENSE, licenses/miniz_oxide-0.9.1/LICENSE-APACHE.md, licenses/miniz_oxide-0.9.1/LICENSE-MIT.md, licenses/miniz_oxide-0.9.1/LICENSE-ZLIB.md
+
+mio 1.2.4
+License: MIT
+Repository: https://github.com/tokio-rs/mio
+Published authors: Carl Lerche <me@carllerche.com>; Thomas de Zeeuw <thomasdezeeuw@gmail.com>; Tokio Contributors <team@tokio.rs>
+Retained files: licenses/mio-1.2.4/LICENSE
+
+moxcms 0.8.1
+License: BSD-3-Clause OR Apache-2.0
+Repository: https://github.com/awxkee/moxcms.git
+Published authors: Radzivon Bartoshyk
+Retained files: licenses/moxcms-0.8.1/LICENSE-APACHE.md, licenses/moxcms-0.8.1/LICENSE.md
+
+multiversion_no_op 1.0.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/hsivonen/multiversion_no_op
+Published authors: Henri Sivonen <hsivonen@hsivonen.fi>
+Retained files: licenses/multiversion_no_op-1.0.0/COPYRIGHT, licenses/multiversion_no_op-1.0.0/LICENSE-APACHE, licenses/multiversion_no_op-1.0.0/LICENSE-MIT
+
+naga 25.0.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+nanorand 0.7.0
+License: Zlib
+Repository: https://github.com/Absolucy/nanorand-rs
+Published authors: Lucy <lucy@absolucy.moe>
+Retained files: licenses/nanorand-0.7.0/LICENSE.md
+
+new_debug_unreachable 1.0.6
+License: MIT
+Repository: https://github.com/mbrubeck/rust-debug-unreachable
+Published authors: Matt Brubeck <mbrubeck@limpet.net>; Jonathan Reem <jonathan.reem@gmail.com>
+Retained files: licenses/new_debug_unreachable-1.0.6/LICENSE-MIT
+
+nix 0.29.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+nix 0.31.3
+License: MIT
+Repository: https://github.com/nix-rust/nix
+Retained files: licenses/nix-0.31.3/LICENSE
+
+no_std_io2 0.9.4
+License: Apache-2.0 OR MIT
+Repository: https://github.com/wcampbell0x2a/no-std-io2
+Retained files: licenses/no_std_io2-0.9.4/LICENSE-APACHE, licenses/no_std_io2-0.9.4/LICENSE-MIT
+
+nom 7.1.3
+License: MIT
+Repository: https://github.com/Geal/nom
+Published authors: contact@geoffroycouprie.com
+Retained files: licenses/nom-7.1.3/LICENSE
+
+nom 8.0.0
+License: MIT
+Repository: https://github.com/rust-bakery/nom
+Published authors: contact@geoffroycouprie.com
+Retained files: licenses/nom-8.0.0/LICENSE
+
+noop_proc_macro 0.3.0
+License: MIT
+Repository: https://github.com/lu-zero/noop_proc_macro
+Published authors: Luca Barbato <lu_zero@gentoo.org>
+Retained files: licenses/noop_proc_macro-0.3.0/LICENSE
+
+num 0.4.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+num-bigint 0.4.8
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-bigint
+Published authors: The Rust Project Developers
+Retained files: licenses/num-bigint-0.4.8/LICENSE-APACHE, licenses/num-bigint-0.4.8/LICENSE-MIT
+
+num-bigint-dig 0.8.6
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+num-complex 0.4.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-complex
+Published authors: The Rust Project Developers
+Retained files: licenses/num-complex-0.4.6/LICENSE-APACHE, licenses/num-complex-0.4.6/LICENSE-MIT
+
+num-derive 0.4.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-derive
+Published authors: The Rust Project Developers
+Retained files: licenses/num-derive-0.4.2/LICENSE-APACHE, licenses/num-derive-0.4.2/LICENSE-MIT
+
+num-integer 0.1.47
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-integer
+Published authors: The Rust Project Developers
+Retained files: licenses/num-integer-0.1.47/LICENSE-APACHE, licenses/num-integer-0.1.47/LICENSE-MIT
+
+num-iter 0.1.46
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+num-rational 0.4.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-rational
+Published authors: The Rust Project Developers
+Retained files: licenses/num-rational-0.4.2/LICENSE-APACHE, licenses/num-rational-0.4.2/LICENSE-MIT
+
+num-traits 0.2.19
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-num/num-traits
+Published authors: The Rust Project Developers
+Retained files: licenses/num-traits-0.2.19/LICENSE-APACHE, licenses/num-traits-0.2.19/LICENSE-MIT
+
+num_cpus 1.17.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/seanmonstar/num_cpus
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/num_cpus-1.17.0/LICENSE-APACHE, licenses/num_cpus-1.17.0/LICENSE-MIT
+
+objc 0.2.7
+License: MIT
+Repository: http://github.com/SSheldon/rust-objc
+Published authors: Steven Sheldon
+Retained files: licenses/objc-0.2.7/LICENSE.txt
+
+object 0.39.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/gimli-rs/object
+Retained files: licenses/object-0.39.1/LICENSE-APACHE, licenses/object-0.39.1/LICENSE-MIT
+
+once_cell 1.21.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/matklad/once_cell
+Published authors: Aleksey Kladov <aleksey.kladov@gmail.com>
+Retained files: licenses/once_cell-1.21.4/LICENSE-APACHE, licenses/once_cell-1.21.4/LICENSE-MIT
+
+oo7 0.5.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+openssl-probe 0.2.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+ordered-stream 0.2.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+parking 2.2.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/parking
+Published authors: Stjepan Glavina <stjepang@gmail.com>; The Rust Project Developers
+Retained files: licenses/parking-2.2.1/LICENSE-APACHE, licenses/parking-2.2.1/LICENSE-MIT, licenses/parking-2.2.1/LICENSE-THIRD-PARTY
+
+parking_lot 0.12.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/Amanieu/parking_lot
+Published authors: Amanieu d'Antras <amanieu@gmail.com>
+Retained files: licenses/parking_lot-0.12.5/LICENSE-APACHE, licenses/parking_lot-0.12.5/LICENSE-MIT
+
+parking_lot_core 0.9.12
+License: MIT OR Apache-2.0
+Repository: https://github.com/Amanieu/parking_lot
+Published authors: Amanieu d'Antras <amanieu@gmail.com>
+Retained files: licenses/parking_lot_core-0.9.12/LICENSE-APACHE, licenses/parking_lot_core-0.9.12/LICENSE-MIT
+
+paste 1.0.15
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/paste
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/paste-1.0.15/LICENSE-APACHE, licenses/paste-1.0.15/LICENSE-MIT
+
+pastey 0.1.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/as1100k/pastey
+Published authors: Aditya Kumar <git@adityais.dev>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/pastey-0.1.1/LICENSE-APACHE, licenses/pastey-0.1.1/LICENSE-MIT
+
+pathfinder_geometry 0.5.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+pathfinder_simd 0.5.6
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+pbkdf2 0.12.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+percent-encoding 2.3.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-url/
+Published authors: The rust-url developers
+Retained files: licenses/percent-encoding-2.3.2/LICENSE-APACHE, licenses/percent-encoding-2.3.2/LICENSE-MIT
+
+pico-args 0.5.0
+License: MIT
+Repository: https://github.com/RazrFalcon/pico-args
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/pico-args-0.5.0/LICENSE
+
+pin-project 1.1.13
+License: Apache-2.0 OR MIT
+Repository: https://github.com/taiki-e/pin-project
+Retained files: licenses/pin-project-1.1.13/LICENSE-APACHE, licenses/pin-project-1.1.13/LICENSE-MIT
+
+pin-project-internal 1.1.13
+License: Apache-2.0 OR MIT
+Repository: https://github.com/taiki-e/pin-project
+Retained files: licenses/pin-project-internal-1.1.13/LICENSE-APACHE, licenses/pin-project-internal-1.1.13/LICENSE-MIT
+
+pin-project-lite 0.2.17
+License: Apache-2.0 OR MIT
+Repository: https://github.com/taiki-e/pin-project-lite
+Retained files: licenses/pin-project-lite-0.2.17/LICENSE-APACHE, licenses/pin-project-lite-0.2.17/LICENSE-MIT
+
+pin-utils 0.1.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/pin-utils
+Published authors: Josef Brandl <mail@josefbrandl.de>
+Retained files: licenses/pin-utils-0.1.1/LICENSE-APACHE, licenses/pin-utils-0.1.1/LICENSE-MIT
+
+piper 0.2.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/smol-rs/piper
+Published authors: Stjepan Glavina <stjepang@gmail.com>; John Nunley <dev@notgull.net>
+Retained files: licenses/piper-0.2.5/LICENSE-APACHE, licenses/piper-0.2.5/LICENSE-MIT
+
+png 0.17.16
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/image-png
+Published authors: The image-rs Developers
+Retained files: licenses/png-0.17.16/LICENSE-APACHE, licenses/png-0.17.16/LICENSE-MIT
+
+png 0.18.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/image-png
+Published authors: The image-rs Developers
+Retained files: licenses/png-0.18.1/LICENSE-APACHE, licenses/png-0.18.1/LICENSE-MIT
+
+polling 3.11.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/polling
+Published authors: Stjepan Glavina <stjepang@gmail.com>; John Nunley <dev@notgull.net>
+Retained files: licenses/polling-3.11.0/LICENSE-APACHE, licenses/polling-3.11.0/LICENSE-MIT
+
+pollster 0.2.5
+License: Apache-2.0/MIT
+Repository: https://github.com/zesterer/pollster
+Published authors: Joshua Barretto <joshua.s.barretto@gmail.com>
+Retained files: licenses/pollster-0.2.5/LICENSE-APACHE, licenses/pollster-0.2.5/LICENSE-MIT
+
+postage 0.5.0
+License: MIT
+Repository: https://github.com/austinjones/postage-rs
+Published authors: Austin Jones <implAustin@gmail.com>
+Retained files: licenses/postage-0.5.0/LICENSE
+
+potential_utf 0.1.6
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/potential_utf-0.1.6/LICENSE
+
+ppv-lite86 0.2.21
+License: MIT OR Apache-2.0
+Repository: https://github.com/cryptocorrosion/cryptocorrosion
+Published authors: The CryptoCorrosion Contributors
+Retained files: licenses/ppv-lite86-0.2.21/LICENSE-APACHE, licenses/ppv-lite86-0.2.21/LICENSE-MIT
+
+prettyplease 0.2.37
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/prettyplease
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/prettyplease-0.2.37/LICENSE-APACHE, licenses/prettyplease-0.2.37/LICENSE-MIT
+
+proc-macro-crate 3.5.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/bkchr/proc-macro-crate
+Published authors: Bastian Köcher <git@kchr.de>
+Retained files: licenses/proc-macro-crate-3.5.0/LICENSE-APACHE, licenses/proc-macro-crate-3.5.0/LICENSE-MIT
+
+proc-macro-error-attr2 2.0.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/GnomedDev/proc-macro-error-2
+Published authors: CreepySkeleton <creepy-skeleton@yandex.ru>; GnomedDev <david2005thomas@gmail.com>
+Retained files: licenses/proc-macro-error-attr2-2.0.0/LICENSE-APACHE, licenses/proc-macro-error-attr2-2.0.0/LICENSE-MIT
+
+proc-macro-error2 2.0.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/GnomedDev/proc-macro-error-2
+Published authors: CreepySkeleton <creepy-skeleton@yandex.ru>; GnomedDev <david2005thomas@gmail.com>
+Retained files: licenses/proc-macro-error2-2.0.1/LICENSE-APACHE, licenses/proc-macro-error2-2.0.1/LICENSE-MIT
+
+proc-macro2 1.0.107
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/proc-macro2
+Published authors: David Tolnay <dtolnay@gmail.com>; Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/proc-macro2-1.0.107/LICENSE-APACHE, licenses/proc-macro2-1.0.107/LICENSE-MIT
+
+profiling 1.0.18
+License: MIT OR Apache-2.0
+Repository: https://github.com/aclysma/profiling
+Published authors: Philip Degarmo <aclysma@gmail.com>
+Retained files: licenses/profiling-1.0.18/LICENSE-APACHE, licenses/profiling-1.0.18/LICENSE-MIT, licenses/profiling-1.0.18/UPSTREAM_SOURCE.txt
+
+profiling-procmacros 1.0.18
+License: MIT OR Apache-2.0
+Repository: https://github.com/aclysma/profiling
+Published authors: Philip Degarmo <aclysma@gmail.com>
+Retained files: licenses/profiling-procmacros-1.0.18/LICENSE-APACHE, licenses/profiling-procmacros-1.0.18/LICENSE-MIT, licenses/profiling-procmacros-1.0.18/UPSTREAM_SOURCE.txt
+
+psm 0.1.32
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/stacker/
+Published authors: Simonas Kazlauskas <psm@kazlauskas.me>
+Retained files: licenses/psm-0.1.32/LICENSE-APACHE, licenses/psm-0.1.32/LICENSE-MIT
+
+pulp 0.22.3
+License: MIT
+Repository: https://github.com/sarah-quinones/pulp/
+Published authors: sarah quiñones <sarah@veganb.tw>
+Retained files: licenses/pulp-0.22.3/LICENSE
+
+pulp-wasm-simd-flag 0.1.1
+License: MIT
+Repository: https://github.com/sarah-quinones/pulp/
+Published authors: sarah quiñones <sarah@veganb.tw>
+Retained files: licenses/pulp-wasm-simd-flag-0.1.1/LICENSE, licenses/pulp-wasm-simd-flag-0.1.1/UPSTREAM_SOURCE.txt
+
+pxfm 0.1.30
+License: BSD-3-Clause OR Apache-2.0
+Repository: https://github.com/awxkee/pxfm
+Published authors: Radzivon Bartoshyk
+Retained files: licenses/pxfm-0.1.30/LICENSE-APACHE.md, licenses/pxfm-0.1.30/LICENSE.md
+
+qoi 0.4.1
+License: MIT/Apache-2.0
+Repository: https://github.com/aldanor/qoi-rust
+Published authors: Ivan Smirnov <rust@ivan.smirnov.ie>
+Retained files: licenses/qoi-0.4.1/LICENSE-APACHE, licenses/qoi-0.4.1/LICENSE-MIT
+
+quick-error 2.0.1
+License: MIT/Apache-2.0
+Repository: http://github.com/tailhook/quick-error
+Published authors: Paul Colomiets <paul@colomiets.name>; Colin Kiegel <kiegel@gmx.de>
+Retained files: licenses/quick-error-2.0.1/LICENSE-APACHE, licenses/quick-error-2.0.1/LICENSE-MIT
+
+quinn 0.11.12
+License: MIT OR Apache-2.0
+Repository: https://github.com/quinn-rs/quinn
+Retained files: licenses/quinn-0.11.12/LICENSE-APACHE, licenses/quinn-0.11.12/LICENSE-MIT
+
+quinn-proto 0.11.19
+License: MIT OR Apache-2.0
+Repository: https://github.com/quinn-rs/quinn
+Retained files: licenses/quinn-proto-0.11.19/LICENSE-APACHE, licenses/quinn-proto-0.11.19/LICENSE-MIT
+
+quinn-udp 0.5.16
+License: MIT OR Apache-2.0
+Repository: https://github.com/quinn-rs/quinn
+Retained files: licenses/quinn-udp-0.5.16/LICENSE-APACHE, licenses/quinn-udp-0.5.16/LICENSE-MIT
+
+quote 1.0.47
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/quote
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/quote-1.0.47/LICENSE-APACHE, licenses/quote-1.0.47/LICENSE-MIT
+
+r-efi 5.3.0
+License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
+Repository: https://github.com/r-efi/r-efi
+Retained files: none present in the exact local crate source
+
+r-efi 6.0.0
+License: MIT OR Apache-2.0 OR LGPL-2.1-or-later
+Repository: https://github.com/r-efi/r-efi
+Retained files: none present in the exact local crate source
+
+rand 0.10.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers
+Retained files: licenses/rand-0.10.3/COPYRIGHT, licenses/rand-0.10.3/LICENSE-APACHE, licenses/rand-0.10.3/LICENSE-MIT
+
+rand 0.8.8
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+rand 0.9.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers
+Retained files: licenses/rand-0.9.5/COPYRIGHT, licenses/rand-0.9.5/LICENSE-APACHE, licenses/rand-0.9.5/LICENSE-MIT
+
+rand_chacha 0.3.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers; The CryptoCorrosion Contributors
+Retained files: licenses/rand_chacha-0.3.1/COPYRIGHT, licenses/rand_chacha-0.3.1/LICENSE-APACHE, licenses/rand_chacha-0.3.1/LICENSE-MIT
+
+rand_chacha 0.9.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers; The CryptoCorrosion Contributors
+Retained files: licenses/rand_chacha-0.9.0/COPYRIGHT, licenses/rand_chacha-0.9.0/LICENSE-APACHE, licenses/rand_chacha-0.9.0/LICENSE-MIT
+
+rand_core 0.10.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand_core
+Published authors: The Rand Project Developers
+Retained files: licenses/rand_core-0.10.1/COPYRIGHT, licenses/rand_core-0.10.1/LICENSE-APACHE, licenses/rand_core-0.10.1/LICENSE-MIT
+
+rand_core 0.6.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers
+Retained files: licenses/rand_core-0.6.4/COPYRIGHT, licenses/rand_core-0.6.4/LICENSE-APACHE, licenses/rand_core-0.6.4/LICENSE-MIT
+
+rand_core 0.9.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rand
+Published authors: The Rand Project Developers; The Rust Project Developers
+Retained files: licenses/rand_core-0.9.5/COPYRIGHT, licenses/rand_core-0.9.5/LICENSE-APACHE, licenses/rand_core-0.9.5/LICENSE-MIT
+
+rand_pcg 0.10.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-random/rngs
+Published authors: The Rand Project Developers
+Retained files: licenses/rand_pcg-0.10.2/COPYRIGHT, licenses/rand_pcg-0.10.2/LICENSE-APACHE, licenses/rand_pcg-0.10.2/LICENSE-MIT
+
+rav1e 0.8.1
+License: BSD-2-Clause
+Repository: https://github.com/xiph/rav1e/
+Published authors: Thomas Daede <tdaede@xiph.org>
+Retained files: licenses/rav1e-0.8.1/LICENSE
+
+ravif 0.13.0
+License: BSD-3-Clause
+Repository: https://github.com/kornelski/cavif-rs
+Published authors: Kornel Lesiński <kornel@geekhood.net>
+Retained files: licenses/ravif-0.13.0/LICENSE
+
+raw-cpuid 11.6.0
+License: MIT
+Repository: https://github.com/gz/rust-cpuid
+Published authors: Gerd Zellweger <mail@gerdzellweger.com>
+Retained files: licenses/raw-cpuid-11.6.0/LICENSE.md
+
+raw-window-handle 0.6.2
+License: MIT OR Apache-2.0 OR Zlib
+Repository: https://github.com/rust-windowing/raw-window-handle
+Published authors: Osspial <osspial@gmail.com>
+Retained files: licenses/raw-window-handle-0.6.2/LICENSE-APACHE.md, licenses/raw-window-handle-0.6.2/LICENSE-MIT.md, licenses/raw-window-handle-0.6.2/LICENSE-ZLIB.md
+
+rayon 1.12.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rayon-rs/rayon
+Retained files: licenses/rayon-1.12.0/LICENSE-APACHE, licenses/rayon-1.12.0/LICENSE-MIT
+
+rayon-core 1.13.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/rayon-rs/rayon
+Retained files: licenses/rayon-core-1.13.0/LICENSE-APACHE, licenses/rayon-core-1.13.0/LICENSE-MIT
+
+reborrow 0.5.5
+License: MIT
+Repository: https://github.com/sarah-ek/reborrow/
+Published authors: sarah <>
+Retained files: licenses/reborrow-0.5.5/LICENSE
+
+redox_syscall 0.2.16
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+redox_syscall 0.5.18
+License: MIT
+Repository: https://gitlab.redox-os.org/redox-os/syscall
+Published authors: Jeremy Soller <jackpot51@gmail.com>
+Retained files: licenses/redox_syscall-0.5.18/LICENSE
+
+redox_users 0.4.6
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+ref-cast 1.0.27
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/ref-cast
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/ref-cast-1.0.27/LICENSE-APACHE, licenses/ref-cast-1.0.27/LICENSE-MIT
+
+ref-cast-impl 1.0.27
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/ref-cast
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/ref-cast-impl-1.0.27/LICENSE-APACHE, licenses/ref-cast-impl-1.0.27/LICENSE-MIT
+
+regex 1.13.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/regex
+Published authors: The Rust Project Developers; Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/regex-1.13.1/LICENSE-APACHE, licenses/regex-1.13.1/LICENSE-MIT
+
+regex-automata 0.4.18
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/regex
+Published authors: The Rust Project Developers; Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/regex-automata-0.4.18/LICENSE-APACHE, licenses/regex-automata-0.4.18/LICENSE-MIT
+
+regex-syntax 0.8.11
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/regex
+Published authors: The Rust Project Developers; Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/regex-syntax-0.8.11/LICENSE-APACHE, licenses/regex-syntax-0.8.11/LICENSE-MIT, licenses/regex-syntax-0.8.11/src/unicode_tables/LICENSE-UNICODE
+
+resvg 0.45.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/linebender/resvg
+Retained files: licenses/resvg-0.45.1/LICENSE-APACHE, licenses/resvg-0.45.1/LICENSE-MIT
+
+rgb 0.8.53
+License: MIT
+Repository: https://github.com/kornelski/rust-rgb
+Published authors: Kornel Lesiński <kornel@geekhood.net>; James Forster <james.forsterer@gmail.com>
+Retained files: licenses/rgb-0.8.53/LICENSE
+
+ring 0.17.14
+License: Apache-2.0 AND ISC
+Repository: https://github.com/briansmith/ring
+Retained files: licenses/ring-0.17.14/LICENSE, licenses/ring-0.17.14/LICENSE-BoringSSL, licenses/ring-0.17.14/LICENSE-other-bits, licenses/ring-0.17.14/src/polyfill/once_cell/LICENSE-APACHE, licenses/ring-0.17.14/src/polyfill/once_cell/LICENSE-MIT, licenses/ring-0.17.14/third_party/fiat/LICENSE
+
+roxmltree 0.20.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/RazrFalcon/roxmltree
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/roxmltree-0.20.0/LICENSE-APACHE, licenses/roxmltree-0.20.0/LICENSE-MIT
+
+rust-embed 8.12.0
+License: MIT
+Repository: https://pyrossh.dev/repos/rust-embed
+Published authors: pyrossh
+Retained files: licenses/rust-embed-8.12.0/LICENSE
+
+rust-embed-impl 8.12.0
+License: MIT
+Repository: https://pyrossh.dev/repos/rust-embed
+Published authors: pyrossh
+Retained files: licenses/rust-embed-impl-8.12.0/LICENSE
+
+rust-embed-utils 8.12.0
+License: MIT
+Repository: https://pyrossh.dev/repos/rust-embed
+Published authors: pyrossh
+Retained files: licenses/rust-embed-utils-8.12.0/LICENSE
+
+rustc-hash 1.1.0
+License: Apache-2.0/MIT
+Repository: https://github.com/rust-lang-nursery/rustc-hash
+Published authors: The Rust Project Developers
+Retained files: licenses/rustc-hash-1.1.0/LICENSE-APACHE, licenses/rustc-hash-1.1.0/LICENSE-MIT
+
+rustc-hash 2.1.3
+License: Apache-2.0 OR MIT
+Repository: https://github.com/rust-lang/rustc-hash
+Published authors: The Rust Project Developers
+Retained files: licenses/rustc-hash-2.1.3/LICENSE-APACHE, licenses/rustc-hash-2.1.3/LICENSE-MIT
+
+rustc_version 0.4.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/djc/rustc-version-rs
+Retained files: licenses/rustc_version-0.4.1/LICENSE-APACHE, licenses/rustc_version-0.4.1/LICENSE-MIT
+
+rustix 0.38.44
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/rustix
+Published authors: Dan Gohman <dev@sunfishcode.online>; Jakub Konka <kubkon@jakubkonka.com>
+Retained files: licenses/rustix-0.38.44/COPYRIGHT, licenses/rustix-0.38.44/LICENSE-APACHE, licenses/rustix-0.38.44/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/rustix-0.38.44/LICENSE-MIT
+
+rustix 1.1.5
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/rustix
+Published authors: Dan Gohman <dev@sunfishcode.online>; Jakub Konka <kubkon@jakubkonka.com>
+Retained files: licenses/rustix-1.1.5/COPYRIGHT, licenses/rustix-1.1.5/LICENSE-APACHE, licenses/rustix-1.1.5/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/rustix-1.1.5/LICENSE-MIT
+
+rustls 0.23.45
+License: Apache-2.0 OR ISC OR MIT
+Repository: https://github.com/rustls/rustls
+Retained files: licenses/rustls-0.23.45/LICENSE-APACHE, licenses/rustls-0.23.45/LICENSE-ISC, licenses/rustls-0.23.45/LICENSE-MIT
+
+rustls-native-certs 0.8.4
+License: Apache-2.0 OR ISC OR MIT
+Repository: https://github.com/rustls/rustls-native-certs
+Retained files: licenses/rustls-native-certs-0.8.4/LICENSE, licenses/rustls-native-certs-0.8.4/LICENSE-APACHE, licenses/rustls-native-certs-0.8.4/LICENSE-ISC, licenses/rustls-native-certs-0.8.4/LICENSE-MIT
+
+rustls-pemfile 2.2.0
+License: Apache-2.0 OR ISC OR MIT
+Repository: https://github.com/rustls/pemfile
+Retained files: licenses/rustls-pemfile-2.2.0/LICENSE, licenses/rustls-pemfile-2.2.0/LICENSE-APACHE, licenses/rustls-pemfile-2.2.0/LICENSE-ISC, licenses/rustls-pemfile-2.2.0/LICENSE-MIT
+
+rustls-pki-types 1.15.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/rustls/pki-types
+Retained files: licenses/rustls-pki-types-1.15.1/LICENSE-APACHE, licenses/rustls-pki-types-1.15.1/LICENSE-MIT
+
+rustls-webpki 0.103.15
+License: ISC
+Repository: https://github.com/rustls/webpki
+Retained files: licenses/rustls-webpki-0.103.15/LICENSE
+
+rustversion 1.0.23
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/rustversion
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/rustversion-1.0.23/LICENSE-APACHE, licenses/rustversion-1.0.23/LICENSE-MIT
+
+rustybuzz 0.20.1
+License: MIT
+Repository: https://github.com/harfbuzz/rustybuzz
+Published authors: Caleb Maclennan <caleb@alerque.com>; Laurenz Stampfl <laurenz.stampfl@gmail.com>; Yevhenii Reizner <razrfalcon@gmail.com>; خالد حسني (Khaled Hosny) <khaled@aliftype.com>
+Retained files: licenses/rustybuzz-0.20.1/LICENSE, licenses/rustybuzz-0.20.1/scripts/ms-use/COPYING
+
+ryu 1.0.23
+License: Apache-2.0 OR BSL-1.0
+Repository: https://github.com/dtolnay/ryu
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/ryu-1.0.23/LICENSE-APACHE, licenses/ryu-1.0.23/LICENSE-BOOST
+
+same-file 1.0.6
+License: Unlicense/MIT
+Repository: https://github.com/BurntSushi/same-file
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/same-file-1.0.6/COPYING, licenses/same-file-1.0.6/LICENSE-MIT, licenses/same-file-1.0.6/UNLICENSE
+
+schannel 0.1.29
+License: MIT
+Repository: https://github.com/steffengy/schannel-rs
+Published authors: Steven Fackler <sfackler@gmail.com>; Steffen Butzer <steffen.butzer@outlook.com>
+Retained files: licenses/schannel-0.1.29/LICENSE.md
+
+schemars 1.2.2
+License: MIT
+Repository: https://github.com/GREsau/schemars
+Published authors: Graham Esau <gesau@hotmail.co.uk>
+Retained files: licenses/schemars-1.2.2/LICENSE
+
+schemars_derive 1.2.2
+License: MIT
+Repository: https://github.com/GREsau/schemars
+Published authors: Graham Esau <gesau@hotmail.co.uk>
+Retained files: licenses/schemars_derive-1.2.2/LICENSE
+
+scopeguard 1.2.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/bluss/scopeguard
+Published authors: bluss
+Retained files: licenses/scopeguard-1.2.0/LICENSE-APACHE, licenses/scopeguard-1.2.0/LICENSE-MIT
+
+seahash 4.1.0
+License: MIT
+Repository: https://gitlab.redox-os.org/redox-os/seahash
+Published authors: ticki <ticki@users.noreply.github.com>; Tom Almeida <tom@tommoa.me>
+Retained files: none present in the exact local crate source
+
+security-framework 3.7.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+security-framework-sys 2.17.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+semver 1.0.28
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/semver
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/semver-1.0.28/LICENSE-APACHE, licenses/semver-1.0.28/LICENSE-MIT
+
+serde 1.0.229
+License: MIT OR Apache-2.0
+Repository: https://github.com/serde-rs/serde
+Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde-1.0.229/LICENSE-APACHE, licenses/serde-1.0.229/LICENSE-MIT
+
+serde_core 1.0.229
+License: MIT OR Apache-2.0
+Repository: https://github.com/serde-rs/serde
+Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde_core-1.0.229/LICENSE-APACHE, licenses/serde_core-1.0.229/LICENSE-MIT
+
+serde_derive 1.0.229
+License: MIT OR Apache-2.0
+Repository: https://github.com/serde-rs/serde
+Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde_derive-1.0.229/LICENSE-APACHE, licenses/serde_derive-1.0.229/LICENSE-MIT
+
+serde_derive_internals 0.30.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/serde-rs/serde
+Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde_derive_internals-0.30.0/LICENSE-APACHE, licenses/serde_derive_internals-0.30.0/LICENSE-MIT
+
+serde_fmt 1.1.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/KodrAus/serde_fmt.git
+Published authors: Ashley Mannix <ashleymannix@live.com.au>
+Retained files: licenses/serde_fmt-1.1.0/LICENSE-APACHE, licenses/serde_fmt-1.1.0/LICENSE-MIT
+
+serde_json 1.0.151
+License: MIT OR Apache-2.0
+Repository: https://github.com/serde-rs/json
+Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde_json-1.0.151/LICENSE-APACHE, licenses/serde_json-1.0.151/LICENSE-MIT
+
+serde_json_lenient 0.2.4
+License: MIT/Apache-2.0
+Repository: https://github.com/google/serde_json_lenient
+Published authors: Adrian Taylor <adetaylor@chromium.org>; Michael Bolin <bolinfest@gmail.com>; Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/serde_json_lenient-0.2.4/LICENSE-APACHE, licenses/serde_json_lenient-0.2.4/LICENSE-MIT
+
+serde_repr 0.1.21
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+serde_spanned 0.6.9
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+serde_spanned 1.1.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/toml-rs/toml
+Retained files: licenses/serde_spanned-1.1.1/LICENSE-APACHE, licenses/serde_spanned-1.1.1/LICENSE-MIT
+
+serde_urlencoded 0.7.1
+License: MIT/Apache-2.0
+Repository: https://github.com/nox/serde_urlencoded
+Published authors: Anthony Ramine <n.oxyde@gmail.com>
+Retained files: licenses/serde_urlencoded-0.7.1/LICENSE-APACHE, licenses/serde_urlencoded-0.7.1/LICENSE-MIT
+
+sha1_smol 1.0.1
+License: BSD-3-Clause
+Repository: https://github.com/mitsuhiko/sha1-smol
+Published authors: Armin Ronacher <armin.ronacher@active-4.com>
+Retained files: licenses/sha1_smol-1.0.1/LICENSE
+
+sha2 0.10.9
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/hashes
+Published authors: RustCrypto Developers
+Retained files: licenses/sha2-0.10.9/LICENSE-APACHE, licenses/sha2-0.10.9/LICENSE-MIT
+
+sha2 0.11.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/RustCrypto/hashes
+Published authors: RustCrypto Developers
+Retained files: licenses/sha2-0.11.0/LICENSE-APACHE, licenses/sha2-0.11.0/LICENSE-MIT
+
+shlex 1.3.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/comex/rust-shlex
+Published authors: comex <comexk@gmail.com>; Fenhl <fenhl@fenhl.net>; Adrian Taylor <adetaylor@chromium.org>; Alex Touchet <alextouchet@outlook.com>; Daniel Parks <dp+git@oxidized.org>; Garrett Berg <googberg@gmail.com>
+Retained files: licenses/shlex-1.3.0/LICENSE-APACHE, licenses/shlex-1.3.0/LICENSE-MIT
+
+shlex 2.0.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/comex/rust-shlex
+Published authors: comex <comexk@gmail.com>; Fenhl <fenhl@fenhl.net>; Adrian Taylor <adetaylor@chromium.org>; Alex Touchet <alextouchet@outlook.com>; Daniel Parks <dp+git@oxidized.org>; Garrett Berg <googberg@gmail.com>
+Retained files: licenses/shlex-2.0.1/LICENSE-APACHE, licenses/shlex-2.0.1/LICENSE-MIT
+
+signal-hook-registry 1.4.8
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+simd-adler32 0.3.10
+License: MIT
+Repository: https://github.com/mcountryman/simd-adler32
+Published authors: Marvin Countryman <me@maar.vin>
+Retained files: licenses/simd-adler32-0.3.10/LICENSE.md
+
+simd_helpers 0.1.0
+License: MIT
+Repository: https://github.com/lu-zero/simd_helpers
+Published authors: Luca Barbato <lu_zero@gentoo.org>
+Retained files: none present in the exact local crate source
+
+simdutf8 0.1.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rusticstuff/simdutf8
+Published authors: Hans Kratz <hans@appfour.com>
+Retained files: licenses/simdutf8-0.1.5/LICENSE-Apache, licenses/simdutf8-0.1.5/LICENSE-MIT
+
+simplecss 0.2.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/linebender/simplecss
+Retained files: licenses/simplecss-0.2.2/LICENSE-APACHE, licenses/simplecss-0.2.2/LICENSE-MIT
+
+siphasher 1.0.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/jedisct1/rust-siphash
+Published authors: Frank Denis <github@pureftpd.org>
+Retained files: licenses/siphasher-1.0.4/COPYING, licenses/siphasher-1.0.4/LICENSE-APACHE, licenses/siphasher-1.0.4/LICENSE-MIT
+
+slab 0.4.12
+License: MIT
+Repository: https://github.com/tokio-rs/slab
+Published authors: Carl Lerche <me@carllerche.com>
+Retained files: licenses/slab-0.4.12/LICENSE
+
+slotmap 1.1.1
+License: Zlib
+Repository: https://github.com/orlp/slotmap
+Published authors: Orson Peters <orsonpeters@gmail.com>
+Retained files: licenses/slotmap-1.1.1/LICENSE
+
+smallvec 1.16.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-smallvec
+Published authors: The Servo Project Developers
+Retained files: licenses/smallvec-1.16.2/LICENSE-APACHE, licenses/smallvec-1.16.2/LICENSE-MIT
+
+smol 2.0.2
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/smol
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/smol-2.0.2/LICENSE-APACHE, licenses/smol-2.0.2/LICENSE-MIT
+
+socket2 0.6.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/socket2
+Published authors: Alex Crichton <alex@alexcrichton.com>; Thomas de Zeeuw <thomasdezeeuw@gmail.com>
+Retained files: licenses/socket2-0.6.5/LICENSE-APACHE, licenses/socket2-0.6.5/LICENSE-MIT
+
+spin 0.9.9
+License: MIT
+Repository: https://github.com/mvdnes/spin-rs.git
+Published authors: Mathijs van de Nes <git@mathijs.vd-nes.nl>; John Ericson <git@JohnEricson.me>; Joshua Barretto <joshua.s.barretto@gmail.com>
+Retained files: licenses/spin-0.9.9/LICENSE
+
+stable_deref_trait 1.2.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/storyyeller/stable_deref_trait
+Published authors: Robert Grosse <n210241048576@gmail.com>
+Retained files: licenses/stable_deref_trait-1.2.1/LICENSE-APACHE, licenses/stable_deref_trait-1.2.1/LICENSE-MIT
+
+stacker 0.1.25
+License: MIT OR Apache-2.0
+Repository: https://github.com/rust-lang/stacker
+Published authors: Alex Crichton <alex@alexcrichton.com>; Simonas Kazlauskas <stacker@kazlauskas.me>
+Retained files: licenses/stacker-0.1.25/LICENSE-APACHE, licenses/stacker-0.1.25/LICENSE-MIT
+
+stacksafe 0.1.4
+License: Apache-2.0
+Repository: https://github.com/fast/stacksafe
+Retained files: licenses/stacksafe-0.1.4/LICENSE, licenses/stacksafe-0.1.4/UPSTREAM_SOURCE.txt
+
+stacksafe-macro 0.1.4
+License: Apache-2.0
+Repository: https://github.com/fast/stacksafe
+Retained files: licenses/stacksafe-macro-0.1.4/LICENSE, licenses/stacksafe-macro-0.1.4/UPSTREAM_SOURCE.txt
+
+static_assertions 1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/nvzqz/static-assertions-rs
+Published authors: Nikolai Vazquez
+Retained files: licenses/static_assertions-1.1.0/LICENSE-APACHE, licenses/static_assertions-1.1.0/LICENSE-MIT
+
+strict-num 0.1.1
+License: MIT
+Repository: https://github.com/RazrFalcon/strict-num
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/strict-num-0.1.1/LICENSE
+
+strum 0.26.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+strum 0.27.2
+License: MIT
+Repository: https://github.com/Peternator7/strum
+Published authors: Peter Glotfelty <peter.glotfelty@microsoft.com>
+Retained files: licenses/strum-0.27.2/LICENSE
+
+strum_macros 0.26.4
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+strum_macros 0.27.2
+License: MIT
+Repository: https://github.com/Peternator7/strum
+Published authors: Peter Glotfelty <peter.glotfelty@microsoft.com>
+Retained files: licenses/strum_macros-0.27.2/LICENSE
+
+subtle 2.6.1
+License: BSD-3-Clause
+Repository: https://github.com/dalek-cryptography/subtle
+Published authors: Isis Lovecruft <isis@patternsinthevoid.net>; Henry de Valence <hdevalence@hdevalence.ca>
+Retained files: licenses/subtle-2.6.1/LICENSE
+
+sval 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval-2.22.0/LICENSE-APACHE, licenses/sval-2.22.0/LICENSE-MIT
+
+sval_buffer 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_buffer-2.22.0/LICENSE-APACHE, licenses/sval_buffer-2.22.0/LICENSE-MIT
+
+sval_dynamic 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_dynamic-2.22.0/LICENSE-APACHE, licenses/sval_dynamic-2.22.0/LICENSE-MIT
+
+sval_fmt 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_fmt-2.22.0/LICENSE-APACHE, licenses/sval_fmt-2.22.0/LICENSE-MIT
+
+sval_json 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_json-2.22.0/LICENSE-APACHE, licenses/sval_json-2.22.0/LICENSE-MIT
+
+sval_nested 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_nested-2.22.0/LICENSE-APACHE, licenses/sval_nested-2.22.0/LICENSE-MIT
+
+sval_ref 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_ref-2.22.0/LICENSE-APACHE, licenses/sval_ref-2.22.0/LICENSE-MIT
+
+sval_serde 2.22.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/sval
+Published authors: Ashley Mannix <hey@kodraus.com>
+Retained files: licenses/sval_serde-2.22.0/LICENSE-APACHE, licenses/sval_serde-2.22.0/LICENSE-MIT
+
+svg_fmt 0.4.5
+License: MIT/Apache-2.0
+Repository: https://github.com/nical/rust_debug
+Published authors: Nicolas Silva <nical@fastmail.com>
+Retained files: licenses/svg_fmt-0.4.5/LICENSE, licenses/svg_fmt-0.4.5/UPSTREAM_SOURCE.txt
+
+svgtypes 0.15.3
+License: Apache-2.0 OR MIT
+Repository: https://github.com/linebender/svgtypes
+Retained files: licenses/svgtypes-0.15.3/LICENSE-APACHE, licenses/svgtypes-0.15.3/LICENSE-MIT
+
+syn 2.0.119
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/syn
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/syn-2.0.119/LICENSE-APACHE, licenses/syn-2.0.119/LICENSE-MIT
+
+syn 3.0.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/syn
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/syn-3.0.6/LICENSE-APACHE, licenses/syn-3.0.6/LICENSE-MIT
+
+sync_wrapper 1.0.2
+License: Apache-2.0
+Repository: https://github.com/Actyx/sync_wrapper
+Published authors: Actyx AG <developer@actyx.io>
+Retained files: licenses/sync_wrapper-1.0.2/LICENSE
+
+synstructure 0.14.0
+License: MIT
+Repository: https://github.com/mystor/synstructure
+Published authors: Nika Layzell <nika@thelayzells.com>
+Retained files: licenses/synstructure-0.14.0/LICENSE
+
+system-configuration 0.6.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+system-configuration-sys 0.6.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+taffy 0.9.0
+License: MIT
+Repository: https://github.com/DioxusLabs/taffy
+Published authors: Alice Cecile <alice.i.cecile@gmail.com>; Johnathan Kelley <jkelleyrtp@gmail.com>; Nico Burns <nico@nicoburns.com>
+Retained files: licenses/taffy-0.9.0/LICENSE.md, licenses/taffy-0.9.0/UPSTREAM_SOURCE.txt
+
+take-until 0.2.0
+License: MIT
+Repository: https://github.com/hdevalke/take-until.git
+Published authors: Hannes De Valkeneer <hannes@de-valkeneer.be>
+Retained files: licenses/take-until-0.2.0/LICENSE
+
+tempfile 3.27.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/Stebalien/tempfile
+Published authors: Steven Allen <steven@stebalien.com>; The Rust Project Developers; Ashley Mannix <ashleymannix@live.com.au>; Jason White <me@jasonwhite.io>
+Retained files: licenses/tempfile-3.27.0/LICENSE-APACHE, licenses/tempfile-3.27.0/LICENSE-MIT
+
+tendril 0.4.3
+License: MIT/Apache-2.0
+Repository: https://github.com/servo/tendril
+Published authors: Keegan McAllister <mcallister.keegan@gmail.com>; Simon Sapin <simon.sapin@exyr.org>; Chris Morgan <me@chrismorgan.info>
+Retained files: licenses/tendril-0.4.3/LICENSE-APACHE, licenses/tendril-0.4.3/LICENSE-MIT
+
+termcolor 1.4.1
+License: Unlicense OR MIT
+Repository: https://github.com/BurntSushi/termcolor
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/termcolor-1.4.1/COPYING, licenses/termcolor-1.4.1/LICENSE-MIT, licenses/termcolor-1.4.1/UNLICENSE
+
+thiserror 1.0.69
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/thiserror
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/thiserror-1.0.69/LICENSE-APACHE, licenses/thiserror-1.0.69/LICENSE-MIT
+
+thiserror 2.0.21
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/thiserror
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/thiserror-2.0.21/LICENSE-APACHE, licenses/thiserror-2.0.21/LICENSE-MIT
+
+thiserror-impl 1.0.69
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/thiserror
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/thiserror-impl-1.0.69/LICENSE-APACHE, licenses/thiserror-impl-1.0.69/LICENSE-MIT
+
+thiserror-impl 2.0.21
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/thiserror
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/thiserror-impl-2.0.21/LICENSE-APACHE, licenses/thiserror-impl-2.0.21/LICENSE-MIT
+
+tiff 0.11.3
+License: MIT
+Repository: https://github.com/image-rs/image-tiff
+Published authors: The image-rs Developers
+Retained files: licenses/tiff-0.11.3/LICENSE, licenses/tiff-0.11.3/tests/COPYRIGHT
+
+tiny-skia 0.11.4
+License: BSD-3-Clause
+Repository: https://github.com/RazrFalcon/tiny-skia
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/tiny-skia-0.11.4/LICENSE
+
+tiny-skia-path 0.11.4
+License: BSD-3-Clause
+Repository: https://github.com/RazrFalcon/tiny-skia/tree/master/path
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/tiny-skia-path-0.11.4/LICENSE
+
+tinystr 0.8.4
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/tinystr-0.8.4/LICENSE
+
+tinyvec 1.13.3
+License: Zlib OR Apache-2.0 OR MIT
+Repository: https://github.com/Lokathor/tinyvec
+Published authors: Lokathor <zefria@gmail.com>
+Retained files: licenses/tinyvec-1.13.3/LICENSE-APACHE.md, licenses/tinyvec-1.13.3/LICENSE-MIT.md, licenses/tinyvec-1.13.3/LICENSE-ZLIB.md
+
+tokio 1.53.2
+License: MIT
+Repository: https://github.com/tokio-rs/tokio
+Published authors: Tokio Contributors <team@tokio.rs>
+Retained files: licenses/tokio-1.53.2/LICENSE
+
+tokio-rustls 0.26.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/rustls/tokio-rustls
+Retained files: licenses/tokio-rustls-0.26.6/LICENSE-APACHE, licenses/tokio-rustls-0.26.6/LICENSE-MIT
+
+tokio-socks 0.5.3
+License: MIT
+Repository: https://github.com/sticnarf/tokio-socks
+Published authors: Yilin Chen <sticnarf@gmail.com>
+Retained files: licenses/tokio-socks-0.5.3/LICENSE
+
+tokio-util 0.7.19
+License: MIT
+Repository: https://github.com/tokio-rs/tokio
+Published authors: Tokio Contributors <team@tokio.rs>
+Retained files: licenses/tokio-util-0.7.19/LICENSE
+
+toml 0.8.23
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+toml 1.1.6+spec-1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/toml-rs/toml
+Retained files: licenses/toml-1.1.6+spec-1.1.0/LICENSE-APACHE, licenses/toml-1.1.6+spec-1.1.0/LICENSE-MIT
+
+toml_datetime 0.6.11
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+toml_datetime 1.1.1+spec-1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/toml-rs/toml
+Retained files: licenses/toml_datetime-1.1.1+spec-1.1.0/LICENSE-APACHE, licenses/toml_datetime-1.1.1+spec-1.1.0/LICENSE-MIT
+
+toml_edit 0.22.27
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+toml_edit 0.25.15+spec-1.1.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+toml_parser 1.1.3+spec-1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/toml-rs/toml
+Retained files: licenses/toml_parser-1.1.3+spec-1.1.0/LICENSE-APACHE, licenses/toml_parser-1.1.3+spec-1.1.0/LICENSE-MIT
+
+toml_write 0.1.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+toml_writer 1.1.2+spec-1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/toml-rs/toml
+Retained files: licenses/toml_writer-1.1.2+spec-1.1.0/LICENSE-APACHE, licenses/toml_writer-1.1.2+spec-1.1.0/LICENSE-MIT
+
+tower 0.5.3
+License: MIT
+Repository: https://github.com/tower-rs/tower
+Published authors: Tower Maintainers <team@tower-rs.com>
+Retained files: licenses/tower-0.5.3/LICENSE
+
+tower-layer 0.3.3
+License: MIT
+Repository: https://github.com/tower-rs/tower
+Published authors: Tower Maintainers <team@tower-rs.com>
+Retained files: licenses/tower-layer-0.3.3/LICENSE
+
+tower-service 0.3.3
+License: MIT
+Repository: https://github.com/tower-rs/tower
+Published authors: Tower Maintainers <team@tower-rs.com>
+Retained files: licenses/tower-service-0.3.3/LICENSE
+
+tracing 0.1.44
+License: MIT
+Repository: https://github.com/tokio-rs/tracing
+Published authors: Eliza Weisman <eliza@buoyant.io>; Tokio Contributors <team@tokio.rs>
+Retained files: licenses/tracing-0.1.44/LICENSE
+
+tracing-attributes 0.1.31
+License: MIT
+Repository: https://github.com/tokio-rs/tracing
+Published authors: Tokio Contributors <team@tokio.rs>; Eliza Weisman <eliza@buoyant.io>; David Barsky <dbarsky@amazon.com>
+Retained files: licenses/tracing-attributes-0.1.31/LICENSE
+
+tracing-core 0.1.36
+License: MIT
+Repository: https://github.com/tokio-rs/tracing
+Published authors: Tokio Contributors <team@tokio.rs>
+Retained files: licenses/tracing-core-0.1.36/LICENSE, licenses/tracing-core-0.1.36/src/spin/LICENSE
+
+try-lock 0.2.5
+License: MIT
+Repository: https://github.com/seanmonstar/try-lock
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/try-lock-0.2.5/LICENSE
+
+ttf-parser 0.25.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/harfbuzz/ttf-parser
+Published authors: Caleb Maclennan <caleb@alerque.com>; Laurenz Stampfl <laurenz.stampfl@gmail.com>; Yevhenii Reizner <razrfalcon@gmail.com>; خالد حسني (Khaled Hosny) <khaled@aliftype.com>
+Retained files: licenses/ttf-parser-0.25.1/LICENSE-APACHE, licenses/ttf-parser-0.25.1/LICENSE-MIT
+
+typeid 1.0.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/typeid
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/typeid-1.0.3/LICENSE-APACHE, licenses/typeid-1.0.3/LICENSE-MIT
+
+typenum 1.20.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/paholg/typenum
+Retained files: licenses/typenum-1.20.1/LICENSE, licenses/typenum-1.20.1/LICENSE-APACHE, licenses/typenum-1.20.1/LICENSE-MIT
+
+uds_windows 1.2.1
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+unicase 2.9.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/seanmonstar/unicase
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/unicase-2.9.0/LICENSE-APACHE, licenses/unicase-2.9.0/LICENSE-MIT
+
+unicode-bidi 0.3.18
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/unicode-bidi
+Published authors: The Servo Project Developers
+Retained files: licenses/unicode-bidi-0.3.18/COPYRIGHT, licenses/unicode-bidi-0.3.18/LICENSE-APACHE, licenses/unicode-bidi-0.3.18/LICENSE-MIT
+
+unicode-bidi-mirroring 0.4.0
+License: MIT/Apache-2.0
+Repository: https://github.com/RazrFalcon/unicode-bidi-mirroring
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/unicode-bidi-mirroring-0.4.0/LICENSE-APACHE, licenses/unicode-bidi-mirroring-0.4.0/LICENSE-MIT
+
+unicode-ccc 0.4.0
+License: MIT/Apache-2.0
+Repository: https://github.com/RazrFalcon/unicode-ccc
+Published authors: Yevhenii Reizner <razrfalcon@gmail.com>
+Retained files: licenses/unicode-ccc-0.4.0/LICENSE-APACHE, licenses/unicode-ccc-0.4.0/LICENSE-MIT
+
+unicode-ident 1.0.26
+License: (MIT OR Apache-2.0) AND Unicode-3.0
+Repository: https://github.com/dtolnay/unicode-ident
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/unicode-ident-1.0.26/LICENSE-APACHE, licenses/unicode-ident-1.0.26/LICENSE-MIT, licenses/unicode-ident-1.0.26/LICENSE-UNICODE
+
+unicode-properties 0.1.4
+License: MIT/Apache-2.0
+Repository: https://github.com/unicode-rs/unicode-properties
+Published authors: Charles Lew <crlf0710@gmail.com>; Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/unicode-properties-0.1.4/COPYRIGHT, licenses/unicode-properties-0.1.4/LICENSE-APACHE, licenses/unicode-properties-0.1.4/LICENSE-MIT
+
+unicode-script 0.5.8
+License: MIT OR Apache-2.0
+Repository: https://github.com/unicode-rs/unicode-script
+Published authors: Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/unicode-script-0.5.8/LICENSE-APACHE, licenses/unicode-script-0.5.8/LICENSE-MIT
+
+unicode-vo 0.1.0
+License: MIT/Apache-2.0
+Repository: https://github.com/RazrFalcon/unicode-vo
+Published authors: Evgeniy Reizner <razrfalcon@gmail.com>
+Retained files: licenses/unicode-vo-0.1.0/LICENSE-APACHE, licenses/unicode-vo-0.1.0/LICENSE-MIT
+
+unicode-width 0.2.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/unicode-rs/unicode-width
+Published authors: kwantam <kwantam@gmail.com>; Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/unicode-width-0.2.2/COPYRIGHT, licenses/unicode-width-0.2.2/LICENSE-APACHE, licenses/unicode-width-0.2.2/LICENSE-MIT
+
+untrusted 0.9.0
+License: ISC
+Repository: https://github.com/briansmith/untrusted
+Published authors: Brian Smith <brian@briansmith.org>
+Retained files: licenses/untrusted-0.9.0/LICENSE.txt
+
+url 2.5.8
+License: MIT OR Apache-2.0
+Repository: https://github.com/servo/rust-url
+Published authors: The rust-url developers
+Retained files: licenses/url-2.5.8/LICENSE-APACHE, licenses/url-2.5.8/LICENSE-MIT
+
+usvg 0.45.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/linebender/resvg
+Retained files: licenses/usvg-0.45.1/LICENSE-APACHE, licenses/usvg-0.45.1/LICENSE-MIT
+
+utf-8 0.7.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/SimonSapin/rust-utf8
+Published authors: Simon Sapin <simon.sapin@exyr.org>
+Retained files: licenses/utf-8-0.7.6/LICENSE-APACHE, licenses/utf-8-0.7.6/LICENSE-MIT
+
+utf8_iter 1.0.4
+License: Apache-2.0 OR MIT
+Repository: https://github.com/hsivonen/utf8_iter
+Published authors: Henri Sivonen <hsivonen@hsivonen.fi>
+Retained files: licenses/utf8_iter-1.0.4/COPYRIGHT, licenses/utf8_iter-1.0.4/LICENSE-APACHE, licenses/utf8_iter-1.0.4/LICENSE-MIT
+
+uuid 1.27.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/uuid-rs/uuid
+Published authors: Ashley Mannix<ashleymannix@live.com.au>; Dylan DPC<dylan.dpc@gmail.com>; Hunar Roop Kahlon<hunar.roop@gmail.com>
+Retained files: licenses/uuid-1.27.0/LICENSE-APACHE, licenses/uuid-1.27.0/LICENSE-MIT
+
+v_frame 0.3.9
+License: BSD-2-Clause
+Repository: https://github.com/rust-av/v_frame
+Published authors: Luca Barbato <lu_zero@gentoo.org>
+Retained files: licenses/v_frame-0.3.9/LICENSE
+
+value-bag 1.14.1
+License: Apache-2.0 OR MIT
+Repository: https://github.com/sval-rs/value-bag
+Published authors: Ashley Mannix <ashleymannix@live.com.au>
+Retained files: licenses/value-bag-1.14.1/LICENSE-APACHE, licenses/value-bag-1.14.1/LICENSE-MIT
+
+value-bag-serde1 1.14.1
+License: Apache-2.0 OR MIT
+Published authors: Ashley Mannix <ashleymannix@live.com.au>
+Retained files: licenses/value-bag-serde1-1.14.1/LICENSE-APACHE, licenses/value-bag-serde1-1.14.1/LICENSE-MIT
+
+value-bag-sval2 1.14.1
+License: Apache-2.0 OR MIT
+Published authors: Ashley Mannix <ashleymannix@live.com.au>
+Retained files: licenses/value-bag-sval2-1.14.1/LICENSE-APACHE, licenses/value-bag-sval2-1.14.1/LICENSE-MIT
+
+version_check 0.9.5
+License: MIT/Apache-2.0
+Repository: https://github.com/SergioBenitez/version_check
+Published authors: Sergio Benitez <sb@sergio.bz>
+Retained files: licenses/version_check-0.9.5/LICENSE-APACHE, licenses/version_check-0.9.5/LICENSE-MIT
+
+vswhom 0.1.0
+License: MIT
+Repository: https://github.com/nabijaczleweli/vswhom.rs
+Published authors: nabijaczleweli <nabijaczleweli@gmail.com>
+Retained files: licenses/vswhom-0.1.0/LICENSE
+
+vswhom-sys 0.1.3
+License: MIT
+Repository: https://github.com/nabijaczleweli/vswhom-sys.rs
+Published authors: наб <nabijaczleweli@nabijaczleweli.xyz>; forrestsmithfb <forrest.smith@fb.com>
+Retained files: licenses/vswhom-sys-0.1.3/LICENSE
+
+waker-fn 1.2.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/smol-rs/waker-fn
+Published authors: Stjepan Glavina <stjepang@gmail.com>
+Retained files: licenses/waker-fn-1.2.0/LICENSE-APACHE, licenses/waker-fn-1.2.0/LICENSE-MIT
+
+walkdir 2.5.0
+License: Unlicense/MIT
+Repository: https://github.com/BurntSushi/walkdir
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/walkdir-2.5.0/COPYING, licenses/walkdir-2.5.0/LICENSE-MIT, licenses/walkdir-2.5.0/UNLICENSE
+
+want 0.3.1
+License: MIT
+Repository: https://github.com/seanmonstar/want
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/want-0.3.1/LICENSE
+
+wasi 0.11.1+wasi-snapshot-preview1
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wasi
+Published authors: The Cranelift Project Developers
+Retained files: licenses/wasi-0.11.1+wasi-snapshot-preview1/LICENSE-APACHE, licenses/wasi-0.11.1+wasi-snapshot-preview1/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/wasi-0.11.1+wasi-snapshot-preview1/LICENSE-MIT
+
+wasip2 1.0.4+wasi-0.2.12
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wasi-rs
+Retained files: licenses/wasip2-1.0.4+wasi-0.2.12/LICENSE-APACHE, licenses/wasip2-1.0.4+wasi-0.2.12/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/wasip2-1.0.4+wasi-0.2.12/LICENSE-MIT
+
+wasm-bindgen 0.2.129
+License: MIT OR Apache-2.0
+Repository: https://github.com/wasm-bindgen/wasm-bindgen
+Published authors: The wasm-bindgen Developers
+Retained files: licenses/wasm-bindgen-0.2.129/LICENSE-APACHE, licenses/wasm-bindgen-0.2.129/LICENSE-MIT
+
+wasm-bindgen-futures 0.4.79
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+wasm-bindgen-macro 0.2.129
+License: MIT OR Apache-2.0
+Repository: https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro
+Published authors: The wasm-bindgen Developers
+Retained files: licenses/wasm-bindgen-macro-0.2.129/LICENSE-APACHE, licenses/wasm-bindgen-macro-0.2.129/LICENSE-MIT
+
+wasm-bindgen-macro-support 0.2.129
+License: MIT OR Apache-2.0
+Repository: https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support
+Published authors: The wasm-bindgen Developers
+Retained files: licenses/wasm-bindgen-macro-support-0.2.129/LICENSE-APACHE, licenses/wasm-bindgen-macro-support-0.2.129/LICENSE-MIT
+
+wasm-bindgen-shared 0.2.129
+License: MIT OR Apache-2.0
+Repository: https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared
+Published authors: The wasm-bindgen Developers
+Retained files: licenses/wasm-bindgen-shared-0.2.129/LICENSE-APACHE, licenses/wasm-bindgen-shared-0.2.129/LICENSE-MIT
+
+wasm-streams 0.4.2
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+web-sys 0.3.106
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+web-time 1.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/daxpedda/web-time
+Retained files: licenses/web-time-1.1.0/LICENSE-APACHE, licenses/web-time-1.1.0/LICENSE-MIT
+
+weezl 0.1.12
+License: MIT OR Apache-2.0
+Repository: https://github.com/image-rs/weezl
+Published authors: The image-rs Developers
+Retained files: licenses/weezl-0.1.12/LICENSE-APACHE, licenses/weezl-0.1.12/LICENSE-MIT
+
+which 6.0.3
+License: MIT
+Repository: https://github.com/harryfei/which-rs.git
+Published authors: Harry Fei <tiziyuanfang@gmail.com>
+Retained files: licenses/which-6.0.3/LICENSE.txt
+
+winapi 0.3.9
+License: MIT/Apache-2.0
+Repository: https://github.com/retep998/winapi-rs
+Published authors: Peter Atashian <retep998@gmail.com>
+Retained files: licenses/winapi-0.3.9/LICENSE-APACHE, licenses/winapi-0.3.9/LICENSE-MIT
+
+winapi-i686-pc-windows-gnu 0.4.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+winapi-util 0.1.11
+License: Unlicense OR MIT
+Repository: https://github.com/BurntSushi/winapi-util
+Published authors: Andrew Gallant <jamslam@gmail.com>
+Retained files: licenses/winapi-util-0.1.11/COPYING, licenses/winapi-util-0.1.11/LICENSE-MIT, licenses/winapi-util-0.1.11/UNLICENSE
+
+winapi-x86_64-pc-windows-gnu 0.4.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+windows 0.61.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-0.61.3/license-apache-2.0, licenses/windows-0.61.3/license-mit
+
+windows-collections 0.2.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-collections-0.2.0/license-apache-2.0, licenses/windows-collections-0.2.0/license-mit
+
+windows-core 0.61.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-core-0.61.2/license-apache-2.0, licenses/windows-core-0.61.2/license-mit
+
+windows-future 0.2.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-future-0.2.1/license-apache-2.0, licenses/windows-future-0.2.1/license-mit
+
+windows-implement 0.60.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-implement-0.60.2/license-apache-2.0, licenses/windows-implement-0.60.2/license-mit
+
+windows-interface 0.59.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-interface-0.59.3/license-apache-2.0, licenses/windows-interface-0.59.3/license-mit
+
+windows-link 0.1.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-link-0.1.3/license-apache-2.0, licenses/windows-link-0.1.3/license-mit
+
+windows-link 0.2.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-link-0.2.1/license-apache-2.0, licenses/windows-link-0.2.1/license-mit
+
+windows-numerics 0.2.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-numerics-0.2.0/license-apache-2.0, licenses/windows-numerics-0.2.0/license-mit
+
+windows-registry 0.4.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-registry-0.4.0/license-apache-2.0, licenses/windows-registry-0.4.0/license-mit
+
+windows-registry 0.5.3
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-registry-0.5.3/license-apache-2.0, licenses/windows-registry-0.5.3/license-mit
+
+windows-result 0.3.4
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-result-0.3.4/license-apache-2.0, licenses/windows-result-0.3.4/license-mit
+
+windows-strings 0.3.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-strings-0.3.1/license-apache-2.0, licenses/windows-strings-0.3.1/license-mit
+
+windows-strings 0.4.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-strings-0.4.2/license-apache-2.0, licenses/windows-strings-0.4.2/license-mit
+
+windows-sys 0.52.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-sys-0.52.0/license-apache-2.0, licenses/windows-sys-0.52.0/license-mit
+
+windows-sys 0.59.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-sys-0.59.0/license-apache-2.0, licenses/windows-sys-0.59.0/license-mit
+
+windows-sys 0.61.2
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-sys-0.61.2/license-apache-2.0, licenses/windows-sys-0.61.2/license-mit
+
+windows-targets 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-targets-0.52.6/license-apache-2.0, licenses/windows-targets-0.52.6/license-mit
+
+windows-targets 0.53.5
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows-targets-0.53.5/license-apache-2.0, licenses/windows-targets-0.53.5/license-mit
+
+windows-threading 0.1.0
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows-threading-0.1.0/license-apache-2.0, licenses/windows-threading-0.1.0/license-mit
+
+windows_aarch64_gnullvm 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_aarch64_gnullvm-0.52.6/license-apache-2.0, licenses/windows_aarch64_gnullvm-0.52.6/license-mit
+
+windows_aarch64_gnullvm 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_aarch64_gnullvm-0.53.1/license-apache-2.0, licenses/windows_aarch64_gnullvm-0.53.1/license-mit
+
+windows_aarch64_msvc 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_aarch64_msvc-0.52.6/license-apache-2.0, licenses/windows_aarch64_msvc-0.52.6/license-mit
+
+windows_aarch64_msvc 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_aarch64_msvc-0.53.1/license-apache-2.0, licenses/windows_aarch64_msvc-0.53.1/license-mit
+
+windows_i686_gnu 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_i686_gnu-0.52.6/license-apache-2.0, licenses/windows_i686_gnu-0.52.6/license-mit
+
+windows_i686_gnu 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_i686_gnu-0.53.1/license-apache-2.0, licenses/windows_i686_gnu-0.53.1/license-mit
+
+windows_i686_gnullvm 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_i686_gnullvm-0.52.6/license-apache-2.0, licenses/windows_i686_gnullvm-0.52.6/license-mit
+
+windows_i686_gnullvm 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_i686_gnullvm-0.53.1/license-apache-2.0, licenses/windows_i686_gnullvm-0.53.1/license-mit
+
+windows_i686_msvc 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_i686_msvc-0.52.6/license-apache-2.0, licenses/windows_i686_msvc-0.52.6/license-mit
+
+windows_i686_msvc 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_i686_msvc-0.53.1/license-apache-2.0, licenses/windows_i686_msvc-0.53.1/license-mit
+
+windows_x86_64_gnu 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_x86_64_gnu-0.52.6/license-apache-2.0, licenses/windows_x86_64_gnu-0.52.6/license-mit
+
+windows_x86_64_gnu 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_x86_64_gnu-0.53.1/license-apache-2.0, licenses/windows_x86_64_gnu-0.53.1/license-mit
+
+windows_x86_64_gnullvm 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_x86_64_gnullvm-0.52.6/license-apache-2.0, licenses/windows_x86_64_gnullvm-0.52.6/license-mit
+
+windows_x86_64_gnullvm 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_x86_64_gnullvm-0.53.1/license-apache-2.0, licenses/windows_x86_64_gnullvm-0.53.1/license-mit
+
+windows_x86_64_msvc 0.52.6
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Published authors: Microsoft
+Retained files: licenses/windows_x86_64_msvc-0.52.6/license-apache-2.0, licenses/windows_x86_64_msvc-0.52.6/license-mit
+
+windows_x86_64_msvc 0.53.1
+License: MIT OR Apache-2.0
+Repository: https://github.com/microsoft/windows-rs
+Retained files: licenses/windows_x86_64_msvc-0.53.1/license-apache-2.0, licenses/windows_x86_64_msvc-0.53.1/license-mit
+
+winnow 0.7.15
+License: MIT
+Repository: https://github.com/winnow-rs/winnow
+Retained files: licenses/winnow-0.7.15/LICENSE-MIT
+
+winnow 1.0.4
+License: MIT
+Repository: https://github.com/winnow-rs/winnow
+Retained files: licenses/winnow-1.0.4/LICENSE-MIT
+
+winreg 0.55.0
+License: MIT
+Repository: https://github.com/gentoo90/winreg-rs
+Published authors: Igor Shaula <gentoo90@gmail.com>
+Retained files: licenses/winreg-0.55.0/LICENSE
+
+winsafe 0.0.19
+License: MIT
+Repository: https://github.com/rodrigocfd/winsafe
+Published authors: Rodrigo Cesar de Freitas Dias <rcesar@gmail.com>
+Retained files: licenses/winsafe-0.0.19/LICENSE.md
+
+wit-bindgen 0.57.1
+License: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wit-bindgen
+Published authors: Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/wit-bindgen-0.57.1/LICENSE-APACHE, licenses/wit-bindgen-0.57.1/LICENSE-Apache-2.0_WITH_LLVM-exception, licenses/wit-bindgen-0.57.1/LICENSE-MIT
+
+writeable 0.6.4
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/writeable-0.6.4/LICENSE
+
+xattr 0.2.3
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+xmlwriter 0.1.0
+License: MIT
+Repository: https://github.com/RazrFalcon/xmlwriter
+Published authors: Evgeniy Reizner <razrfalcon@gmail.com>
+Retained files: licenses/xmlwriter-0.1.0/LICENSE
+
+y4m 0.8.0
+License: MIT
+Repository: https://github.com/image-rs/y4m.git
+Published authors: Kagami Hiiragi <kagami@genshiken.org>
+Retained files: licenses/y4m-0.8.0/LICENSE
+
+yoke 0.8.3
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/yoke-0.8.3/LICENSE
+
+yoke-derive 0.8.4
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/yoke-derive-0.8.4/LICENSE
+
+zbus 5.19.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zbus_macros 5.19.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zbus_names 4.3.4
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zcheapstr 1.1.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zed-async-tar 0.5.0-zed
+License: MIT/Apache-2.0
+Repository: https://github.com/dignifiedquire/async-tar
+Published authors: dignifiedquire <me@dignifiequire.com>; Alex Crichton <alex@alexcrichton.com>
+Retained files: licenses/zed-async-tar-0.5.0-zed/LICENSE-APACHE, licenses/zed-async-tar-0.5.0-zed/LICENSE-MIT
+
+zed-reqwest 0.12.15-zed
+License: MIT OR Apache-2.0
+Repository: https://github.com/seanmonstar/reqwest
+Published authors: Sean McArthur <sean@seanmonstar.com>
+Retained files: licenses/zed-reqwest-0.12.15-zed/LICENSE-APACHE, licenses/zed-reqwest-0.12.15-zed/LICENSE-MIT
+
+zerocopy 0.8.59
+License: BSD-2-Clause OR Apache-2.0 OR MIT
+Repository: https://github.com/google/zerocopy
+Retained files: licenses/zerocopy-0.8.59/LICENSE-APACHE, licenses/zerocopy-0.8.59/LICENSE-BSD, licenses/zerocopy-0.8.59/LICENSE-MIT
+
+zerocopy-derive 0.8.59
+License: BSD-2-Clause OR Apache-2.0 OR MIT
+Repository: https://github.com/google/zerocopy
+Retained files: licenses/zerocopy-derive-0.8.59/LICENSE-APACHE, licenses/zerocopy-derive-0.8.59/LICENSE-BSD, licenses/zerocopy-derive-0.8.59/LICENSE-MIT
+
+zerofrom 0.1.8
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/zerofrom-0.1.8/LICENSE
+
+zerofrom-derive 0.1.8
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/zerofrom-derive-0.1.8/LICENSE
+
+zeroize 1.9.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/RustCrypto/utils
+Published authors: The RustCrypto Project Developers
+Retained files: licenses/zeroize-1.9.0/LICENSE-APACHE, licenses/zeroize-1.9.0/LICENSE-MIT
+
+zeroize_derive 1.5.0
+License: Apache-2.0 OR MIT
+Repository: https://github.com/RustCrypto/utils
+Published authors: The RustCrypto Project Developers
+Retained files: licenses/zeroize_derive-1.5.0/LICENSE-APACHE, licenses/zeroize_derive-1.5.0/LICENSE-MIT
+
+zerotrie 0.2.5
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/zerotrie-0.2.5/LICENSE
+
+zerovec 0.11.8
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: The ICU4X Project Developers
+Retained files: licenses/zerovec-0.11.8/LICENSE
+
+zerovec-derive 0.11.6
+License: Unicode-3.0
+Repository: https://github.com/unicode-org/icu4x
+Published authors: Manish Goregaokar <manishsmail@gmail.com>
+Retained files: licenses/zerovec-derive-0.11.6/LICENSE
+
+zlib-rs 0.6.8
+License: Zlib
+Repository: https://github.com/trifectatechfoundation/zlib-rs
+Retained files: licenses/zlib-rs-0.6.8/LICENSE
+
+zmij 1.0.23
+License: MIT
+Repository: https://github.com/dtolnay/zmij
+Published authors: David Tolnay <dtolnay@gmail.com>
+Retained files: licenses/zmij-1.0.23/LICENSE-MIT
+
+zune-core 0.5.3
+License: MIT OR Apache-2.0 OR Zlib
+Repository: https://github.com/etemesi254/zune-image
+Retained files: licenses/zune-core-0.5.3/LICENSE-APACHE, licenses/zune-core-0.5.3/LICENSE-MIT, licenses/zune-core-0.5.3/LICENSE-ZLIB
+
+zune-inflate 0.2.54
+License: MIT OR Apache-2.0 OR Zlib
+Retained files: none present in the exact local crate source
+
+zune-jpeg 0.5.15
+License: MIT OR Apache-2.0 OR Zlib
+Repository: https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg
+Published authors: caleb <etemesicaleb@gmail.com>
+Retained files: licenses/zune-jpeg-0.5.15/LICENSE-APACHE, licenses/zune-jpeg-0.5.15/LICENSE-MIT, licenses/zune-jpeg-0.5.15/LICENSE-ZLIB
+
+zvariant 5.15.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zvariant_derive 5.15.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+zvariant_utils 4.2.0
+License: not available in local registry source
+Retained files: none present in the exact local crate source
+
+Coverage notes
+--------------
+Locked external packages: 586
+Packages with local source: 503
+Packages with retained license/notice files: 493
+
+Exact package source not present locally:
+ashpd 0.12.3
+async-recursion 1.2.0
+async-signal 0.2.14
+async-trait 0.1.92
+bindgen 0.71.1
+block-padding 0.3.3
+cbc 0.1.2
+cbindgen 0.28.0
+cgl 0.3.2
+clang-sys 1.9.1
+cocoa 0.26.0
+cocoa-foundation 0.2.0
+command-fds 0.3.3
+core-foundation 0.10.0
+core-graphics 0.24.0
+core-graphics2 0.4.1
+core-text 21.0.0
+core-video 0.4.3
+endi 1.1.1
+enumflags2 0.7.12
+enumflags2_derive 0.7.12
+fontconfig-parser 0.5.8
+foreign-types-macros 0.2.4
+gloo-timers 0.3.0
+gpui_media 0.2.2
+heck 0.4.1
+hermit-abi 0.5.3
+hex 0.4.3
+instant 0.1.13
+interpolate_name 0.2.4
+io-surface 0.16.1
+itertools 0.13.0
+js-sys 0.3.106
+lazy_static 1.5.1
+leak 0.1.2
+leaky-cow 0.1.1
+libfuzzer-sys 0.4.13
+libredox 0.1.25
+md-5 0.10.6
+memoffset 0.9.1
+metal 0.29.0
+naga 25.0.1
+nix 0.29.0
+num 0.4.3
+num-bigint-dig 0.8.6
+num-iter 0.1.46
+oo7 0.5.0
+openssl-probe 0.2.1
+ordered-stream 0.2.0
+pathfinder_geometry 0.5.1
+pathfinder_simd 0.5.6
+pbkdf2 0.12.2
+rand 0.8.8
+redox_syscall 0.2.16
+redox_users 0.4.6
+security-framework 3.7.0
+security-framework-sys 2.17.0
+serde_repr 0.1.21
+serde_spanned 0.6.9
+signal-hook-registry 1.4.8
+strum 0.26.3
+strum_macros 0.26.4
+system-configuration 0.6.1
+system-configuration-sys 0.6.0
+toml 0.8.23
+toml_datetime 0.6.11
+toml_edit 0.22.27
+toml_edit 0.25.15+spec-1.1.0
+toml_write 0.1.2
+uds_windows 1.2.1
+wasm-bindgen-futures 0.4.79
+wasm-streams 0.4.2
+web-sys 0.3.106
+winapi-i686-pc-windows-gnu 0.4.0
+winapi-x86_64-pc-windows-gnu 0.4.0
+xattr 0.2.3
+zbus 5.19.0
+zbus_macros 5.19.0
+zbus_names 4.3.4
+zcheapstr 1.1.0
+zvariant 5.15.0
+zvariant_derive 5.15.0
+zvariant_utils 4.2.0
+
+Local crate declares licensing but has no matching license/notice file:
+block 0.1.6: MIT
+convert_case 0.4.0: MIT
+hexf-parse 0.2.1: CC0-1.0
+mac 0.1.1: MIT/Apache-2.0
+malloc_buf 0.0.6: MIT
+r-efi 5.3.0: MIT OR Apache-2.0 OR LGPL-2.1-or-later
+r-efi 6.0.0: MIT OR Apache-2.0 OR LGPL-2.1-or-later
+seahash 4.1.0: MIT
+simd_helpers 0.1.0: MIT
+zune-inflate 0.2.54: MIT OR Apache-2.0 OR Zlib

@@ -1,0 +1,5 @@
+License files retrieved unchanged from the exact published crate VCS commit
+identified by that crate's .cargo_vcs_info.json:
+
+https://raw.githubusercontent.com/mmastrac/rust-ctor/b05136ac964049a1ee29de763d0b119c42258567/LICENSE-APACHE
+https://raw.githubusercontent.com/mmastrac/rust-ctor/b05136ac964049a1ee29de763d0b119c42258567/LICENSE-MIT
