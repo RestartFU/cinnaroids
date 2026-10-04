@@ -1,0 +1,7 @@
+wit-bindgen-core 0.57.1
+Official published package: https://crates.io/api/v1/crates/wit-bindgen-core/0.57.1/download
+Cargo package SHA-256 from lockfile: 02dee27a2dc20d1008016c742ec9fc6ea498492994ba3750be7454cbc97ff04c
+Declared license: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wit-bindgen
+Published VCS revision: 2e00369a643c0c8048b8636401e36b0cbf2dfb05
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-Apache-2.0_WITH_LLVM-exception, LICENSE-MIT

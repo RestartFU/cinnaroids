@@ -1,0 +1,7 @@
+leb128fmt 0.1.0
+Official published package: https://crates.io/api/v1/crates/leb128fmt/0.1.0/download
+Cargo package SHA-256 from lockfile: 09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2
+Declared license: MIT OR Apache-2.0
+Repository: https://github.com/bluk/leb128fmt
+Published VCS revision: 8bf933b6c8aa3d1920f69d4dc71f190b626f979d
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-MIT

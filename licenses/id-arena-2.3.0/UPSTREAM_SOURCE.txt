@@ -1,0 +1,7 @@
+id-arena 2.3.0
+Official published package: https://crates.io/api/v1/crates/id-arena/2.3.0/download
+Cargo package SHA-256 from lockfile: 3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954
+Declared license: MIT/Apache-2.0
+Repository: https://github.com/fitzgen/id-arena
+Published VCS revision: 52bd3681cf295a220f78de945d32a26ead712385
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-MIT

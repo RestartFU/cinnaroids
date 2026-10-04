@@ -1,131 +1,219 @@
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AimMode {
-    Continuous,
-    #[default]
-    WhileClicking,
-}
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    pub cps: u32,
-    pub toggle_key: String,
-    pub minimize_on_enable: bool,
     pub dark_mode: bool,
-    pub aim_strength: u32,
-    pub aim_mode: AimMode,
     pub cinnabar_path: Option<PathBuf>,
 }
+
+/// Prefer this package's client over a saved managed bundle, preserving custom clients.
+pub fn select_client(saved: Option<PathBuf>, bundled: Option<PathBuf>) -> Option<PathBuf> {
+    let managed_bundle = saved.as_ref().is_some_and(|path| {
+        path.parent().is_some_and(|directory| {
+            directory
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Cinnabar"))
+                && directory
+                    .parent()
+                    .and_then(Path::file_name)
+                    .is_some_and(|name| managed_package(&name.to_string_lossy()))
+        })
+    });
+    if managed_bundle {
+        bundled.or(saved)
+    } else {
+        saved.or(bundled)
+    }
+}
+
+fn managed_package(name: &str) -> bool {
+    if name.eq_ignore_ascii_case(crate::PRODUCT_NAME)
+        || name.eq_ignore_ascii_case("CinnabarClicker")
+    {
+        return true;
+    }
+    let Some((product, version)) = name.rsplit_once('-') else {
+        return false;
+    };
+    product.eq_ignore_ascii_case(crate::PRODUCT_NAME)
+        && version.split('.').count() == 3
+        && version.split('.').all(|part| part.parse::<u32>().is_ok())
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            cps: 12,
-            toggle_key: "F8".into(),
-            minimize_on_enable: false,
             dark_mode: true,
-            aim_strength: 35,
-            aim_mode: AimMode::WhileClicking,
             cinnabar_path: None,
         }
     }
 }
+
 impl Settings {
     pub fn path() -> Option<PathBuf> {
-        std::env::var_os("LOCALAPPDATA").map(|base| {
-            PathBuf::from(base)
-                .join("CinnabarClicker")
-                .join("settings.json")
-        })
+        std::env::var_os("LOCALAPPDATA")
+            .map(|base| PathBuf::from(base).join("Cinnaroids/settings.json"))
     }
+
     pub fn load() -> (Self, Option<String>) {
-        let Some(path) = Self::path() else {
+        let Some(base) = std::env::var_os("LOCALAPPDATA") else {
             return (Self::default(), Some("Settings folder unavailable.".into()));
         };
-        match fs::read(&path) {
-            Ok(bytes) => match serde_json::from_slice::<Self>(&bytes) {
-                Ok(mut settings) => {
-                    settings.cps = settings.cps.clamp(1, 30);
-                    settings.aim_strength = settings.aim_strength.min(100);
-                    (settings, None)
+        let base = PathBuf::from(base);
+        Self::load_from(
+            &base.join("Cinnaroids/settings.json"),
+            &base.join("CinnabarClicker/settings.json"),
+        )
+    }
+
+    fn load_from(path: &Path, legacy: &Path) -> (Self, Option<String>) {
+        let (bytes, migrated) = match fs::read(path) {
+            Ok(bytes) => (bytes, false),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => match fs::read(legacy) {
+                Ok(bytes) => (bytes, true),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return (Self::default(), None);
                 }
-                Err(_) => (
+                Err(_) => {
+                    return (
+                        Self::default(),
+                        Some("Saved settings could not be read.".into()),
+                    );
+                }
+            },
+            Err(_) => {
+                return (
+                    Self::default(),
+                    Some("Saved settings could not be read.".into()),
+                );
+            }
+        };
+        let settings = match serde_json::from_slice::<Self>(&bytes) {
+            Ok(settings) => settings,
+            Err(_) => {
+                return (
                     Self::default(),
                     Some("Saved settings could not be read. Defaults restored.".into()),
-                ),
-            },
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Self::default(), None),
-            Err(_) => (
-                Self::default(),
-                Some("Saved settings could not be read.".into()),
-            ),
-        }
+                );
+            }
+        };
+        let error = if migrated {
+            settings.save_to(path).err()
+        } else {
+            None
+        };
+        (settings, error)
     }
+
     pub fn save(&self) -> Result<(), String> {
         let path = Self::path().ok_or("Settings folder unavailable.")?;
-        fs::create_dir_all(path.parent().unwrap())
+        self.save_to(&path)
+    }
+
+    fn save_to(&self, path: &Path) -> Result<(), String> {
+        fs::create_dir_all(path.parent().ok_or("Settings folder unavailable.")?)
             .map_err(|_| "Could not create settings folder.")?;
         let bytes = serde_json::to_vec_pretty(self).map_err(|_| "Could not encode settings.")?;
-        let temp = path.with_extension("tmp");
-        fs::write(&temp, bytes).map_err(|_| "Could not save settings.")?;
-        fs::rename(&temp, &path).map_err(|_| "Could not replace saved settings.".to_string())
+        let temp = path.with_extension(format!("pending-{}", std::process::id()));
+        let result = (|| {
+            fs::write(&temp, bytes).map_err(|_| "Could not save settings.")?;
+            fs::rename(&temp, path).map_err(|_| "Could not replace saved settings.".to_string())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(temp);
+        }
+        result
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static ID: AtomicU64 = AtomicU64::new(0);
+
     #[test]
-    fn older_settings_preserve_preferences_and_ignore_legacy_accent() {
-        let settings: Settings = serde_json::from_str(
-            r#"{"cps":18,"toggle_key":"VK:65","minimize_on_enable":true,"purple":true}"#,
-        )
-        .unwrap();
-        assert_eq!(settings.cps, 18);
-        assert_eq!(settings.toggle_key, "VK:65");
-        assert!(settings.minimize_on_enable);
-        assert!(settings.dark_mode);
-        assert_eq!(settings.aim_strength, 35);
-        assert_eq!(settings.aim_mode, AimMode::WhileClicking);
-        assert_eq!(settings.cinnabar_path, None);
-        assert!(!serde_json::to_string(&settings).unwrap().contains("purple"));
-    }
-    #[test]
-    fn preferences_round_trip_without_enabled_state() {
-        let original = Settings {
-            cps: 24,
-            toggle_key: "F6".into(),
-            minimize_on_enable: true,
-            dark_mode: false,
-            aim_strength: 70,
-            aim_mode: AimMode::Continuous,
-            cinnabar_path: Some(PathBuf::from("C:/Cinnabar/bedrock-client.exe")),
-        };
-        let json = serde_json::to_string(&original).unwrap();
-        let values: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert!(values.get("enabled").is_none());
-        assert!(values.get("aim_enabled").is_none());
-        let restored: Settings = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.cps, 24);
-        assert_eq!(restored.toggle_key, "F6");
-        assert!(restored.minimize_on_enable);
-        assert!(!restored.dark_mode);
-        assert_eq!(restored.aim_strength, 70);
-        assert_eq!(restored.aim_mode, AimMode::Continuous);
-        assert_eq!(restored.cinnabar_path, original.cinnabar_path);
-        assert_eq!(values["aim_mode"], "continuous");
+    fn old_module_fields_do_not_become_launcher_controls() {
+        let settings: Settings = serde_json::from_str(r#"{"cps":18,"toggle_key":"F6","aim_strength":70,"dark_mode":false,"cinnabar_path":"C:/Cinnabar/bedrock-client.exe"}"#).unwrap();
+        assert!(!settings.dark_mode);
+        assert_eq!(
+            settings.cinnabar_path,
+            Some(PathBuf::from("C:/Cinnabar/bedrock-client.exe"))
+        );
+        let values = serde_json::to_value(&settings).unwrap();
+        assert_eq!(values.as_object().unwrap().len(), 2);
+        assert!(Settings::default().dark_mode);
     }
 
     #[test]
-    fn aim_preferences_default_to_clicking_and_serialize_with_snake_case() {
-        let settings = Settings::default();
-        assert_eq!(settings.aim_strength, 35);
-        assert_eq!(settings.aim_mode, AimMode::WhileClicking);
-        assert_eq!(settings.cinnabar_path, None);
-        let values = serde_json::to_value(settings).unwrap();
-        assert_eq!(values["aim_mode"], "while_clicking");
-        assert!(values.get("aim_enabled").is_none());
+    fn migration_preserves_legacy_file_and_new_settings_take_precedence() {
+        let directory = std::env::temp_dir().join(format!(
+            "cinnaroids-settings-{}-{}",
+            std::process::id(),
+            ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let legacy = directory.join("legacy.json");
+        let new = directory.join("new/settings.json");
+        let old_bytes =
+            br#"{"dark_mode":false,"cinnabar_path":"C:/Custom/bedrock-client.exe","cps":20}"#;
+        fs::write(&legacy, old_bytes).unwrap();
+        let (settings, error) = Settings::load_from(&new, &legacy);
+        assert!(error.is_none());
+        assert!(!settings.dark_mode);
+        assert!(new.is_file());
+        assert_eq!(fs::read(&legacy).unwrap(), old_bytes);
+        Settings::default().save_to(&new).unwrap();
+        let (settings, error) = Settings::load_from(&new, &legacy);
+        assert!(error.is_none());
+        assert!(settings.dark_mode);
+        assert!(settings.cinnabar_path.is_none());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn updated_package_replaces_a_saved_managed_bundle() {
+        let updated = PathBuf::from("C:/Apps/Cinnaroids-2.0.0/Cinnabar/bedrock-client.exe");
+        for old in [
+            "C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe",
+            "C:/Apps/Cinnaroids-1.9.0/Cinnabar/bedrock-client.exe",
+        ] {
+            assert_eq!(
+                select_client(Some(PathBuf::from(old)), Some(updated.clone())),
+                Some(updated.clone())
+            );
+        }
+        let custom = PathBuf::from("C:/Apps/Cinnaroids-custom/Cinnabar/bedrock-client.exe");
+        assert_eq!(
+            select_client(Some(custom.clone()), Some(updated)),
+            Some(custom)
+        );
+    }
+
+    #[test]
+    fn renamed_bundle_replaces_legacy_bundle_but_keeps_custom_client() {
+        let bundle = PathBuf::from("C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe");
+        let legacy = PathBuf::from("C:/Apps/CinnabarClicker/Cinnabar/bedrock-client.exe");
+        assert_eq!(
+            select_client(Some(legacy.clone()), Some(bundle.clone())),
+            Some(bundle.clone())
+        );
+        let custom = PathBuf::from("C:/Custom/Cinnabar/bedrock-client.exe");
+        assert_eq!(
+            select_client(Some(custom.clone()), Some(bundle.clone())),
+            Some(custom)
+        );
+        let custom = PathBuf::from("C:/Apps/CinnabarClicker/Custom/bedrock-client.exe");
+        assert_eq!(
+            select_client(Some(custom.clone()), Some(bundle.clone())),
+            Some(custom)
+        );
+        assert_eq!(select_client(Some(legacy.clone()), None), Some(legacy));
+        assert_eq!(select_client(None, Some(bundle.clone())), Some(bundle));
     }
 }

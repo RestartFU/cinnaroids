@@ -1,0 +1,6 @@
+Cinnabar mod-api 0.1.3
+Source repository: https://github.com/bedrock-mc/cinnabar
+Source directory: crates/mod-api
+SDK revision: 385821098c39a44292b6e326c05867121a9d14bd
+The upstream package and workspace do not declare a license.
+No root LICENSE or COPYING file is present in the selected upstream source.

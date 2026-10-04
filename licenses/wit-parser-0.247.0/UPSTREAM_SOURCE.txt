@@ -1,0 +1,7 @@
+wit-parser 0.247.0
+Official published package: https://crates.io/api/v1/crates/wit-parser/0.247.0/download
+Cargo package SHA-256 from lockfile: 8ffe4064318cdf3c08cb99343b44c039fcefe61ccdf58aa9975285f13d74d1fc
+Declared license: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wit-parser
+Published VCS revision: 0285a4680738439cb884d2674bec8be1e8beac5c
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-Apache-2.0_WITH_LLVM-exception, LICENSE-MIT

@@ -1,0 +1,7 @@
+macro-string 0.2.0
+Official published package: https://crates.io/api/v1/crates/macro-string/0.2.0/download
+Cargo package SHA-256 from lockfile: 59a9dbbfc75d2688ed057456ce8a3ee3f48d12eec09229f560f3643b9f275653
+Declared license: MIT OR Apache-2.0
+Repository: https://github.com/dtolnay/macro-string
+Published VCS revision: 82ed15030fb6d5d436a43e562af2061df685173d
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-MIT

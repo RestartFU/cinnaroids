@@ -1,0 +1,7 @@
+foldhash 0.2.0
+Official published package: https://crates.io/api/v1/crates/foldhash/0.2.0/download
+Cargo package SHA-256 from lockfile: 77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb
+Declared license: Zlib
+Repository: https://github.com/orlp/foldhash
+Published VCS revision: 8f878c636fda9c9e93384824ea45e06d03f009f5
+License files copied unmodified from the cached published package: LICENSE

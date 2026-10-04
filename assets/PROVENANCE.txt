@@ -1,32 +1,31 @@
-Cinnabar clicker visual references
-================================
+Cinnaroids visual references
+===========================
 
-The mark.svg and cinnabar-mark.svg assets are independently drawn C monograms
-created for this app. They do not contain copied logos or pixel data.
-The cinnabar-icon.png and cinnabar.ico files are raster conversions of the
-independently drawn cinnabar-mark.svg. The ICO contains 16, 32, 48, 64, 128
-and 256 pixel images.
+The mark.svg and cinnaroids-mark.svg assets are independently drawn C
+monograms created for this app. They contain no copied logos or pixel data.
+The cinnaroids-icon.png and cinnaroids.ico files are raster conversions of
+cinnaroids-mark.svg. The ICO contains 16, 32, 48, 64, 128 and 256 pixel images.
 
-The minimize.svg, maximize.svg,
-restore.svg, and close.svg files are original 16x16 line icons for the regular
-top-right window controls. They contain no copied platform artwork.
+The minimize.svg, maximize.svg, restore.svg, and close.svg files are original
+16x16 line icons for the regular top-right window controls.
 
-Design inspiration: the vermilion and coral palette of the Cinnabar project's
-red title art and cube icon, combined with the user's initial dark sidebar
-screenshot. Version 1.4.0 uses neutral charcoal or white surfaces, a single
-coral accent, two tabs and regular top-right window controls. Backgrounds are
-rendered by GPUI with native Windows acrylic. No Apple artwork or system
-assets are included.
+The neutral charcoal and white launcher surfaces use a coral accent with a
+native Windows backdrop. No Apple artwork or system assets are included.
 
-Reference repository: https://github.com/bedrock-mc/cinnabar/
-Inspected commit: bcf245974d6ba81f093141898defb5fb2c13b348
+Design inspiration: https://github.com/bedrock-mc/cinnabar/
+Reference commit: bcf245974d6ba81f093141898defb5fb2c13b348
 Reference files: assets/branding/title.png, packaging/icons/cinnabar.svg,
 THIRD_PARTY_NOTICES.md.
 
-The repository's notices describe its launcher title and panorama as original
-art generated for Cinnabar. No license granting reuse of those branding assets
-was found, so neither is included in this distribution. No game resources are
-included.
+No license granting reuse of the referenced branding assets was found, so
+they are not included. No game resources are committed to this repository.
+Cinnaroids is independent of the Cinnabar client and its maintainers.
 
-This is an independent external clicker app. It is not the Bedrock game client
-distributed by bedrock-mc/cinnabar and is not affiliated with its maintainers.
+README screenshot
+-----------------
+assets/screenshot.png is an unedited 1280x720 native GPU capture of the
+host-rendered Cinnaroids personal panel, taken at DPI 1 and GUI scale 2.
+The preview uses Cinnabar's JSON-UI/rendering path with original panel
+controls, a plain background, and the licensed Inter Medium font. It contains no
+Minecraft artwork or connected-server footage.
+SHA-256: 22C0ECA12AE5BF7044FE22BF0296623F1488EB1048138C1B60EC44358F74140B

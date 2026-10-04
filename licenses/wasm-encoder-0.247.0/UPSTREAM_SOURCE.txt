@@ -1,0 +1,7 @@
+wasm-encoder 0.247.0
+Official published package: https://crates.io/api/v1/crates/wasm-encoder/0.247.0/download
+Cargo package SHA-256 from lockfile: 30b6733b8b91d010a6ac5b0fb237dc46a19650bc4c67db66857e2e787d437204
+Declared license: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
+Repository: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder
+Published VCS revision: 0285a4680738439cb884d2674bec8be1e8beac5c
+License files copied unmodified from the cached published package: LICENSE-APACHE, LICENSE-Apache-2.0_WITH_LLVM-exception, LICENSE-MIT
