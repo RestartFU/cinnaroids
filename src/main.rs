@@ -1,12 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod aimassist;
 mod engine;
 mod settings;
 mod window_frame;
 
+use aimassist::AimAssist;
 use engine::{Engine, ToggleKey};
 use gpui::{prelude::*, *};
-use settings::Settings;
-use std::{borrow::Cow, cell::Cell, rc::Rc, time::Duration};
+use settings::{AimMode, Settings};
+use std::{borrow::Cow, cell::Cell, path::PathBuf, rc::Rc, time::Duration};
 
 struct Assets;
 impl AssetSource for Assets {
@@ -37,10 +39,20 @@ impl AssetSource for Assets {
 #[derive(Clone, Copy, PartialEq)]
 enum Page {
     Clicker,
+    AimAssist,
     Settings,
+}
+#[derive(Clone, Copy)]
+enum Slider {
+    ClickSpeed,
+    AimStrength,
 }
 struct Client {
     engine: Engine,
+    aim: Option<AimAssist>,
+    aim_enabled: bool,
+    aim_error: Option<String>,
+    aim_status: Option<String>,
     preferences: Settings,
     page: Page,
     error: Option<String>,
@@ -48,8 +60,10 @@ struct Client {
     preview: bool,
     was_enabled: bool,
     binding_revision: u64,
+    stop_revision: u64,
     slider_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
-    dragging: bool,
+    aim_slider_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    dragging: Option<Slider>,
 }
 impl Client {
     fn new(preview: bool, page: Page, window: &Window, cx: &mut Context<Self>) -> Self {
@@ -74,7 +88,22 @@ impl Client {
         let key = ToggleKey::from_label(&preferences.toggle_key).unwrap_or(ToggleKey::F8);
         preferences.toggle_key = key.storage_label();
         engine.set_toggle_key(key);
-        let binding_revision = engine.snapshot().binding_revision;
+        let snapshot = engine.snapshot();
+        let binding_revision = snapshot.binding_revision;
+        let stop_revision = snapshot.stop_revision;
+        let (aim, aim_error) = if preview {
+            (None, None)
+        } else {
+            match AimAssist::new() {
+                Ok(aim) => {
+                    let error = aim
+                        .publish(false, preferences.aim_strength, preferences.aim_mode)
+                        .err();
+                    (Some(aim), error)
+                }
+                Err(error) => (None, Some(error)),
+            }
+        };
         cx.spawn_in(window, async move |view, cx| {
             loop {
                 Timer::after(Duration::from_millis(80)).await;
@@ -89,6 +118,12 @@ impl Client {
                                 window.minimize_window();
                             }
                             s.was_enabled = snapshot.enabled;
+                            if snapshot.stop_revision != s.stop_revision
+                                || (s.aim_enabled && !s.preview && !snapshot.hotkeys_available)
+                            {
+                                s.stop_revision = snapshot.stop_revision;
+                                s.stop_aim();
+                            }
                             if snapshot.binding_revision != s.binding_revision {
                                 s.binding_revision = snapshot.binding_revision;
                                 s.preferences.toggle_key = snapshot.toggle_key.storage_label();
@@ -109,6 +144,10 @@ impl Client {
         .detach();
         Self {
             engine,
+            aim,
+            aim_enabled: false,
+            aim_error,
+            aim_status: None,
             preferences,
             page,
             error,
@@ -116,8 +155,10 @@ impl Client {
             preview,
             was_enabled: false,
             binding_revision,
+            stop_revision,
             slider_bounds: Rc::new(Cell::new(None)),
-            dragging: false,
+            aim_slider_bounds: Rc::new(Cell::new(None)),
+            dragging: None,
         }
     }
     fn tone(&self, dark: u32, light: u32) -> u32 {
@@ -148,7 +189,98 @@ impl Client {
     fn save(&mut self) {
         if !self.preview {
             self.error = self.preferences.save().err();
+            self.publish_aim();
         }
+    }
+    fn publish_aim(&mut self) {
+        if let Some(aim) = &self.aim {
+            self.aim_error = aim
+                .publish(
+                    self.aim_enabled,
+                    self.preferences.aim_strength,
+                    self.preferences.aim_mode,
+                )
+                .err();
+            if self.aim_error.is_some() {
+                self.aim_enabled = false;
+            }
+        }
+    }
+    fn stop_aim(&mut self) {
+        self.aim_enabled = false;
+        self.publish_aim();
+    }
+    fn toggle_aim(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        let can_enable = self.preview
+            || (self.startup_error.is_none() && self.engine.snapshot().hotkeys_available);
+        if (self.aim.is_some() || self.preview) && (self.aim_enabled || can_enable) {
+            self.aim_enabled = !self.aim_enabled;
+            self.publish_aim();
+            cx.notify();
+        }
+    }
+    fn set_aim_strength(&mut self, strength: u32, cx: &mut Context<Self>) {
+        self.preferences.aim_strength = strength.min(100);
+        self.save();
+        cx.notify();
+    }
+    fn launch_cinnabar(&mut self, executable: PathBuf, cx: &mut Context<Self>) {
+        let Some(aim) = &self.aim else { return };
+        match aim.launch(&executable) {
+            Ok(()) => {
+                self.preferences.cinnabar_path = Some(executable);
+                self.save();
+                self.aim_status = Some("Cinnabar started.".into());
+            }
+            Err(error) => {
+                self.aim_error = Some(error);
+                self.aim_status = None;
+            }
+        }
+        cx.notify();
+    }
+    fn start_cinnabar(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.preview || self.aim.is_none() {
+            return;
+        }
+        let executable = self
+            .preferences
+            .cinnabar_path
+            .clone()
+            .filter(|path| path.is_file())
+            .or_else(|| {
+                std::env::current_exe()
+                    .ok()?
+                    .parent()
+                    .map(|directory| directory.join("Cinnabar").join("bedrock-client.exe"))
+                    .filter(|path| path.is_file())
+            });
+        if let Some(executable) = executable {
+            self.launch_cinnabar(executable, cx);
+            return;
+        }
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Select Cinnabar's bedrock-client.exe".into()),
+        });
+        cx.spawn_in(window, async move |view, cx| {
+            let result = paths.await;
+            let _ = view.update(cx, |s, cx| match result {
+                Ok(Ok(Some(paths))) => {
+                    if let Some(path) = paths.into_iter().next() {
+                        s.launch_cinnabar(path, cx);
+                    }
+                }
+                Ok(Ok(None)) => {}
+                _ => {
+                    s.aim_error = Some("Could not select Cinnabar.".into());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
     }
     fn set_cps(&mut self, cps: u32, cx: &mut Context<Self>) {
         self.preferences.cps = cps.clamp(1, 30);
@@ -162,10 +294,17 @@ impl Client {
             cx.notify();
         }
     }
-    fn set_slider(&mut self, x: Pixels, cx: &mut Context<Self>) {
-        if let Some(bounds) = self.slider_bounds.get() {
+    fn set_slider(&mut self, slider: Slider, x: Pixels, cx: &mut Context<Self>) {
+        let bounds = match slider {
+            Slider::ClickSpeed => self.slider_bounds.get(),
+            Slider::AimStrength => self.aim_slider_bounds.get(),
+        };
+        if let Some(bounds) = bounds.filter(|bounds| bounds.size.width > px(0.0)) {
             let ratio = ((x - bounds.origin.x) / bounds.size.width).clamp(0.0, 1.0);
-            self.set_cps((1.0 + ratio * 29.0).round() as u32, cx);
+            match slider {
+                Slider::ClickSpeed => self.set_cps((1.0 + ratio * 29.0).round() as u32, cx),
+                Slider::AimStrength => self.set_aim_strength((ratio * 100.0).round() as u32, cx),
+            }
         }
     }
     fn icon(path: &'static str, color: u32, size: f32) -> Svg {
@@ -263,8 +402,9 @@ impl Client {
             .hover(|d| d.bg(self.tint(0xffffff10, 0xffffffd9)))
             .on_click(cx.listener(move |s, _, _, cx| {
                 s.engine.cancel_key_capture();
-                s.dragging = false;
+                s.dragging = None;
                 s.slider_bounds.set(None);
+                s.aim_slider_bounds.set(None);
                 s.page = page;
                 cx.notify();
             }))
@@ -373,8 +513,8 @@ impl Client {
                             .on_mouse_down(
                                 MouseButton::Left,
                                 cx.listener(|s, e: &MouseDownEvent, _, cx| {
-                                    s.dragging = true;
-                                    s.set_slider(e.position.x, cx);
+                                    s.dragging = Some(Slider::ClickSpeed);
+                                    s.set_slider(Slider::ClickSpeed, e.position.x, cx);
                                 }),
                             )
                             .child(
@@ -517,6 +657,171 @@ impl Client {
             )
             .into_any_element()
     }
+    fn aim_page(&self, cx: &mut Context<Self>) -> AnyElement {
+        let strength = self.preferences.aim_strength;
+        let bounds = self.aim_slider_bounds.clone();
+        div()
+            .child(
+                self.panel()
+                    .px(px(20.0))
+                    .child(
+                        self.row(
+                            "Aim assist",
+                            "Adjust aim toward nearby players.",
+                            div()
+                                .id("aim-enable-switch")
+                                .cursor_pointer()
+                                .on_click(cx.listener(Self::toggle_aim))
+                                .child(self.switch(self.aim_enabled))
+                                .into_any_element(),
+                        ),
+                    )
+                    .child(self.divider())
+                    .child(
+                        div()
+                            .py(px(16.0))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .child("Strength")
+                                    .child(
+                                        div()
+                                            .text_color(rgb(self.muted()))
+                                            .child(format!("{strength}%")),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id("aim-strength-slider")
+                                    .relative()
+                                    .h(px(30.0))
+                                    .mt(px(8.0))
+                                    .mx(px(8.0))
+                                    .cursor_pointer()
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|s, e: &MouseDownEvent, _, cx| {
+                                            s.dragging = Some(Slider::AimStrength);
+                                            s.set_slider(Slider::AimStrength, e.position.x, cx);
+                                        }),
+                                    )
+                                    .child(
+                                        canvas(
+                                            move |rect, _, _| {
+                                                bounds.set(Some(rect));
+                                            },
+                                            |_, _, _, _| {},
+                                        )
+                                        .absolute()
+                                        .size_full(),
+                                    )
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(13.0))
+                                            .w_full()
+                                            .h(px(4.0))
+                                            .rounded_full()
+                                            .bg(self.tint(0xffffff1a, 0x00000015)),
+                                    )
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(13.0))
+                                            .w(relative(strength as f32 / 100.0))
+                                            .h(px(4.0))
+                                            .rounded_full()
+                                            .bg(rgb(self.accent())),
+                                    )
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .top(px(7.0))
+                                            .left(relative(strength as f32 / 100.0))
+                                            .ml(px(-8.0))
+                                            .size(px(16.0))
+                                            .rounded_full()
+                                            .bg(rgb(self.accent())),
+                                    ),
+                            ),
+                    )
+                    .child(self.divider())
+                    .child(
+                        self.row(
+                            "Activation",
+                            "Choose when to assist.",
+                            div()
+                                .flex()
+                                .gap(px(4.0))
+                                .children(
+                                    [
+                                        ("Continuous", AimMode::Continuous),
+                                        ("While clicking", AimMode::WhileClicking),
+                                    ]
+                                    .into_iter()
+                                    .map(|(title, mode)| {
+                                        div()
+                                            .id(title)
+                                            .px(px(10.0))
+                                            .py(px(7.0))
+                                            .rounded(px(6.0))
+                                            .cursor_pointer()
+                                            .text_size(px(11.0))
+                                            .bg(if self.preferences.aim_mode == mode {
+                                                self.accent_fill(26)
+                                            } else {
+                                                self.tint(0xffffff08, 0x00000004)
+                                            })
+                                            .text_color(rgb(if self.preferences.aim_mode == mode {
+                                                self.accent()
+                                            } else {
+                                                self.muted()
+                                            }))
+                                            .hover(|d| d.bg(self.tint(0xffffff16, 0x0000000b)))
+                                            .on_click(cx.listener(move |s, _, _, cx| {
+                                                s.preferences.aim_mode = mode;
+                                                s.save();
+                                                cx.notify();
+                                            }))
+                                            .child(title)
+                                    }),
+                                )
+                                .into_any_element(),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .mt(px(12.0))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.0))
+                    .child(
+                        div()
+                            .text_size(px(11.0))
+                            .text_color(rgb(self.muted()))
+                            .child(self.aim_status.clone().unwrap_or_else(|| {
+                                "Start a new Cinnabar session to use aim assist.".into()
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("start-cinnabar")
+                            .px(px(12.0))
+                            .py(px(8.0))
+                            .rounded(px(6.0))
+                            .cursor_pointer()
+                            .bg(self.tint(0xffffff0c, 0x00000005))
+                            .hover(|d| d.bg(self.tint(0xffffff16, 0x0000000b)))
+                            .on_click(cx.listener(Self::start_cinnabar))
+                            .child("Start Cinnabar"),
+                    ),
+            )
+            .into_any_element()
+    }
     fn header(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         div()
             .h(px(56.0))
@@ -599,6 +904,7 @@ impl Client {
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(|s, _, _, cx| {
                                 s.engine.stop();
+                                s.stop_aim();
                                 cx.quit();
                             }))
                             .child(Self::icon("close.svg", self.muted(), 15.0)),
@@ -609,7 +915,23 @@ impl Client {
 impl Render for Client {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let snapshot = self.engine.snapshot();
-        let status = if self.startup_error.is_some() {
+        let active = if self.page == Page::AimAssist {
+            self.aim_enabled
+        } else {
+            snapshot.enabled
+        };
+        let status = if self.page == Page::AimAssist {
+            if self.aim_error.is_some()
+                || self.startup_error.is_some()
+                || (!snapshot.hotkeys_available && !self.preview)
+            {
+                "Unavailable"
+            } else if self.aim_enabled {
+                "Enabled"
+            } else {
+                "Disabled"
+            }
+        } else if self.startup_error.is_some() {
             "Unavailable"
         } else if snapshot.input_error.is_some() {
             "Input blocked"
@@ -629,13 +951,20 @@ impl Render for Client {
         } else {
             snapshot.last_error
         };
-        let error = self
-            .startup_error
-            .clone()
-            .or(binding_error)
-            .or(self.error.clone());
+        let error = if self.page == Page::AimAssist {
+            self.startup_error
+                .clone()
+                .or(self.aim_error.clone())
+                .or(self.error.clone())
+        } else {
+            self.startup_error
+                .clone()
+                .or(binding_error)
+                .or(self.error.clone())
+        };
         let content = match self.page {
             Page::Clicker => self.clicker_page(cx),
+            Page::AimAssist => self.aim_page(cx),
             Page::Settings => self.settings_page(cx),
         };
         div()
@@ -649,16 +978,19 @@ impl Render for Client {
             .flex()
             .flex_col()
             .on_mouse_move(cx.listener(|s, e: &MouseMoveEvent, _, cx| {
-                if s.dragging && e.pressed_button == Some(MouseButton::Left) {
-                    s.set_slider(e.position.x, cx);
+                if let Some(slider) = s
+                    .dragging
+                    .filter(|_| e.pressed_button == Some(MouseButton::Left))
+                {
+                    s.set_slider(slider, e.position.x, cx);
                 }
                 if e.pressed_button.is_none() {
-                    s.dragging = false;
+                    s.dragging = None;
                 }
             }))
             .on_mouse_up(
                 MouseButton::Left,
-                cx.listener(|s, _, _, _| s.dragging = false),
+                cx.listener(|s, _, _, _| s.dragging = None),
             )
             .child(self.header(window, cx))
             .child(
@@ -670,6 +1002,7 @@ impl Render for Client {
                     .items_center()
                     .gap(px(4.0))
                     .child(self.tab("Clicker", Page::Clicker, cx))
+                    .child(self.tab("Aim assist", Page::AimAssist, cx))
                     .child(self.tab("Preferences", Page::Settings, cx)),
             )
             .child(
@@ -710,32 +1043,41 @@ impl Render for Client {
                             .flex()
                             .items_center()
                             .gap(px(7.0))
-                            .child(div().size(px(5.0)).rounded_full().bg(rgb(
-                                if snapshot.enabled {
-                                    self.accent()
-                                } else {
-                                    self.faint()
-                                },
-                            )))
+                            .child(div().size(px(5.0)).rounded_full().bg(rgb(if active {
+                                self.accent()
+                            } else {
+                                self.faint()
+                            })))
                             .child(status),
                     )
-                    .child(format!(
-                        "{} toggle · {}",
-                        snapshot
-                            .active_toggle_key
-                            .map_or_else(|| snapshot.toggle_key.label(), |key| key.label()),
+                    .child(if self.page == Page::AimAssist {
                         if snapshot.hotkeys_available || self.preview {
                             "F10 stop"
                         } else {
                             "Hotkeys unavailable"
                         }
-                    )),
+                        .into()
+                    } else {
+                        format!(
+                            "{} toggle · {}",
+                            snapshot
+                                .active_toggle_key
+                                .map_or_else(|| snapshot.toggle_key.label(), |key| key.label()),
+                            if snapshot.hotkeys_available || self.preview {
+                                "F10 stop"
+                            } else {
+                                "Hotkeys unavailable"
+                            }
+                        )
+                    }),
             )
     }
 }
 fn main() {
     let preview = std::env::args().any(|arg| arg == "--smoke-test");
-    let page = if preview && std::env::args().any(|arg| arg == "--page=settings") {
+    let page = if preview && std::env::args().any(|arg| arg == "--page=aim") {
+        Page::AimAssist
+    } else if preview && std::env::args().any(|arg| arg == "--page=settings") {
         Page::Settings
     } else {
         Page::Clicker
@@ -774,7 +1116,9 @@ fn main() {
                 },
             )
             .expect("Could not open Cinnabar clicker window");
-            cx.activate(true);
+            if !preview {
+                cx.activate(true);
+            }
             if preview {
                 cx.spawn(async move |cx| {
                     Timer::after(Duration::from_secs(3)).await;

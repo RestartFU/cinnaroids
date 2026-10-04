@@ -1,0 +1,24 @@
+[package]
+name = "cinnabar-aimassist-mod"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93.1"
+license = "MIT"
+publish = false
+
+[workspace]
+members = ["pack"]
+resolver = "3"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+mod-api = { git = "https://github.com/bedrock-mc/cinnabar", rev = "d392984f60372b18c99254485ad89b12cece36a5" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

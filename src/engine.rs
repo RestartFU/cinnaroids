@@ -166,6 +166,8 @@ pub struct Snapshot {
     pub capturing_key: bool,
     /// Changes when a binding is set or captured, so the UI can save it immediately.
     pub binding_revision: u64,
+    /// Changes on every emergency stop, including when clicking is already disabled.
+    pub stop_revision: u64,
     pub hotkeys_available: bool,
     #[cfg(test)]
     pub clicks: u64,
@@ -184,6 +186,7 @@ struct State {
     active_toggle_key: Option<ToggleKey>,
     capturing_key: bool,
     binding_revision: u64,
+    stop_revision: u64,
     keys_down: [bool; 256],
     consumed_keys: [bool; 256],
     stop_registered: bool,
@@ -206,6 +209,7 @@ impl Default for State {
             active_toggle_key: None,
             capturing_key: false,
             binding_revision: 0,
+            stop_revision: 0,
             keys_down: [false; 256],
             consumed_keys: [false; 256],
             stop_registered: false,
@@ -237,6 +241,7 @@ impl Shared {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    #[cfg(test)]
     fn enabled(&self, enabled: bool) {
         let mut state = self.lock();
         if !state.stopping && (!enabled || !state.capturing_key) {
@@ -259,6 +264,15 @@ impl Shared {
                 state.input_error = None;
             }
         }
+        drop(state);
+        self.wake.notify_all();
+    }
+
+    fn stop(&self) {
+        let mut state = self.lock();
+        state.enabled = false;
+        state.revision = state.revision.wrapping_add(1);
+        state.stop_revision = state.stop_revision.wrapping_add(1);
         drop(state);
         self.wake.notify_all();
     }
@@ -306,6 +320,7 @@ impl Shared {
         if virtual_key == VK_F10 as u32 {
             state.enabled = false;
             state.revision = state.revision.wrapping_add(1);
+            state.stop_revision = state.stop_revision.wrapping_add(1);
             if state.capturing_key {
                 state.hotkey_error =
                     Some("F10 is reserved for emergency stop. Press another key.".into());
@@ -461,6 +476,7 @@ impl Engine {
             active_toggle_key: state.active_toggle_key,
             capturing_key: state.capturing_key,
             binding_revision: state.binding_revision,
+            stop_revision: state.stop_revision,
             hotkeys_available: state.active_toggle_key.is_some() && state.stop_registered,
             #[cfg(test)]
             clicks: state.clicks,
@@ -510,6 +526,7 @@ impl Engine {
         state.hotkey_error = None;
     }
 
+    #[cfg(test)]
     pub fn set_enabled(&self, enabled: bool) {
         self.inner.shared.enabled(enabled);
     }
@@ -519,7 +536,7 @@ impl Engine {
     }
 
     pub fn stop(&self) {
-        self.set_enabled(false);
+        self.inner.shared.stop();
     }
 }
 
@@ -621,7 +638,7 @@ fn hook_main(shared: Arc<Shared>, ready: mpsc::SyncSender<Result<u32, String>>) 
             }
             if message.message == WM_HOTKEY {
                 if message.wParam as i32 == STOP_HOTKEY_ID {
-                    shared.enabled(false);
+                    shared.stop();
                 }
             } else {
                 unsafe {
@@ -1211,6 +1228,24 @@ mod tests {
         assert!(shared.observe_keyboard(WM_KEYDOWN, b'A' as u32, 0));
         assert_eq!(engine.snapshot().toggle_key.virtual_key(), b'A' as u32);
         assert!(engine.snapshot().hotkey_error.is_none());
+    }
+
+    #[test]
+    fn emergency_stop_notifies_other_features_when_clicker_is_off() {
+        let engine = keyboard_engine();
+        assert!(!engine.snapshot().enabled);
+        let initial = engine.snapshot().stop_revision;
+        engine
+            .inner
+            .shared
+            .observe_keyboard(WM_KEYDOWN, VK_F10 as u32, 0);
+        assert_eq!(engine.snapshot().stop_revision, initial.wrapping_add(1));
+        engine
+            .inner
+            .shared
+            .observe_keyboard(WM_KEYUP, VK_F10 as u32, 0);
+        engine.stop();
+        assert_eq!(engine.snapshot().stop_revision, initial.wrapping_add(2));
     }
 
     #[test]

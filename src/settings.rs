@@ -1,6 +1,14 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AimMode {
+    Continuous,
+    #[default]
+    WhileClicking,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -8,6 +16,9 @@ pub struct Settings {
     pub toggle_key: String,
     pub minimize_on_enable: bool,
     pub dark_mode: bool,
+    pub aim_strength: u32,
+    pub aim_mode: AimMode,
+    pub cinnabar_path: Option<PathBuf>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -16,6 +27,9 @@ impl Default for Settings {
             toggle_key: "F8".into(),
             minimize_on_enable: false,
             dark_mode: true,
+            aim_strength: 35,
+            aim_mode: AimMode::WhileClicking,
+            cinnabar_path: None,
         }
     }
 }
@@ -35,6 +49,7 @@ impl Settings {
             Ok(bytes) => match serde_json::from_slice::<Self>(&bytes) {
                 Ok(mut settings) => {
                     settings.cps = settings.cps.clamp(1, 30);
+                    settings.aim_strength = settings.aim_strength.min(100);
                     (settings, None)
                 }
                 Err(_) => (
@@ -72,6 +87,9 @@ mod tests {
         assert_eq!(settings.toggle_key, "VK:65");
         assert!(settings.minimize_on_enable);
         assert!(settings.dark_mode);
+        assert_eq!(settings.aim_strength, 35);
+        assert_eq!(settings.aim_mode, AimMode::WhileClicking);
+        assert_eq!(settings.cinnabar_path, None);
         assert!(!serde_json::to_string(&settings).unwrap().contains("purple"));
     }
     #[test]
@@ -81,13 +99,33 @@ mod tests {
             toggle_key: "F6".into(),
             minimize_on_enable: true,
             dark_mode: false,
+            aim_strength: 70,
+            aim_mode: AimMode::Continuous,
+            cinnabar_path: Some(PathBuf::from("C:/Cinnabar/bedrock-client.exe")),
         };
         let json = serde_json::to_string(&original).unwrap();
-        assert!(!json.contains("enabled"));
+        let values: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(values.get("enabled").is_none());
+        assert!(values.get("aim_enabled").is_none());
         let restored: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.cps, 24);
         assert_eq!(restored.toggle_key, "F6");
         assert!(restored.minimize_on_enable);
         assert!(!restored.dark_mode);
+        assert_eq!(restored.aim_strength, 70);
+        assert_eq!(restored.aim_mode, AimMode::Continuous);
+        assert_eq!(restored.cinnabar_path, original.cinnabar_path);
+        assert_eq!(values["aim_mode"], "continuous");
+    }
+
+    #[test]
+    fn aim_preferences_default_to_clicking_and_serialize_with_snake_case() {
+        let settings = Settings::default();
+        assert_eq!(settings.aim_strength, 35);
+        assert_eq!(settings.aim_mode, AimMode::WhileClicking);
+        assert_eq!(settings.cinnabar_path, None);
+        let values = serde_json::to_value(settings).unwrap();
+        assert_eq!(values["aim_mode"], "while_clicking");
+        assert!(values.get("aim_enabled").is_none());
     }
 }
