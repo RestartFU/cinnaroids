@@ -4,7 +4,7 @@ mod engine;
 mod settings;
 mod window_frame;
 
-use aimassist::AimAssist;
+use aimassist::{Activation, AimAssist};
 use engine::{Engine, ToggleKey};
 use gpui::{prelude::*, *};
 use settings::{AimMode, Settings};
@@ -50,7 +50,7 @@ enum Slider {
 struct Client {
     engine: Engine,
     aim: Option<AimAssist>,
-    aim_enabled: bool,
+    aim_state: Activation,
     aim_error: Option<String>,
     aim_status: Option<String>,
     preferences: Settings,
@@ -60,7 +60,6 @@ struct Client {
     preview: bool,
     was_enabled: bool,
     binding_revision: u64,
-    stop_revision: u64,
     slider_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     aim_slider_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     dragging: Option<Slider>,
@@ -118,11 +117,12 @@ impl Client {
                                 window.minimize_window();
                             }
                             s.was_enabled = snapshot.enabled;
-                            if snapshot.stop_revision != s.stop_revision
-                                || (s.aim_enabled && !s.preview && !snapshot.hotkeys_available)
-                            {
-                                s.stop_revision = snapshot.stop_revision;
-                                s.stop_aim();
+                            if let Some(reason) = s.aim_state.poll_stop(
+                                snapshot.stop_revision,
+                                s.preview || snapshot.hotkeys_available,
+                            ) {
+                                s.aim_status = Some(reason.into());
+                                s.publish_aim();
                             }
                             if snapshot.binding_revision != s.binding_revision {
                                 s.binding_revision = snapshot.binding_revision;
@@ -145,7 +145,7 @@ impl Client {
         Self {
             engine,
             aim,
-            aim_enabled: false,
+            aim_state: Activation::new(stop_revision),
             aim_error,
             aim_status: None,
             preferences,
@@ -155,7 +155,6 @@ impl Client {
             preview,
             was_enabled: false,
             binding_revision,
-            stop_revision,
             slider_bounds: Rc::new(Cell::new(None)),
             aim_slider_bounds: Rc::new(Cell::new(None)),
             dragging: None,
@@ -196,25 +195,29 @@ impl Client {
         if let Some(aim) = &self.aim {
             self.aim_error = aim
                 .publish(
-                    self.aim_enabled,
+                    self.aim_state.enabled,
                     self.preferences.aim_strength,
                     self.preferences.aim_mode,
                 )
                 .err();
             if self.aim_error.is_some() {
-                self.aim_enabled = false;
+                self.aim_state.enabled = false;
+                self.aim_status = Some("Stopped: could not update aim assist.".into());
             }
         }
     }
     fn stop_aim(&mut self) {
-        self.aim_enabled = false;
+        self.aim_state.enabled = false;
         self.publish_aim();
     }
     fn toggle_aim(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
-        let can_enable = self.preview
-            || (self.startup_error.is_none() && self.engine.snapshot().hotkeys_available);
-        if (self.aim.is_some() || self.preview) && (self.aim_enabled || can_enable) {
-            self.aim_enabled = !self.aim_enabled;
+        let snapshot = self.engine.snapshot();
+        let can_enable =
+            self.preview || (self.startup_error.is_none() && snapshot.hotkeys_available);
+        if (self.aim.is_some() || self.preview) && (self.aim_state.enabled || can_enable) {
+            self.aim_state
+                .set_enabled(!self.aim_state.enabled, snapshot.stop_revision);
+            self.aim_status = None;
             self.publish_aim();
             cx.notify();
         }
@@ -672,7 +675,7 @@ impl Client {
                                 .id("aim-enable-switch")
                                 .cursor_pointer()
                                 .on_click(cx.listener(Self::toggle_aim))
-                                .child(self.switch(self.aim_enabled))
+                                .child(self.switch(self.aim_state.enabled))
                                 .into_any_element(),
                         ),
                     )
@@ -916,7 +919,7 @@ impl Render for Client {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let snapshot = self.engine.snapshot();
         let active = if self.page == Page::AimAssist {
-            self.aim_enabled
+            self.aim_state.enabled
         } else {
             snapshot.enabled
         };
@@ -926,7 +929,7 @@ impl Render for Client {
                 || (!snapshot.hotkeys_available && !self.preview)
             {
                 "Unavailable"
-            } else if self.aim_enabled {
+            } else if self.aim_state.enabled {
                 "Enabled"
             } else {
                 "Disabled"

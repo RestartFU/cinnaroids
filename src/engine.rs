@@ -321,11 +321,13 @@ impl Shared {
             state.enabled = false;
             state.revision = state.revision.wrapping_add(1);
             state.stop_revision = state.stop_revision.wrapping_add(1);
+            // Consume physical F10 so RegisterHotKey cannot enqueue a second,
+            // delayed stop for this same press after the user re-enables aim.
+            state.consumed_keys[index] = true;
+            consumed = true;
             if state.capturing_key {
                 state.hotkey_error =
                     Some("F10 is reserved for emergency stop. Press another key.".into());
-                state.consumed_keys[index] = true;
-                consumed = true;
             }
         } else if state.capturing_key {
             if let Some(key) = ToggleKey::from_virtual_key(virtual_key) {
@@ -1246,6 +1248,19 @@ mod tests {
             .observe_keyboard(WM_KEYUP, VK_F10 as u32, 0);
         engine.stop();
         assert_eq!(engine.snapshot().stop_revision, initial.wrapping_add(2));
+    }
+
+    #[test]
+    fn physical_stop_is_consumed_once_including_repeat_and_release() {
+        let engine = keyboard_engine();
+        let shared = &engine.inner.shared;
+        assert!(shared.observe_keyboard(WM_KEYDOWN, VK_F10 as u32, 0));
+        let revision = engine.snapshot().stop_revision;
+        assert!(shared.observe_keyboard(WM_KEYDOWN, VK_F10 as u32, 0));
+        assert!(shared.observe_keyboard(WM_KEYUP, VK_F10 as u32, 0));
+        assert_eq!(engine.snapshot().stop_revision, revision);
+        assert!(shared.observe_keyboard(WM_KEYDOWN, VK_F10 as u32, 0));
+        assert_eq!(engine.snapshot().stop_revision, revision.wrapping_add(1));
     }
 
     #[test]

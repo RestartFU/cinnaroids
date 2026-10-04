@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "cinnabar-clicker"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "embed-resource",
  "gpui",

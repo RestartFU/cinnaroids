@@ -14,6 +14,45 @@ const TEMPLATE: &[u8] = include_bytes!("../assets/aimassist.component.wasm");
 const MAGIC: &[u8; 16] = b"CNBR_AIM_CFG_v1!";
 static WRITE_ID: AtomicU64 = AtomicU64::new(0);
 
+pub struct Activation {
+    pub enabled: bool,
+    stop_revision: u64,
+}
+
+impl Activation {
+    pub fn new(stop_revision: u64) -> Self {
+        Self {
+            enabled: false,
+            stop_revision,
+        }
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool, stop_revision: u64) {
+        // An explicit enable supersedes stop events that already happened.
+        if enabled {
+            self.stop_revision = stop_revision;
+        }
+        self.enabled = enabled;
+    }
+
+    pub fn poll_stop(&mut self, stop_revision: u64, available: bool) -> Option<&'static str> {
+        let stopped = stop_revision != self.stop_revision;
+        self.stop_revision = stop_revision;
+        if !self.enabled {
+            return None;
+        }
+        let reason = if stopped {
+            "Stopped by F10."
+        } else if !available {
+            "Stopped: emergency-stop hook unavailable."
+        } else {
+            return None;
+        };
+        self.enabled = false;
+        Some(reason)
+    }
+}
+
 pub struct AimAssist {
     path: PathBuf,
 }
@@ -162,6 +201,32 @@ fn supports_gameplay_mods(path: &Path) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enabling_after_a_pending_stop_does_not_disable_again() {
+        let mut activation = Activation::new(4);
+        activation.set_enabled(true, 5);
+        assert_eq!(activation.poll_stop(5, true), None);
+        assert!(activation.enabled);
+        assert_eq!(activation.poll_stop(6, true), Some("Stopped by F10."));
+        assert!(!activation.enabled);
+        assert_eq!(activation.poll_stop(6, true), None);
+        activation.set_enabled(true, 6);
+        assert_eq!(activation.poll_stop(6, true), None);
+        assert!(activation.enabled);
+    }
+
+    #[test]
+    fn losing_the_stop_hook_disarms_and_reports_the_reason() {
+        let mut activation = Activation::new(0);
+        activation.set_enabled(true, 0);
+        assert_eq!(
+            activation.poll_stop(0, false),
+            Some("Stopped: emergency-stop hook unavailable.")
+        );
+        assert!(!activation.enabled);
+        assert_eq!(activation.poll_stop(0, false), None);
+    }
 
     #[test]
     fn component_patch_preserves_length_and_all_bytes_outside_settings() {

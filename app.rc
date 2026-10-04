@@ -1,7 +1,7 @@
 1 ICON "assets/cinnabar.ico"
 1 VERSIONINFO
-FILEVERSION 1,5,0,0
-PRODUCTVERSION 1,5,0,0
+FILEVERSION 1,5,1,0
+PRODUCTVERSION 1,5,1,0
 FILEOS 0x40004L
 FILETYPE 0x1L
 BEGIN
@@ -11,8 +11,8 @@ BEGIN
     BEGIN
       VALUE "FileDescription", "Cinnabar clicker\0"
       VALUE "ProductName", "Cinnabar clicker\0"
-      VALUE "FileVersion", "1.5.0\0"
-      VALUE "ProductVersion", "1.5.0\0"
+      VALUE "FileVersion", "1.5.1\0"
+      VALUE "ProductVersion", "1.5.1\0"
       VALUE "OriginalFilename", "CinnabarClicker.exe\0"
     END
   END
