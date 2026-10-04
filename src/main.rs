@@ -65,6 +65,37 @@ struct Client {
     dragging: Option<Slider>,
 }
 impl Client {
+    fn trace_controls(&self, event: &str) {
+        use std::io::Write;
+        let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+            return;
+        };
+        if self.preview {
+            return;
+        }
+        let directory = PathBuf::from(base).join("CinnabarClicker/logs");
+        let _ = std::fs::create_dir_all(&directory);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(directory.join("controls.log"))
+        {
+            let snapshot = self.engine.snapshot();
+            let time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis());
+            let _ = writeln!(
+                file,
+                "time={time} pid={} event={event:?} clicker={} aim={} stop={} hooks={} error={:?}",
+                std::process::id(),
+                snapshot.enabled,
+                self.aim_state.enabled,
+                snapshot.stop_revision,
+                snapshot.hotkeys_available,
+                self.aim_error
+            );
+        }
+    }
     fn new(preview: bool, page: Page, window: &Window, cx: &mut Context<Self>) -> Self {
         let (mut preferences, error) = if preview {
             (Settings::default(), None)
@@ -110,6 +141,9 @@ impl Client {
                     .update(|window, cx| {
                         view.update(cx, |s, cx| {
                             let snapshot = s.engine.snapshot();
+                            if snapshot.enabled != s.was_enabled {
+                                s.trace_controls("clicker state changed");
+                            }
                             if snapshot.enabled
                                 && !s.was_enabled
                                 && s.preferences.minimize_on_enable
@@ -123,6 +157,7 @@ impl Client {
                             ) {
                                 s.aim_status = Some(reason.into());
                                 s.publish_aim();
+                                s.trace_controls(reason);
                             }
                             if snapshot.binding_revision != s.binding_revision {
                                 s.binding_revision = snapshot.binding_revision;
@@ -203,6 +238,7 @@ impl Client {
             if self.aim_error.is_some() {
                 self.aim_state.enabled = false;
                 self.aim_status = Some("Stopped: could not update aim assist.".into());
+                self.trace_controls("module update failed");
             }
         }
     }
@@ -219,6 +255,7 @@ impl Client {
                 .set_enabled(!self.aim_state.enabled, snapshot.stop_revision);
             self.aim_status = None;
             self.publish_aim();
+            self.trace_controls("aim switch");
             cx.notify();
         }
     }
@@ -293,7 +330,9 @@ impl Client {
     }
     fn toggle(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
         if self.startup_error.is_none() {
+            self.trace_controls("clicker switch before");
             self.engine.toggle();
+            self.trace_controls("clicker switch after");
             cx.notify();
         }
     }

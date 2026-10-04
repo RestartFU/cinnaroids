@@ -1251,6 +1251,53 @@ mod tests {
     }
 
     #[test]
+    fn enabling_clicker_by_ui_or_key_preserves_active_aim() {
+        let engine = keyboard_engine();
+        engine.inner.shared.lock().stop_registered = true;
+        let mut aim = crate::aimassist::Activation::new(engine.snapshot().stop_revision);
+        aim.set_enabled(true, engine.snapshot().stop_revision);
+        assert!(!engine.snapshot().enabled);
+
+        // The UI switch uses Engine::toggle, while the bound key uses the hook.
+        engine.toggle();
+        let snapshot = engine.snapshot();
+        assert!(snapshot.enabled);
+        assert_eq!(
+            aim.poll_stop(snapshot.stop_revision, snapshot.hotkeys_available),
+            None
+        );
+        assert!(aim.enabled);
+        engine.toggle();
+        engine
+            .inner
+            .shared
+            .observe_keyboard(WM_KEYDOWN, ToggleKey::F8.virtual_key(), 0);
+        let snapshot = engine.snapshot();
+        assert!(snapshot.enabled);
+        assert_eq!(
+            aim.poll_stop(snapshot.stop_revision, snapshot.hotkeys_available),
+            None
+        );
+        assert!(aim.enabled);
+
+        engine
+            .inner
+            .shared
+            .observe_keyboard(WM_KEYUP, ToggleKey::F8.virtual_key(), 0);
+        engine
+            .inner
+            .shared
+            .observe_keyboard(WM_KEYDOWN, VK_F10 as u32, 0);
+        let snapshot = engine.snapshot();
+        assert!(!snapshot.enabled);
+        assert_eq!(
+            aim.poll_stop(snapshot.stop_revision, snapshot.hotkeys_available),
+            Some("Stopped by F10.")
+        );
+        assert!(!aim.enabled);
+    }
+
+    #[test]
     fn physical_stop_is_consumed_once_including_repeat_and_release() {
         let engine = keyboard_engine();
         let shared = &engine.inner.shared;

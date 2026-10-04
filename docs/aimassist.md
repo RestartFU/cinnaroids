@@ -4,6 +4,8 @@ Open **Aim assist**, choose strength and **Continuous** or **While clicking**, t
 
 Losing a target, releasing Attack in click-only mode, changing focus or switching tabs pauses assistance without turning its switch off. Automatic stops show their reason beside Start Cinnabar. Re-enabling acknowledges earlier stop events; a later F10 still stops both features.
 
+Feature transitions and stop reasons are recorded in `%LOCALAPPDATA%/CinnabarClicker/logs/controls.log` for troubleshooting.
+
 The prepared local app includes a compatible client in `Cinnabar/`. An existing Cinnabar session needs to be restarted through this launcher to load the module. A source checkout requires a Cinnabar client built from commit `d392984f60372b18c99254485ad89b12cece36a5` or later with `--features local-mods`, plus its sibling Go binaries and resources. Select that `bedrock-client.exe` using Start Cinnabar if it is not bundled.
 
 The local package also includes compatible compiled assets in `Cinnabar/assets/compiled/`. When present, the launcher passes their block asset path with `--assets`, which selects the matching entity and other carriers in the same folder. These files were prepared beside the new runtime; the installed client and its cached assets stay in place. Cinnabar binaries and Minecraft assets are excluded from the public source repository.
