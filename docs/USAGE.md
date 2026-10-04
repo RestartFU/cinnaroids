@@ -1,6 +1,12 @@
 # Cinnaroids
 
-Open **Cinnaroids.exe** and select **Start Cinnabar**. A compatible client is bundled beside the launcher. **Choose client** selects a separately built client with the required WASM APIs.
+Open **Cinnaroids.exe** while Cinnabar is running. It finds the installed client at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and registers the embedded WASM module automatically. The status changes to **Attached** after the running game confirms loading. It uses that client's existing resources and settings.
+
+Older clients need one update with live local-module support and a restart. After that, attaching requires no game restart. **Start Cinnabar** starts the installed client only when it is absent; **Attach** retries an existing session. **Choose client** selects a custom installation. Saved older bundled clients no longer override the standard installed client.
+
+If the launcher reports **No module acknowledgment**, restart Cinnabar once to load the updated executable. The launcher detects installed-client updates automatically and retries attachment.
+
+Run **Cinnaroids.exe --background** to register and monitor attachment without showing or focusing a launcher window. It still starts no game automatically. Open Cinnaroids normally when you need its launcher controls.
 
 Press **Right Shift** in Cinnabar to open or close the module interface. Manage Clicker, Aim assist, Reach, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it leaves the running Cinnabar session and its module settings alone.
 

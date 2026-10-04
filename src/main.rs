@@ -1,14 +1,50 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod client_process;
 mod component;
 mod settings;
 mod window_frame;
 
-use component::ModComponent;
+use component::{AttachRequest, ModComponent};
 use gpui::{prelude::*, *};
 use settings::Settings;
-use std::{borrow::Cow, path::PathBuf, time::Duration};
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime},
+};
 
 const PRODUCT_NAME: &str = "Cinnaroids";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ExecutableRevision {
+    size: u64,
+    modified: Option<SystemTime>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ClientWatch {
+    executable: PathBuf,
+    revision: Option<ExecutableRevision>,
+}
+
+impl ClientWatch {
+    fn observe(&mut self, revision: Option<ExecutableRevision>) -> bool {
+        if self.revision == revision {
+            return false;
+        }
+        self.revision = revision;
+        // A temporarily absent executable is not a candidate for attachment.
+        self.revision.is_some()
+    }
+}
+
+fn executable_revision(path: &Path) -> Option<ExecutableRevision> {
+    let metadata = std::fs::metadata(path).ok()?;
+    metadata.is_file().then(|| ExecutableRevision {
+        size: metadata.len(),
+        modified: metadata.modified().ok(),
+    })
+}
 
 struct Assets;
 impl AssetSource for Assets {
@@ -42,6 +78,9 @@ struct Launcher {
     error: Option<String>,
     status: String,
     preview: bool,
+    attachment: Option<AttachRequest>,
+    pending: bool,
+    client_watch: Option<ClientWatch>,
 }
 
 impl Launcher {
@@ -68,6 +107,9 @@ impl Launcher {
             error,
             status: "Ready".into(),
             preview,
+            attachment: None,
+            pending: false,
+            client_watch: None,
         }
     }
 
@@ -116,22 +158,51 @@ impl Launcher {
         settings::select_client(saved, bundled)
     }
 
-    fn launch(&mut self, executable: PathBuf, cx: &mut Context<Self>) {
-        let Some(component) = &self.component else {
+    fn attach(&mut self, executable: PathBuf, start_if_absent: bool, cx: &mut Context<Self>) {
+        if self.pending {
+            return;
+        }
+        let Some(component) = self.component.clone() else {
             return;
         };
-        match component.launch(&executable) {
-            Ok(()) => {
-                self.preferences.cinnabar_path = Some(executable);
-                self.save();
-                self.status = "Cinnabar started".into();
-            }
-            Err(error) => {
-                self.error = Some(error);
-                self.status = "Could not start".into();
-            }
-        }
+        self.pending = true;
+        self.status = "Attaching…".into();
+        self.error = None;
+        self.attachment = None;
         cx.notify();
+        let watched_executable = executable.clone();
+        let task = cx.background_executor().spawn(async move {
+            let revision = executable_revision(&executable);
+            (revision, component.attach(&executable, start_if_absent))
+        });
+        cx.spawn(async move |view, cx| {
+            let (revision, result) = task.await;
+            let _ = view.update(cx, |s, cx| {
+                s.pending = false;
+                s.client_watch = Some(ClientWatch {
+                    executable: watched_executable,
+                    revision,
+                });
+                match result {
+                    Ok(request) => {
+                        s.preferences.cinnabar_path = Some(request.executable.clone());
+                        s.save();
+                        s.status = if request.client_pid.is_some() {
+                            "Waiting for Cinnabar to load modules".into()
+                        } else {
+                            "Ready — start Cinnabar".into()
+                        };
+                        s.attachment = Some(request);
+                    }
+                    Err(error) => {
+                        s.error = Some(error);
+                        s.status = "Attachment unavailable".into();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     fn start(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -139,14 +210,14 @@ impl Launcher {
             return;
         }
         if let Some(executable) = self.selected_client() {
-            self.launch(executable, cx);
+            self.attach(executable, true, cx);
         } else {
             self.choose(true, window, cx);
         }
     }
 
     fn choose(&mut self, launch: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if self.preview {
+        if self.preview || self.pending {
             return;
         }
         let paths = cx.prompt_for_paths(PathPromptOptions {
@@ -161,12 +232,13 @@ impl Launcher {
                 Ok(Ok(Some(paths))) => {
                     if let Some(path) = paths.into_iter().next() {
                         if launch {
-                            s.launch(path, cx);
+                            s.attach(path, true, cx);
                         } else {
                             s.preferences.cinnabar_path = Some(path);
                             s.save();
-                            s.status = "Client selected".into();
-                            cx.notify();
+                            if let Some(executable) = s.selected_client() {
+                                s.attach(executable, false, cx);
+                            }
                         }
                     }
                 }
@@ -281,13 +353,11 @@ impl Launcher {
 
 impl Render for Launcher {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let client_label = self
-            .preferences
-            .cinnabar_path
-            .as_ref()
-            .and_then(|path| path.file_name())
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Bundled Cinnabar client".into());
+        let client_label = if self.selected_client().is_some() {
+            "Cinnabar"
+        } else {
+            "Select your installed Cinnabar"
+        };
         div()
             .size_full()
             .relative()
@@ -321,12 +391,9 @@ impl Render for Launcher {
                                     .text_size(px(15.0))
                                     .child(client_label),
                             )
-                            .child(
-                                div()
-                                    .mt(px(8.0))
-                                    .text_color(rgb(self.muted()))
-                                    .child("Right Shift opens modules in-game."),
-                            )
+                            .child(div().mt(px(8.0)).text_color(rgb(self.muted())).child(
+                                "Attaches automatically. Right Shift opens modules in-game.",
+                            ))
                             .child(
                                 div()
                                     .mt(px(22.0))
@@ -344,7 +411,11 @@ impl Render for Launcher {
                                             .text_color(rgb(0x181818))
                                             .hover(|d| d.opacity(0.85))
                                             .on_click(cx.listener(Self::start))
-                                            .child("Start Cinnabar"),
+                                            .child(if self.status.starts_with("Attached") {
+                                                "Attach"
+                                            } else {
+                                                "Start Cinnabar"
+                                            }),
                                     )
                                     .child(
                                         div()
@@ -413,6 +484,7 @@ impl Render for Launcher {
 
 fn main() {
     let preview = std::env::args().any(|arg| arg == "--smoke-test");
+    let background = std::env::args().any(|arg| arg == "--background");
     let light = preview && std::env::args().any(|arg| arg == "--light");
     Application::new()
         .with_assets(Assets)
@@ -420,6 +492,8 @@ fn main() {
             let bounds = Bounds::centered(None, size(px(600.0), px(360.0)), cx);
             cx.open_window(
                 WindowOptions {
+                    focus: !background,
+                    show: !background,
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     window_min_size: Some(size(px(500.0), px(340.0))),
                     window_background: WindowBackgroundAppearance::Blurred,
@@ -437,17 +511,100 @@ fn main() {
                         cx.quit();
                         true
                     });
-                    cx.new(|_| {
+                    cx.new(|cx| {
                         let mut launcher = Launcher::new(preview);
                         if light {
                             launcher.preferences.dark_mode = false;
+                        }
+                        if !preview {
+                            if let Some(executable) = launcher.selected_client() {
+                                launcher.attach(executable, false, cx);
+                            }
+                            cx.spawn(async move |view, cx| {
+                                loop {
+                                    Timer::after(Duration::from_millis(500)).await;
+                                    let (request, watch, pending) =
+                                        match view.read_with(cx, |s, _| {
+                                            (
+                                                s.attachment.clone(),
+                                                s.client_watch.clone(),
+                                                s.pending,
+                                            )
+                                        }) {
+                                            Ok(snapshot) => snapshot,
+                                            Err(_) => break,
+                                        };
+                                    if pending || (request.is_none() && watch.is_none()) {
+                                        continue;
+                                    }
+                                    let watched_executable =
+                                        watch.as_ref().map(|watch| watch.executable.clone());
+                                    let (revision, status) = cx
+                                        .background_executor()
+                                        .spawn(async move {
+                                            let revision = watched_executable
+                                                .as_deref()
+                                                .and_then(executable_revision);
+                                            let status = request.map(|request| {
+                                                (request.id.clone(), request.status())
+                                            });
+                                            (revision, status)
+                                        })
+                                        .await;
+                                    if view
+                                        .update(cx, |s, cx| {
+                                            if !s.pending
+                                                && watch.is_some()
+                                                && s.client_watch == watch
+                                            {
+                                                let updated_executable =
+                                                    s.client_watch.as_mut().and_then(|watch| {
+                                                        watch
+                                                            .observe(revision)
+                                                            .then(|| watch.executable.clone())
+                                                    });
+                                                if let Some(executable) = updated_executable {
+                                                    s.attach(executable, false, cx);
+                                                    return;
+                                                }
+                                            }
+                                            let Some((request_id, result)) = status else {
+                                                return;
+                                            };
+                                            if s.attachment
+                                                .as_ref()
+                                                .is_none_or(|request| request.id != request_id)
+                                            {
+                                                return;
+                                            }
+                                            match result {
+                                                Ok(Some(status)) if s.status != status => {
+                                                    s.status = status;
+                                                    s.error = None;
+                                                    cx.notify();
+                                                }
+                                                Err(error) if s.error.as_ref() != Some(&error) => {
+                                                    s.error = Some(error);
+                                                    s.status = "Could not attach".into();
+                                                    cx.notify();
+                                                }
+                                                _ => {}
+                                            }
+                                        })
+                                        .is_err()
+                                    {
+                                        break;
+                                    }
+                                }
+                            })
+                            .detach();
                         }
                         launcher
                     })
                 },
             )
             .expect("Could not open Cinnaroids window");
-            if !preview {
+            if !preview && !background {
                 cx.activate(true);
             }
             if preview {
@@ -458,4 +615,41 @@ fn main() {
                 .detach();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::prelude::v1::test;
+
+    #[test]
+    fn client_update_retries_once_and_waits_through_a_missing_executable() {
+        let original = ExecutableRevision {
+            size: 100,
+            modified: Some(SystemTime::UNIX_EPOCH),
+        };
+        let updated = ExecutableRevision {
+            size: 110,
+            modified: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1)),
+        };
+        let mut watch = ClientWatch {
+            executable: "C:/Installed/Cinnabar/bedrock-client.exe".into(),
+            revision: Some(original.clone()),
+        };
+        for _ in 0..100 {
+            assert!(!watch.observe(Some(original.clone())));
+        }
+        assert!(watch.observe(Some(updated.clone())));
+        assert!(!watch.observe(Some(updated.clone())));
+        let rebuilt = ExecutableRevision {
+            size: updated.size,
+            modified: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(2)),
+        };
+        assert!(watch.observe(Some(rebuilt.clone())));
+        assert!(!watch.observe(Some(rebuilt.clone())));
+        assert!(!watch.observe(None));
+        assert!(!watch.observe(None));
+        assert!(watch.observe(Some(rebuilt.clone())));
+        assert!(!watch.observe(Some(rebuilt)));
+    }
 }

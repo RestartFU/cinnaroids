@@ -1,6 +1,8 @@
 # In-game modules
 
-Open **Cinnaroids.exe** and use **Start Cinnabar**. The local package includes a compatible client beside the launcher. An existing Cinnabar session needs to be restarted through this launcher to load the module.
+Open **Cinnaroids.exe** with your installed Cinnabar already running. It registers the embedded module automatically and shows **Attached** after the game acknowledges loading. **Start Cinnabar** starts the installed client only when no matching process is running.
+
+The host must include live local-module loading. Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
 Press **Right Shift** to open or close the module interface. It manages:
 
@@ -21,14 +23,14 @@ Reach changes the client's actor attack selection distance. It preserves block t
 
 The launcher installs `%LOCALAPPDATA%/Cinnaroids/mods/cinnaroids.component.wasm`. The host stores module preferences in its fixed companion, `cinnaroids.component.settings.json`. Valid preferences from the older `%LOCALAPPDATA%/CinnabarClicker/settings.json` migrate only if the companion is absent. Existing module preferences and the old file are preserved; runtime enabled switches are not migrated.
 
-Startup output is in `%LOCALAPPDATA%/Cinnaroids/logs/cinnabar.log`. The launcher sets `CINNABAR_MOD_COMPONENT` and grants `CINNABAR_MOD_PLAYERS`, `CINNABAR_MOD_CAMERA`, `CINNABAR_MOD_CONTROLS`, `CINNABAR_MOD_INTERACTION`, and `CINNABAR_MOD_SETTINGS` for the child client. The WASM component has no WASI or ambient operating-system access.
+When the launcher starts Cinnabar, output is in `%LOCALAPPDATA%/Cinnaroids/logs/cinnabar.log`. It atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction and settings grants. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the selected running client. The WASM component has no WASI or ambient operating-system access.
 
-The panel uses the bundled OFL Inter Medium font, installed with its license in `%LOCALAPPDATA%/Cinnaroids/fonts/`. `CINNABAR_MOD_FONT` selects it for the child. It is rasterized once at startup and applies only to personal-panel labels. Panel sizing follows display DPI independently of Minecraft's GUI scale.
+The panel uses the embedded OFL Inter Medium font, installed with its license in `%LOCALAPPDATA%/Cinnaroids/fonts/`. Registration selects it for the personal panel. The worker rasterizes it before attachment; the host updates its isolated font page without replacing game or server glyphs. Panel sizing follows display DPI independently of Minecraft's GUI scale.
 
-The local package contains compatible compiled assets in `Cinnabar/assets/compiled/`. The launcher supplies their block carrier with `--assets` when present, selecting matching sidecars from the same folder. Installed Cinnabar files and caches remain in place. Client binaries and Minecraft assets are excluded from the public repository.
+The launcher uses the installed Cinnabar's resources without overriding its asset path. Module preferences, client settings and caches remain in place. Client binaries and Minecraft assets are excluded from the public repository.
 
 ## Build
 
-A source checkout needs Cinnabar's extended personal-mod API, built with `--features local-mods`, plus the matching Go binaries, resources, and compiled assets. Select its `bedrock-client.exe` with **Choose client** if it is not bundled.
+A source checkout needs Cinnabar's extended personal-mod API and live registration loader, built with `--features local-mods`, plus the matching Go binaries and installed resources. Select its installed `bedrock-client.exe` with **Choose client** if it is outside the standard installation folder.
 
 Rebuild the guest with `powershell -ExecutionPolicy Bypass -File scripts/build-cinnaroids.ps1`, then build the launcher with `cargo build --release --locked`. Guest tests use `cargo test --manifest-path mods/cinnaroids/Cargo.toml --locked`.
