@@ -34,6 +34,7 @@ pub struct Preferences {
     pub aim_mode: AimMode,
     pub reach_blocks: f32,
     pub dark_mode: bool,
+    pub fake_lag_ms: u16,
 }
 
 impl Default for Preferences {
@@ -47,6 +48,7 @@ impl Default for Preferences {
             aim_mode: AimMode::WhileClicking,
             reach_blocks: MIN_REACH,
             dark_mode: true,
+            fake_lag_ms: 100,
         }
     }
 }
@@ -78,6 +80,9 @@ impl Preferences {
         }
         if let Some(value) = values.get("dark_mode").and_then(Value::as_bool) {
             preferences.dark_mode = value;
+        }
+        if let Some(value) = values.get("fake_lag_ms").and_then(Value::as_u64) {
+            preferences.fake_lag_ms = value.min(u64::from(mod_api::MAX_PACKET_DELAY_MS)) as u16;
         }
         let binding = values
             .get("clicker_key")
@@ -133,6 +138,7 @@ pub struct Modules {
     pub clicker: bool,
     pub aim: bool,
     pub reach: bool,
+    pub fake_lag: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -277,6 +283,13 @@ impl State {
                 &mut self.preferences.reach_blocks,
                 ((value * 10.0).round() / 10.0).clamp(MIN_REACH, mod_api::MAX_ENTITY_REACH_BLOCKS),
             ),
+            "fake_lag" => replace(&mut self.modules.fake_lag, value >= 0.5),
+            "fake_lag_ms" => replace(
+                &mut self.preferences.fake_lag_ms,
+                value
+                    .round()
+                    .clamp(0.0, mod_api::MAX_PACKET_DELAY_MS as f32) as u16,
+            ),
             "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
             "stop_all" => {
                 self.stop_all();
@@ -289,7 +302,7 @@ impl State {
             if matches!(event.id.as_str(), "clicker" | "cps") {
                 self.clicker.reset();
             }
-            if !matches!(event.id.as_str(), "clicker" | "aim" | "reach") {
+            if !matches!(event.id.as_str(), "clicker" | "aim" | "reach" | "fake_lag") {
                 self.preferences_dirty = true;
             }
         }
@@ -307,6 +320,14 @@ impl State {
             enabled: self.modules.aim,
             strength: self.preferences.aim_strength,
             only_when_clicking: self.preferences.aim_mode == AimMode::WhileClicking,
+        }
+    }
+
+    pub fn packet_delay_ms(&self) -> u32 {
+        if self.modules.fake_lag {
+            u32::from(self.preferences.fake_lag_ms)
+        } else {
+            0
         }
     }
 
@@ -399,6 +420,19 @@ impl State {
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
             },
             Control::Toggle {
+                id: "fake_lag",
+                label: "FakeLag",
+                value: self.modules.fake_lag,
+            },
+            Control::Slider {
+                id: "fake_lag_ms",
+                label: "Delay (ms)",
+                value: f32::from(self.preferences.fake_lag_ms),
+                min: 0.0,
+                max: mod_api::MAX_PACKET_DELAY_MS as f32,
+                step: 1.0,
+            },
+            Control::Toggle {
                 id: "dark_mode",
                 label: "Dark mode",
                 value: self.preferences.dark_mode,
@@ -441,6 +475,14 @@ impl State {
                     controls: &["reach_blocks", "reach_key"],
                 },
                 Section {
+                    id: "fake_lag_section",
+                    label: "FakeLag",
+                    icon: "none",
+                    category: "Combat",
+                    toggle: Some("fake_lag"),
+                    controls: &["fake_lag_ms"],
+                },
+                Section {
                     id: "general_section",
                     label: "General",
                     icon: "settings",
@@ -450,7 +492,7 @@ impl State {
                 },
             ],
         };
-        // This bounded twelve-control specification fits without buffer growth.
+        // Reserve space for the bounded retained-panel specification.
         let mut json = Vec::with_capacity(4096);
         serde_json::to_writer(&mut json, &panel)?;
         // serde_json writes UTF-8 even when preferences contain arbitrary text.

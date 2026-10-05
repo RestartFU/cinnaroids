@@ -2,13 +2,14 @@
 
 Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically registers the embedded module for the standard installation at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and shows **Attached** after the game acknowledges loading. It never starts the game or selects another installation.
 
-The host must include live local-module loading and compact personal-panel controls ([host update](https://github.com/bedrock-mc/cinnabar/pull/133)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
+The host must include live local-module loading, compact personal-panel controls, and the packet-timing capability ([host update](https://github.com/bedrock-mc/cinnabar/pull/170)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
 Press **Right Shift** to open or close the module interface. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key is configurable; F8 is the default.
 - **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its default toggle key is R.
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its default toggle key is V.
+- **FakeLag:** delay inbound and outbound game packets by 0–1000 milliseconds each, with a toggle in the Combat tab. Default delay is 100 ms; the module starts off. Slider values can also be typed.
 - **Appearance:** neutral dark mode by default, with a light option.
 
 Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and **Right Shift** retain their reserved actions.
@@ -21,11 +22,13 @@ Aim assist reads player coordinates, selects a target within six blocks and a 30
 
 Reach changes the client's actor attack selection distance. It preserves block targeting and normal server authority; a server can reject an attack outside its own range.
 
+FakeLag delays application packets in both directions while preserving their order; the selected delay adds to each direction separately. Login and transport acknowledgments continue normally. Turning it off or pressing F10 releases queued packets; closing the launcher removes the delay. A host heartbeat expires the delay if the client stops responding.
+
 ## Runtime and settings
 
 The launcher installs `%LOCALAPPDATA%/Cinnaroids/mods/cinnaroids.component.wasm`. The host stores module preferences in its fixed companion, `cinnaroids.component.settings.json`. Valid preferences from the older `%LOCALAPPDATA%/CinnabarClicker/settings.json` migrate only if the companion is absent. Existing module preferences and the old file are preserved; runtime enabled switches are not migrated.
 
-The launcher atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction and settings grants. Matching launcher instances reuse an unchanged registration. Replaced assets, a failed live request, or a conflicting loaded acknowledgment require a fresh request. Attachment failures retry after 2, 4, and 8 seconds; a game restart or installed-client update resets that retry budget. Errors remain visible until recovery. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the standard installed running client. The WASM component has no WASI or ambient operating-system access.
+The launcher atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction, packet timing and settings grants. Matching launcher instances reuse an unchanged registration. Replaced assets, a failed live request, or a conflicting loaded acknowledgment require a fresh request. Attachment failures retry after 2, 4, and 8 seconds; a game restart or installed-client update resets that retry budget. Errors remain visible until recovery. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the standard installed running client. The WASM component has no WASI or ambient operating-system access.
 
 The panel uses Cinnabar's installed Cinnangles Sans font. Cinnaroids registers no private font override. Panel sizing follows display DPI independently of Minecraft's GUI scale.
 

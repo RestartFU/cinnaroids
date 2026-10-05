@@ -33,7 +33,7 @@ fn preferences_restore_without_enabling_any_module() {
     assert_eq!(state.preferences.clicker_key, "KeyV");
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
-    assert_eq!(json.as_object().unwrap().len(), 8);
+    assert_eq!(json.as_object().unwrap().len(), 9);
     assert!(json.get("aim").is_none());
 }
 
@@ -196,7 +196,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 12);
+    assert_eq!(json["controls"].as_array().unwrap().len(), 14);
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -408,4 +408,64 @@ fn capture_loss_consumes_module_edges_but_preserves_emergency_stop() {
         events: &[],
     });
     assert!(!state.modules.aim);
+}
+
+#[test]
+fn fake_lag_delay_is_bounded_persisted_and_disabled_by_stop() {
+    let mut state = State::new(Preferences::from_json(
+        r#"{"fake_lag_ms":5000,"fake_lag":true}"#,
+    ));
+    assert_eq!(
+        state.preferences.fake_lag_ms,
+        mod_api::MAX_PACKET_DELAY_MS as u16
+    );
+    assert_eq!(state.packet_delay_ms(), 0);
+    controls(
+        &mut state,
+        &[],
+        &[("fake_lag", 1.0), ("fake_lag_ms", 250.4)],
+    );
+    assert_eq!(state.packet_delay_ms(), 250);
+    state.controls(Controls {
+        focused: false,
+        panel_open: false,
+        keys: &[],
+        events: &[],
+    });
+    assert_eq!(state.packet_delay_ms(), 250);
+    controls(&mut state, &[], &[("fake_lag_ms", f32::NAN)]);
+    assert_eq!(state.packet_delay_ms(), 250);
+    controls(&mut state, &[], &[("fake_lag_ms", -5.0)]);
+    assert_eq!(state.packet_delay_ms(), 0);
+    controls(&mut state, &[], &[("fake_lag_ms", 800.0)]);
+    controls(&mut state, &[STOP_KEY], &[]);
+    assert_eq!(state.packet_delay_ms(), 0);
+    assert_eq!(state.preferences.fake_lag_ms, 800);
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    assert_eq!(Preferences::from_json(&saved).fake_lag_ms, 800);
+    assert!(
+        serde_json::from_str::<Value>(&saved)
+            .unwrap()
+            .get("fake_lag")
+            .is_none()
+    );
+}
+
+#[test]
+fn fake_lag_panel_exposes_millisecond_slider_and_toggle() {
+    let panel: Value = serde_json::from_str(&state().panel_json().unwrap()).unwrap();
+    let controls = panel["controls"].as_array().unwrap();
+    let delay = controls
+        .iter()
+        .find(|control| control["id"] == "fake_lag_ms")
+        .unwrap();
+    assert_eq!(delay["min"], 0.0);
+    assert_eq!(delay["max"], mod_api::MAX_PACKET_DELAY_MS as f32);
+    assert_eq!(delay["step"], 1.0);
+    assert_eq!(delay["label"], "Delay (ms)");
+    assert!(
+        controls
+            .iter()
+            .any(|control| control["id"] == "fake_lag" && control["value"] == false)
+    );
 }

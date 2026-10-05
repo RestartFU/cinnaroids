@@ -12,12 +12,13 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
-const GRANTS: [&str; 5] = [
+const GRANTS: [&str; 6] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
     "CINNABAR_MOD_CONTROLS",
     "CINNABAR_MOD_INTERACTION",
     "CINNABAR_MOD_SETTINGS",
+    "CINNABAR_MOD_PACKET_DELAY",
 ];
 const LIVE_ATTACHMENT_MARKER: &str = "local-mod.status.json";
 const REGISTRATION_BYTES: usize = 16 * 1024;
@@ -277,7 +278,7 @@ fn registration(id: &str, component: &Path) -> Result<Vec<u8>, String> {
         "version": 1, "request_id": id, "enabled": true,
         "component": component, "font": null,
         "grants": {"environment": false, "players": true, "camera": true,
-            "controls": true, "interaction": true, "settings": true}
+            "controls": true, "interaction": true, "settings": true, "packet_delay": true}
     }))
     .map_err(|error| format!("Could not encode module registration: {error}"))?;
     if bytes.len() > REGISTRATION_BYTES {
