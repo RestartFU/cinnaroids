@@ -543,20 +543,20 @@ impl State {
                     controls: &["fake_lag_ms", "show_real_position"],
                 },
                 Section {
-                    id: "general_section",
-                    label: "General",
-                    icon: "settings",
-                    category: "Settings",
-                    toggle: None,
-                    controls: &["dark_mode", "stop_all"],
-                },
-                Section {
                     id: "netherite_section",
                     label: "Netherite",
                     icon: "crosshair",
                     category: "Visual",
                     toggle: Some("netherite"),
                     controls: &["netherite_range"],
+                },
+                Section {
+                    id: "general_section",
+                    label: "General",
+                    icon: "settings",
+                    category: "Settings",
+                    toggle: None,
+                    controls: &["dark_mode", "stop_all"],
                 },
             ],
         };
