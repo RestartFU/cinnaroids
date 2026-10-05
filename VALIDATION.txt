@@ -1,3 +1,15 @@
+Cinnaroids 2.5.1 — saved-settings startup budget
+==============================================
+
+The real Wasmtime host reproduced fuel exhaustion during startup with populated
+preferences. Initialization now reads preferences; the first frame publishes the
+panel under a fresh callback budget. Panel JSON uses serde_json's UTF-8 string
+serializer without a second text scan. The host's execution limit is unchanged.
+The real-host regression covers empty, legacy and populated preferences, followed
+by module toggles, range/theme updates and emergency stop. It failed before the
+fix and passes afterward. 37 guest and 19 launcher tests and the release build pass.
+A hidden Windows DX12 1920x1080 capture with a copy of the user's saved preferences
+confirms startup, preserved values, panel navigation and solid pink rendering.
 Cinnaroids 2.5.0 — solid pink Netherite Finder
 ===========================================
 

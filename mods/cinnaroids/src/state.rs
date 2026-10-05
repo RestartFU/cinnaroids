@@ -560,11 +560,7 @@ impl State {
                 },
             ],
         };
-        // Reserve space for the bounded retained-panel specification.
-        let mut json = Vec::with_capacity(4096);
-        serde_json::to_writer(&mut json, &panel)?;
-        // serde_json writes UTF-8 even when preferences contain arbitrary text.
-        Ok(String::from_utf8(json).expect("JSON serialization emits UTF-8"))
+        serde_json::to_string(&panel)
     }
 }
 

@@ -27,7 +27,7 @@ impl Guest for Cinnaroids {
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
             *modules = State::new(preferences);
-            publish(&mut modules);
+            // Publish on the first frame, with a fresh budget after settings parsing.
         });
         AIM.with(|aim| aim.borrow_mut().reset());
     }

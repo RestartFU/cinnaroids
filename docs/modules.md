@@ -40,3 +40,5 @@ The launcher uses the installed Cinnabar's resources without overriding its asse
 A source checkout needs Cinnabar's extended personal-mod API and live registration loader, built with `--features local-mods`, plus the matching Go binaries and resources in the standard installation folder.
 
 Rebuild the guest with `powershell -ExecutionPolicy Bypass -File scripts/build-cinnaroids.ps1`, then build the launcher with `cargo build --release --locked`. Guest tests use `cargo test --manifest-path mods/cinnaroids/Cargo.toml --locked`.
+
+To check the actual WASM execution budget against a matching Cinnabar source checkout, run `scripts/verify-host-budget.ps1 -HostRepo PATH`. It tests startup with saved preferences and subsequent panel changes without starting a game. Builds under Codex pass its shared Cargo wrapper through `-CargoWrapper`.
