@@ -13,7 +13,7 @@ confirms startup, preserved values, panel navigation and solid pink rendering.
 Cinnaroids 2.5.0 — solid pink Netherite Finder
 ===========================================
 
-Visual → Netherite selects loaded ancient debris and netherite blocks, with
+Visual → Netherite Finder selects loaded ancient debris and netherite blocks, with
 opaque full-block pink cubes through terrain. Range is 1–128 blocks, default 64.
 Four loaded-terrain scan tests cover palettes, mutations, unloading, dimensions,
 bounded work and nearest-block output. Seven host permission/transaction tests,

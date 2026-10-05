@@ -486,7 +486,7 @@ impl State {
             },
             Control::Toggle {
                 id: "netherite",
-                label: "Netherite",
+                label: "Netherite Finder",
                 value: self.modules.netherite,
             },
             Control::Slider {
@@ -544,8 +544,8 @@ impl State {
                 },
                 Section {
                     id: "netherite_section",
-                    label: "Netherite",
-                    icon: "crosshair",
+                    label: "Netherite Finder",
+                    icon: "none",
                     category: "Visual",
                     toggle: Some("netherite"),
                     controls: &["netherite_range"],
