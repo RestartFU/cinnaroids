@@ -1,3 +1,15 @@
+Cinnaroids 2.4.1 — smooth 3D position marker
+==========================================
+
+Show real position uses a translucent coral world-space cuboid with antialiased
+edges. Three smoothing/session/world-loss tests and twelve renderer tests pass;
+36 guest tests pass against the merged SDK. Touched UI/render/client crates compile
+with tests. A hidden Windows DX12 capture at 1920x1080/DPI1 verifies perspective
+faces, fill, edges, panel layering and clearing. No remote server session was used.
+Standing bounds are used; the feed does not include delivered body yaw or crouch.
+Host source: 2bb5b6d8fb98c8207cf9ba0db8ff080fd65c22d7.
+Upstream: https://github.com/bedrock-mc/cinnabar/pull/178 (CI pending).
+
 Cinnaroids 2.2.2 — unload on launcher close
 ===========================================
 
