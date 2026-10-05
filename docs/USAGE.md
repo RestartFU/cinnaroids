@@ -1,12 +1,12 @@
 # Cinnaroids
 
-Open **Cinnaroids.exe** while Cinnabar is running. It finds the installed client at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and registers the embedded WASM module automatically. The status changes to **Attached** after the running game confirms loading. It uses that client's existing resources and settings.
+Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically attaches only to `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe`. The status changes to **Attached** after the running game confirms loading. It uses that client's existing resources and settings.
 
-Older clients need one update with live local-module support and a restart. After that, attaching requires no game restart. **Start Cinnabar** starts the installed client only when it is absent; **Attach** retries an existing session. **Choose client** selects a custom installation. Saved older bundled clients no longer override the standard installed client.
+Attachment is automatic; there are no connection buttons or custom client paths. Cinnaroids waits for Cinnabar to open and handles game restarts and installed-client updates. It never starts the game. Older clients need one update with live local-module support and a restart.
 
 If the launcher reports **No module acknowledgment**, restart Cinnabar once to load the updated executable. The launcher detects installed-client updates automatically and retries attachment.
 
-Run **Cinnaroids.exe --background** to register and monitor attachment without showing or focusing a launcher window. It still starts no game automatically. Open Cinnaroids normally when you need its launcher controls.
+Run **Cinnaroids.exe --background** to register and monitor attachment without showing or focusing a launcher window. Open Cinnaroids normally to change its appearance.
 
 Press **Right Shift** in Cinnabar to open or close the module interface. Manage Clicker, Aim assist, Reach, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it leaves the running Cinnabar session and its module settings alone.
 
@@ -14,7 +14,7 @@ Press **Toggle key** and then a keyboard key to bind the clicker. Right Shift an
 
 The launcher starts in neutral dark mode and also supports light mode. Drag its header to move it. Regular top-right controls minimize, maximize or restore, and close it.
 
-Launcher preferences save to `%LOCALAPPDATA%/Cinnaroids/settings.json`. Existing dark/light and client-path preferences migrate from `%LOCALAPPDATA%/CinnabarClicker/settings.json`; the old file is preserved. Module settings are stored separately beside the installed WASM component. [Module setup and behavior](modules.md).
+Launcher preferences save to `%LOCALAPPDATA%/Cinnaroids/settings.json`. Existing dark/light preferences migrate from `%LOCALAPPDATA%/CinnabarClicker/settings.json`; the old file is preserved. Saved client paths are ignored. Module settings are stored separately beside the installed WASM component. [Module setup and behavior](modules.md).
 
 ## Build
 

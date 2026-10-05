@@ -8,57 +8,19 @@ use std::{
 #[serde(default)]
 pub struct Settings {
     pub dark_mode: bool,
+    // Retain legacy preferences without using them for client discovery.
     pub cinnabar_path: Option<PathBuf>,
 }
 
-/// Prefer installed Cinnabar over managed bundles, preserving an explicit custom client.
-pub fn select_client(saved: Option<PathBuf>, bundled: Option<PathBuf>) -> Option<PathBuf> {
-    let installed = std::env::var_os("LOCALAPPDATA")
+/// Always watch the standard installation, including before its executable exists.
+pub fn installed_client_path() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA")
         .filter(|base| !base.is_empty())
-        .and_then(|base| installed_client_in(Path::new(&base)));
-    select_client_with_installed(saved, bundled, installed)
+        .map(|base| installed_client_in(Path::new(&base)))
 }
 
-fn installed_client_in(local_app_data: &Path) -> Option<PathBuf> {
-    let path = local_app_data.join("Programs/Cinnabar/bedrock-client.exe");
-    path.is_file().then_some(path)
-}
-
-fn select_client_with_installed(
-    saved: Option<PathBuf>,
-    bundled: Option<PathBuf>,
-    installed: Option<PathBuf>,
-) -> Option<PathBuf> {
-    let managed_bundle = saved.as_ref().is_some_and(|path| {
-        path.parent().is_some_and(|directory| {
-            directory
-                .file_name()
-                .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Cinnabar"))
-                && directory
-                    .parent()
-                    .and_then(Path::file_name)
-                    .is_some_and(|name| managed_package(&name.to_string_lossy()))
-        })
-    });
-    if managed_bundle {
-        installed.or(bundled).or(saved)
-    } else {
-        saved.or(installed).or(bundled)
-    }
-}
-
-fn managed_package(name: &str) -> bool {
-    if name.eq_ignore_ascii_case(crate::PRODUCT_NAME)
-        || name.eq_ignore_ascii_case("CinnabarClicker")
-    {
-        return true;
-    }
-    let Some((product, version)) = name.rsplit_once('-') else {
-        return false;
-    };
-    product.eq_ignore_ascii_case(crate::PRODUCT_NAME)
-        && version.split('.').count() == 3
-        && version.split('.').all(|part| part.parse::<u32>().is_ok())
+fn installed_client_in(local_app_data: &Path) -> PathBuf {
+    local_app_data.join("Programs/Cinnabar/bedrock-client.exe")
 }
 
 impl Default for Settings {
@@ -193,92 +155,34 @@ mod tests {
     }
 
     #[test]
-    fn updated_package_replaces_a_saved_managed_bundle() {
-        let updated = PathBuf::from("C:/Apps/Cinnaroids-2.0.0/Cinnabar/bedrock-client.exe");
-        for old in [
-            "C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe",
-            "C:/Apps/Cinnaroids-1.9.0/Cinnabar/bedrock-client.exe",
-        ] {
-            assert_eq!(
-                select_client_with_installed(Some(PathBuf::from(old)), Some(updated.clone()), None),
-                Some(updated.clone())
-            );
-        }
-        let custom = PathBuf::from("C:/Apps/Cinnaroids-custom/Cinnabar/bedrock-client.exe");
-        assert_eq!(
-            select_client_with_installed(Some(custom.clone()), Some(updated), None),
-            Some(custom)
-        );
-    }
-
-    #[test]
-    fn renamed_bundle_replaces_legacy_bundle_but_keeps_custom_client() {
-        let bundle = PathBuf::from("C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe");
-        let legacy = PathBuf::from("C:/Apps/CinnabarClicker/Cinnabar/bedrock-client.exe");
-        assert_eq!(
-            select_client_with_installed(Some(legacy.clone()), Some(bundle.clone()), None),
-            Some(bundle.clone())
-        );
-        let custom = PathBuf::from("C:/Custom/Cinnabar/bedrock-client.exe");
-        assert_eq!(
-            select_client_with_installed(Some(custom.clone()), Some(bundle.clone()), None),
-            Some(custom)
-        );
-        let custom = PathBuf::from("C:/Apps/CinnabarClicker/Custom/bedrock-client.exe");
-        assert_eq!(
-            select_client_with_installed(Some(custom.clone()), Some(bundle.clone()), None),
-            Some(custom)
-        );
-        assert_eq!(
-            select_client_with_installed(Some(legacy.clone()), None, None),
-            Some(legacy)
-        );
-        assert_eq!(
-            select_client_with_installed(None, Some(bundle.clone()), None),
-            Some(bundle)
-        );
-    }
-
-    #[test]
-    fn installed_client_replaces_managed_bundles_but_keeps_an_explicit_custom_client() {
-        let installed =
-            PathBuf::from("C:/Users/User/AppData/Local/Programs/Cinnabar/bedrock-client.exe");
-        let bundled = PathBuf::from("C:/Apps/Cinnaroids-2.0.0/Cinnabar/bedrock-client.exe");
+    fn legacy_client_paths_do_not_override_the_standard_installation() {
+        let local = Path::new("C:/Users/Test/AppData/Local");
+        let expected = local.join("Programs/Cinnabar/bedrock-client.exe");
         for saved in [
-            None,
-            Some(PathBuf::from(
-                "C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe",
-            )),
-            Some(PathBuf::from(
-                "C:/Apps/CinnabarClicker/Cinnabar/bedrock-client.exe",
-            )),
+            "C:/Custom/Cinnabar/bedrock-client.exe",
+            "C:/Apps/Cinnaroids/Cinnabar/bedrock-client.exe",
+            "C:/Apps/CinnabarClicker/Cinnabar/bedrock-client.exe",
         ] {
-            assert_eq!(
-                select_client_with_installed(saved, Some(bundled.clone()), Some(installed.clone())),
-                Some(installed.clone())
-            );
+            let settings: Settings = serde_json::from_value(serde_json::json!({
+                "dark_mode": false,
+                "cinnabar_path": saved,
+            }))
+            .unwrap();
+            assert!(!settings.dark_mode);
+            assert_eq!(settings.cinnabar_path.as_deref(), Some(Path::new(saved)));
+            assert_eq!(installed_client_in(local), expected);
         }
-        let custom = PathBuf::from("C:/Development/Cinnabar/bedrock-client.exe");
-        assert_eq!(
-            select_client_with_installed(Some(custom.clone()), Some(bundled), Some(installed)),
-            Some(custom)
-        );
     }
 
     #[test]
-    fn installed_discovery_requires_the_standard_executable_to_be_a_file() {
+    fn discovery_watches_the_standard_path_before_it_is_installed() {
         let directory = std::env::temp_dir().join(format!(
             "cinnaroids-discovery-{}-{}",
             std::process::id(),
             ID.fetch_add(1, Ordering::Relaxed)
         ));
         let installed = directory.join("Programs/Cinnabar/bedrock-client.exe");
-        assert!(installed_client_in(&directory).is_none());
-        fs::create_dir_all(&installed).unwrap();
-        assert!(installed_client_in(&directory).is_none());
-        fs::remove_dir(&installed).unwrap();
-        fs::write(&installed, b"test executable").unwrap();
-        assert_eq!(installed_client_in(&directory), Some(installed));
-        fs::remove_dir_all(directory).unwrap();
+        assert!(!installed.exists());
+        assert_eq!(installed_client_in(&directory), installed);
     }
 }

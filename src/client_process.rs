@@ -26,32 +26,33 @@ use windows_sys::Win32::{
 
 struct Handle(HANDLE);
 
-pub struct ClientStartLock(Handle);
+pub struct RegistrationLock(Handle);
 
-impl ClientStartLock {
-    /// Serializes launcher starts across instances without blocking the UI thread.
+impl RegistrationLock {
+    /// Serializes registration across instances without blocking the UI thread.
     pub fn acquire() -> Result<Self, String> {
         use windows_sys::Win32::{
             Foundation::{WAIT_ABANDONED, WAIT_OBJECT_0},
             System::Threading::{CreateMutexW, WaitForSingleObject},
         };
+        // Keep the existing name to coordinate with already-running older launchers.
         let name: Vec<u16> = format!("Local\\{}.ClientStart", crate::PRODUCT_NAME)
             .encode_utf16()
             .chain([0])
             .collect();
         let raw = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
         if raw.is_null() {
-            return Err("Could not coordinate Cinnabar startup.".into());
+            return Err("Could not coordinate Cinnabar attachment.".into());
         }
         let handle = Handle(raw);
         match unsafe { WaitForSingleObject(handle.0, 5000) } {
             WAIT_OBJECT_0 | WAIT_ABANDONED => Ok(Self(handle)),
-            _ => Err("Another Cinnaroids instance is starting Cinnabar. Try again.".into()),
+            _ => Err("Another Cinnaroids instance is registering modules.".into()),
         }
     }
 }
 
-impl Drop for ClientStartLock {
+impl Drop for RegistrationLock {
     fn drop(&mut self) {
         unsafe { windows_sys::Win32::System::Threading::ReleaseMutex(self.0.0) };
     }
@@ -100,7 +101,7 @@ pub fn running_client(executable: &Path) -> Result<Option<u32>, String> {
             .unwrap_or(entry.szExeFile.len());
         if wide_equal(&entry.szExeFile[..name_length], &client_name) {
             // A process can exit between the snapshot and inspection. Access
-            // denied is an error so the caller does not launch a duplicate.
+            // denied is an error so discovery does not report an incomplete scan.
             if let Some(path) = process_path(entry.th32ProcessID)? {
                 if wide_equal(&canonical_path(&path)?, &expected) {
                     return Ok(Some(entry.th32ProcessID));

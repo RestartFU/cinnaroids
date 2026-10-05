@@ -10,10 +10,50 @@ use settings::Settings;
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 const PRODUCT_NAME: &str = "Cinnaroids";
+const ATTACH_RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_secs(2),
+    Duration::from_secs(4),
+    Duration::from_secs(8),
+];
+
+#[derive(Default)]
+struct AttachmentRetry {
+    retries: usize,
+    next_attempt: Option<Instant>,
+}
+
+impl AttachmentRetry {
+    fn failed(&mut self, now: Instant) {
+        if self.next_attempt.is_none()
+            && let Some(delay) = ATTACH_RETRY_DELAYS.get(self.retries)
+        {
+            self.retries += 1;
+            self.next_attempt = Some(now + *delay);
+        }
+    }
+
+    fn take_due(&mut self, now: Instant) -> bool {
+        if self.next_attempt.is_some_and(|deadline| now >= deadline) {
+            self.next_attempt = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn registered(&mut self) {
+        // Registration success stops local retries; a failed host ACK keeps this budget.
+        self.next_attempt = None;
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ExecutableRevision {
@@ -25,17 +65,36 @@ struct ExecutableRevision {
 struct ClientWatch {
     executable: PathBuf,
     revision: Option<ExecutableRevision>,
+    client_pid: Option<u32>,
 }
 
 impl ClientWatch {
-    fn observe(&mut self, revision: Option<ExecutableRevision>) -> bool {
-        if self.revision == revision {
+    fn observe(&mut self, revision: Option<ExecutableRevision>, client_pid: Option<u32>) -> bool {
+        if self.revision == revision && self.client_pid == client_pid {
             return false;
         }
         self.revision = revision;
+        self.client_pid = client_pid;
         // A temporarily absent executable is not a candidate for attachment.
         self.revision.is_some()
     }
+}
+
+fn observe_installed_client() -> Result<Option<ClientWatch>, String> {
+    let Some(executable) = settings::installed_client_path() else {
+        return Ok(None);
+    };
+    let revision = executable_revision(&executable);
+    let client_pid = if revision.is_some() {
+        client_process::running_client(&executable)?
+    } else {
+        None
+    };
+    Ok(Some(ClientWatch {
+        executable,
+        revision,
+        client_pid,
+    }))
 }
 
 fn executable_revision(path: &Path) -> Option<ExecutableRevision> {
@@ -81,6 +140,7 @@ struct Launcher {
     attachment: Option<AttachRequest>,
     pending: bool,
     client_watch: Option<ClientWatch>,
+    retry: AttachmentRetry,
 }
 
 impl Launcher {
@@ -110,6 +170,7 @@ impl Launcher {
             attachment: None,
             pending: false,
             client_watch: None,
+            retry: AttachmentRetry::default(),
         }
     }
 
@@ -142,111 +203,47 @@ impl Launcher {
         }
     }
 
-    fn selected_client(&self) -> Option<PathBuf> {
-        let saved = self
-            .preferences
-            .cinnabar_path
-            .clone()
-            .filter(|path| path.is_file());
-        let bundled = (|| {
-            std::env::current_exe()
-                .ok()?
-                .parent()
-                .map(|directory| directory.join("Cinnabar/bedrock-client.exe"))
-                .filter(|path| path.is_file())
-        })();
-        settings::select_client(saved, bundled)
-    }
-
-    fn attach(&mut self, executable: PathBuf, start_if_absent: bool, cx: &mut Context<Self>) {
-        if self.pending {
+    fn attach(&mut self, executable: PathBuf, cx: &mut Context<Self>) {
+        if self.pending || self.preview {
             return;
         }
-        let Some(component) = self.component.clone() else {
-            return;
-        };
+        let component = self.component.clone();
         self.pending = true;
         self.status = "Attaching…".into();
-        self.error = None;
         self.attachment = None;
         cx.notify();
-        let watched_executable = executable.clone();
         let task = cx.background_executor().spawn(async move {
-            let revision = executable_revision(&executable);
-            (revision, component.attach(&executable, start_if_absent))
+            match component.map_or_else(ModComponent::new, Ok) {
+                Ok(component) => {
+                    let result = component.attach(&executable);
+                    (Some(component), result)
+                }
+                Err(error) => (None, Err(error)),
+            }
         });
         cx.spawn(async move |view, cx| {
-            let (revision, result) = task.await;
+            let (component, result) = task.await;
             let _ = view.update(cx, |s, cx| {
                 s.pending = false;
-                s.client_watch = Some(ClientWatch {
-                    executable: watched_executable,
-                    revision,
-                });
+                s.component = component;
                 match result {
                     Ok(request) => {
-                        s.preferences.cinnabar_path = Some(request.executable.clone());
-                        s.save();
+                        s.retry.registered();
                         s.status = if request.client_pid.is_some() {
                             "Waiting for Cinnabar to load modules".into()
                         } else {
-                            "Ready — start Cinnabar".into()
+                            s.error = None;
+                            "Waiting for Cinnabar".into()
                         };
                         s.attachment = Some(request);
                     }
                     Err(error) => {
+                        s.retry.failed(Instant::now());
                         s.error = Some(error);
                         s.status = "Attachment unavailable".into();
                     }
                 }
                 cx.notify();
-            });
-        })
-        .detach();
-    }
-
-    fn start(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.preview || self.component.is_none() {
-            return;
-        }
-        if let Some(executable) = self.selected_client() {
-            self.attach(executable, true, cx);
-        } else {
-            self.choose(true, window, cx);
-        }
-    }
-
-    fn choose(&mut self, launch: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if self.preview || self.pending {
-            return;
-        }
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some("Select Cinnabar's bedrock-client.exe".into()),
-        });
-        cx.spawn_in(window, async move |view, cx| {
-            let result = paths.await;
-            let _ = view.update(cx, |s, cx| match result {
-                Ok(Ok(Some(paths))) => {
-                    if let Some(path) = paths.into_iter().next() {
-                        if launch {
-                            s.attach(path, true, cx);
-                        } else {
-                            s.preferences.cinnabar_path = Some(path);
-                            s.save();
-                            if let Some(executable) = s.selected_client() {
-                                s.attach(executable, false, cx);
-                            }
-                        }
-                    }
-                }
-                Ok(Ok(None)) => {}
-                _ => {
-                    s.error = Some("Could not select Cinnabar.".into());
-                    cx.notify();
-                }
             });
         })
         .detach();
@@ -353,11 +350,6 @@ impl Launcher {
 
 impl Render for Launcher {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let client_label = if self.selected_client().is_some() {
-            "Cinnabar"
-        } else {
-            "Select your installed Cinnabar"
-        };
         div()
             .size_full()
             .relative()
@@ -389,49 +381,11 @@ impl Render for Launcher {
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_size(px(15.0))
-                                    .child(client_label),
+                                    .child("Cinnabar"),
                             )
                             .child(div().mt(px(8.0)).text_color(rgb(self.muted())).child(
                                 "Attaches automatically. Right Shift opens modules in-game.",
-                            ))
-                            .child(
-                                div()
-                                    .mt(px(22.0))
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(10.0))
-                                    .child(
-                                        div()
-                                            .id("start-cinnabar")
-                                            .px(px(16.0))
-                                            .py(px(10.0))
-                                            .rounded(px(7.0))
-                                            .cursor_pointer()
-                                            .bg(rgb(self.accent()))
-                                            .text_color(rgb(0x181818))
-                                            .hover(|d| d.opacity(0.85))
-                                            .on_click(cx.listener(Self::start))
-                                            .child(if self.status.starts_with("Attached") {
-                                                "Attach"
-                                            } else {
-                                                "Start Cinnabar"
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .id("choose-client")
-                                            .px(px(14.0))
-                                            .py(px(10.0))
-                                            .rounded(px(7.0))
-                                            .cursor_pointer()
-                                            .bg(self.tint(0xffffff0b, 0x00000005))
-                                            .hover(|d| d.bg(self.tint(0xffffff16, 0x0000000b)))
-                                            .on_click(cx.listener(|s, _, window, cx| {
-                                                s.choose(false, window, cx)
-                                            }))
-                                            .child("Choose client"),
-                                    ),
-                            ),
+                            )),
                     )
                     .child(
                         div()
@@ -511,15 +465,12 @@ fn main() {
                         cx.quit();
                         true
                     });
-                    cx.new(|cx| {
+                    cx.new(|cx: &mut Context<Launcher>| {
                         let mut launcher = Launcher::new(preview);
                         if light {
                             launcher.preferences.dark_mode = false;
                         }
                         if !preview {
-                            if let Some(executable) = launcher.selected_client() {
-                                launcher.attach(executable, false, cx);
-                            }
                             cx.spawn(async move |view, cx| {
                                 loop {
                                     Timer::after(Duration::from_millis(500)).await;
@@ -534,61 +485,109 @@ fn main() {
                                             Ok(snapshot) => snapshot,
                                             Err(_) => break,
                                         };
-                                    if pending || (request.is_none() && watch.is_none()) {
+                                    if pending {
                                         continue;
                                     }
-                                    let watched_executable =
-                                        watch.as_ref().map(|watch| watch.executable.clone());
-                                    let (revision, status) = cx
+                                    let (observation, status) = cx
                                         .background_executor()
                                         .spawn(async move {
-                                            let revision = watched_executable
-                                                .as_deref()
-                                                .and_then(executable_revision);
+                                            let observation = observe_installed_client();
                                             let status = request.map(|request| {
                                                 (request.id.clone(), request.status())
                                             });
-                                            (revision, status)
+                                            (observation, status)
                                         })
                                         .await;
                                     if view
                                         .update(cx, |s, cx| {
-                                            if !s.pending
-                                                && watch.is_some()
-                                                && s.client_watch == watch
-                                            {
-                                                let updated_executable =
-                                                    s.client_watch.as_mut().and_then(|watch| {
-                                                        watch
-                                                            .observe(revision)
-                                                            .then(|| watch.executable.clone())
-                                                    });
-                                                if let Some(executable) = updated_executable {
-                                                    s.attach(executable, false, cx);
+                                            if s.pending || s.client_watch != watch {
+                                                return;
+                                            }
+                                            let observed = match observation {
+                                                Ok(Some(observed)) => observed,
+                                                Ok(None) => {
+                                                    s.error =
+                                                        Some("Settings folder unavailable.".into());
+                                                    s.status = "Attachment unavailable".into();
+                                                    cx.notify();
                                                     return;
                                                 }
-                                            }
-                                            let Some((request_id, result)) = status else {
-                                                return;
+                                                Err(error) => {
+                                                    if s.error.as_ref() != Some(&error) {
+                                                        s.error = Some(error);
+                                                        s.status =
+                                                            "Could not inspect Cinnabar".into();
+                                                        cx.notify();
+                                                    }
+                                                    return;
+                                                }
                                             };
-                                            if s.attachment
-                                                .as_ref()
-                                                .is_none_or(|request| request.id != request_id)
-                                            {
+                                            let executable = observed.executable.clone();
+                                            let installed = observed.revision.is_some();
+                                            let should_attach = match &mut s.client_watch {
+                                                Some(watch) if watch.executable == executable => {
+                                                    watch.observe(
+                                                        observed.revision,
+                                                        observed.client_pid,
+                                                    )
+                                                }
+                                                _ => {
+                                                    s.client_watch = Some(observed);
+                                                    installed
+                                                }
+                                            };
+                                            if should_attach {
+                                                s.retry.reset();
+                                                s.attach(executable, cx);
                                                 return;
                                             }
-                                            match result {
-                                                Ok(Some(status)) if s.status != status => {
-                                                    s.status = status;
-                                                    s.error = None;
+                                            if !installed {
+                                                s.retry.reset();
+                                                s.attachment = None;
+                                                if s.status != "Waiting for installed Cinnabar" {
+                                                    s.status =
+                                                        "Waiting for installed Cinnabar".into();
                                                     cx.notify();
                                                 }
-                                                Err(error) if s.error.as_ref() != Some(&error) => {
-                                                    s.error = Some(error);
-                                                    s.status = "Could not attach".into();
-                                                    cx.notify();
+                                                return;
+                                            }
+                                            if let Some((request_id, result)) = status
+                                                && s.attachment
+                                                    .as_ref()
+                                                    .is_some_and(|request| request.id == request_id)
+                                            {
+                                                match result {
+                                                    Ok(Some(status)) => {
+                                                        let attached =
+                                                            status.starts_with("Attached");
+                                                        if attached {
+                                                            s.retry.reset();
+                                                        }
+                                                        if s.status != status
+                                                            || (attached && s.error.is_some())
+                                                        {
+                                                            s.status = status;
+                                                            if attached {
+                                                                s.error = None;
+                                                            }
+                                                            cx.notify();
+                                                        }
+                                                    }
+                                                    Err(error) => {
+                                                        s.retry.failed(Instant::now());
+                                                        if s.error.as_ref() != Some(&error)
+                                                            || s.status != "Could not attach"
+                                                        {
+                                                            s.error = Some(error);
+                                                            s.status = "Could not attach".into();
+                                                            cx.notify();
+                                                        }
+                                                    }
+                                                    _ => {}
                                                 }
-                                                _ => {}
+                                            }
+                                            if s.retry.take_due(Instant::now()) {
+                                                s.attach(executable, cx);
                                             }
                                         })
                                         .is_err()
@@ -623,6 +622,50 @@ mod tests {
     use core::prelude::v1::test;
 
     #[test]
+    fn transient_attachment_failure_recovers_without_a_new_observation_or_success_churn() {
+        let revision = ExecutableRevision {
+            size: 100,
+            modified: Some(SystemTime::UNIX_EPOCH),
+        };
+        let mut watch = ClientWatch {
+            executable: "C:/Installed/Cinnabar/bedrock-client.exe".into(),
+            revision: Some(revision.clone()),
+            client_pid: Some(100),
+        };
+        let mut retry = AttachmentRetry::default();
+        let failed_at = Instant::now();
+        retry.failed(failed_at);
+        assert!(!watch.observe(Some(revision.clone()), Some(100)));
+        assert!(!retry.take_due(failed_at + Duration::from_secs(1)));
+        assert!(retry.take_due(failed_at + Duration::from_secs(2)));
+        retry.registered();
+        for seconds in 2..120 {
+            assert!(!watch.observe(Some(revision.clone()), Some(100)));
+            assert!(!retry.take_due(failed_at + Duration::from_secs(seconds)));
+        }
+    }
+
+    #[test]
+    fn host_failures_keep_the_bounded_budget_until_a_confirmed_attachment() {
+        let mut retry = AttachmentRetry::default();
+        let mut now = Instant::now();
+        for delay in ATTACH_RETRY_DELAYS {
+            retry.failed(now);
+            // Repeated observations of the same failure must not postpone or multiply retries.
+            retry.failed(now + Duration::from_millis(500));
+            assert!(!retry.take_due(now + delay - Duration::from_millis(1)));
+            assert!(retry.take_due(now + delay));
+            retry.registered();
+            now += delay;
+        }
+        retry.failed(now);
+        assert!(!retry.take_due(now + Duration::from_secs(60)));
+        retry.reset();
+        retry.failed(now);
+        assert!(retry.take_due(now + Duration::from_secs(2)));
+    }
+
+    #[test]
     fn client_update_retries_once_and_waits_through_a_missing_executable() {
         let original = ExecutableRevision {
             size: 100,
@@ -635,21 +678,50 @@ mod tests {
         let mut watch = ClientWatch {
             executable: "C:/Installed/Cinnabar/bedrock-client.exe".into(),
             revision: Some(original.clone()),
+            client_pid: None,
         };
         for _ in 0..100 {
-            assert!(!watch.observe(Some(original.clone())));
+            assert!(!watch.observe(Some(original.clone()), None));
         }
-        assert!(watch.observe(Some(updated.clone())));
-        assert!(!watch.observe(Some(updated.clone())));
+        assert!(watch.observe(Some(updated.clone()), None));
+        assert!(!watch.observe(Some(updated.clone()), None));
         let rebuilt = ExecutableRevision {
             size: updated.size,
             modified: Some(SystemTime::UNIX_EPOCH + Duration::from_secs(2)),
         };
-        assert!(watch.observe(Some(rebuilt.clone())));
-        assert!(!watch.observe(Some(rebuilt.clone())));
-        assert!(!watch.observe(None));
-        assert!(!watch.observe(None));
-        assert!(watch.observe(Some(rebuilt.clone())));
-        assert!(!watch.observe(Some(rebuilt)));
+        assert!(watch.observe(Some(rebuilt.clone()), None));
+        assert!(!watch.observe(Some(rebuilt.clone()), None));
+        assert!(!watch.observe(None, None));
+        assert!(!watch.observe(None, None));
+        assert!(watch.observe(Some(rebuilt.clone()), None));
+        assert!(!watch.observe(Some(rebuilt), None));
+    }
+
+    #[test]
+    fn automatic_attachment_tracks_later_installation_and_game_restarts_once() {
+        let revision = ExecutableRevision {
+            size: 100,
+            modified: Some(SystemTime::UNIX_EPOCH),
+        };
+        let mut watch = ClientWatch {
+            executable: "C:/Installed/Cinnabar/bedrock-client.exe".into(),
+            revision: None,
+            client_pid: None,
+        };
+        for _ in 0..100 {
+            assert!(!watch.observe(None, None));
+        }
+        assert!(watch.observe(Some(revision.clone()), None));
+        for _ in 0..100 {
+            assert!(!watch.observe(Some(revision.clone()), None));
+        }
+        assert!(watch.observe(Some(revision.clone()), Some(100)));
+        for _ in 0..100 {
+            assert!(!watch.observe(Some(revision.clone()), Some(100)));
+        }
+        assert!(watch.observe(Some(revision.clone()), None));
+        assert!(!watch.observe(Some(revision.clone()), None));
+        assert!(watch.observe(Some(revision.clone()), Some(200)));
+        assert!(!watch.observe(Some(revision), Some(200)));
     }
 }

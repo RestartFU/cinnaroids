@@ -1,15 +1,26 @@
-Cinnaroids 2.1.0 — Windows x64
-Validation snapshot: 2026-10-04
+Cinnaroids 2.1.1 — Windows x64
+Validation snapshot: 2026-10-05
 
-The GPUI launcher discovers the installed Cinnabar, registers its embedded
-WASM component, and attaches to an existing matching client. It starts a
-client only after the user presses Start Cinnabar and no matching process
-is running. No operating-system input hooks remain.
+The GPUI launcher watches only the standard installed Cinnabar, registers
+its embedded WASM component, and attaches automatically. Attach, Choose
+client, and Start Cinnabar controls and custom/bundled selection are gone.
+No game-start code or operating-system input hooks remain. Preferences
+and the embedded guest, font, and installed host are unchanged.
+
+Automatic attachment handles a later installation, game restarts, and
+installed-client updates without repeatedly rewriting a successful request.
+Temporary failures retry after 2/4/8 seconds per observed client state;
+host failures preserve that bounded budget until a loaded acknowledgment.
+Matching loaded requests preserve identity. Replaced assets, failed live
+requests, and conflicting loaded acknowledgments receive a fresh request.
 
 Completed checks for live attachment:
-- 15 launcher tests: installed/custom selection, process path matching,
-  bounded registration, acknowledgment lifetime, metadata-based update
-  retry, migrations, resource preservation, and independent preferences.
+- 17 launcher tests: fixed installed path, process path matching, bounded
+  registration, request reuse and reconciliation, acknowledgment lifetime,
+  later installation/game restarts, bounded retry recovery, migrations,
+  resource preservation, and independent preferences.
+
+Previously completed checks for the unchanged installed host:
 - Touched client, UI, renderer and component-host crates compile with tests
   and the opt-in local-mods feature against Cinnabar v0.1.5.
 - The streamed-terrain lighting/mesh regression passes using its existing
@@ -52,10 +63,10 @@ GUI scale 2 without activating a window or sending desktop input. The
 three rendered frames retained sharp Inter text, unchanged geometry and
 clipping; unloading restored the separate game font.
 
-The launcher was inspected natively at 600x360 in dark mode. Installed
+The 2.1.0 launcher was inspected natively at 600x360 in dark mode. Installed
 client compatibility errors fit the card and the regular window controls
 and layout remained intact.
-The final --background build passed all 15 launcher tests, stayed alive
+That --background build passed all 15 prior launcher tests, stayed alive
 without a visible main window, and wrote the expected bounded registration
 for the installed client without starting a game or sending desktop input.
 
@@ -107,11 +118,11 @@ against the installed layout and reached the intended missing-core stop.
 The updater's atomic replacement was exercised after normal game exit and
 verified against the requested executable; it also passed a file fixture.
 Verified original-executable backups remain. The latest private integration
-also passed the installed-resource preflight and may wait for normal game
-exit before installation.
+passed the installed-resource preflight and was installed after normal game
+exit on 2026-10-05; its installed executable hash was verified.
 
 Native physical Right Shift remains unverified: the automation tool's
 Shift_R request produced ShiftLeft in an earlier run. The panel is bound
-to ShiftRight. Connected multiplayer and release performance acceptance
-have not been tested; current older running sessions cannot gain the loader
-without a restart. A queued update is not a completed live attachment.
+to ShiftRight. Connected multiplayer behavior and release performance
+acceptance remain unverified. A loaded acknowledgment confirms module
+loading, not multiplayer stability or a successful attack.

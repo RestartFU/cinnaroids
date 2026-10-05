@@ -3,10 +3,11 @@
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -28,6 +29,7 @@ static WRITE_ID: AtomicU64 = AtomicU64::new(0);
 pub struct ModComponent {
     path: PathBuf,
     font_path: PathBuf,
+    assets_changed: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -73,7 +75,7 @@ impl AttachRequest {
             return self.waiting_status();
         }
         if !crate::client_process::client_is_running(status.client_pid, &self.executable) {
-            return Ok(Some("Ready — start Cinnabar".into()));
+            return Ok(Some("Waiting for Cinnabar".into()));
         }
         match status.state.as_str() {
             "loaded" => Ok(Some("Attached — Right Shift opens modules".into())),
@@ -97,7 +99,7 @@ impl AttachRequest {
                     "Waiting for Cinnabar to load modules".into()
                 }
             } else {
-                "Ready — start Cinnabar".into()
+                "Waiting for Cinnabar".into()
             },
         ))
     }
@@ -108,7 +110,7 @@ impl ModComponent {
         let base = std::env::var_os("LOCALAPPDATA").ok_or("Settings folder unavailable.")?;
         let base = PathBuf::from(base);
         let path = base.join("Cinnaroids/mods/cinnaroids.component.wasm");
-        install_component(&path, COMPONENT)?;
+        let mut assets_changed = install_component(&path, COMPONENT)?;
         let font_path = base.join("Cinnaroids/fonts/Inter-Medium.ttf");
         for (path, bytes) in [
             (&font_path, PANEL_FONT),
@@ -117,6 +119,7 @@ impl ModComponent {
             if !fs::read(path).is_ok_and(|current| current == bytes) {
                 write_atomic(path, bytes, false)
                     .map_err(|error| format!("Could not install panel font: {error}"))?;
+                assets_changed |= path == &font_path;
             }
         }
         migrate_preferences(
@@ -124,15 +127,18 @@ impl ModComponent {
             &base.join("CinnabarClicker/settings.json"),
         )
         .map_err(|error| format!("Could not migrate module preferences: {error}"))?;
-        Ok(Self { path, font_path })
+        Ok(Self {
+            path,
+            font_path,
+            assets_changed: Arc::new(AtomicBool::new(assets_changed)),
+        })
     }
 
-    pub fn attach(
-        &self,
-        executable: &Path,
-        start_if_absent: bool,
-    ) -> Result<AttachRequest, String> {
-        let _start_lock = crate::client_process::ClientStartLock::acquire()?;
+    pub fn attach(&self, executable: &Path) -> Result<AttachRequest, String> {
+        if crate::settings::installed_client_path().as_deref() != Some(executable) {
+            return Err("Cinnaroids requires the standard installed Cinnabar client.".into());
+        }
+        let _registration_lock = crate::client_process::RegistrationLock::acquire()?;
         let mut file =
             File::open(executable).map_err(|error| format!("Could not read Cinnabar: {error}"))?;
         if !supports_modules(&mut file)
@@ -145,55 +151,102 @@ impl ModComponent {
         let client_pid = crate::client_process::running_client(executable)?;
         let base = std::env::var_os("LOCALAPPDATA").ok_or("Settings folder unavailable.")?;
         let registration_path = PathBuf::from(base).join("Cinnabar/local-mod.json");
-        let id = format!(
-            "{}-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos(),
-            WRITE_ID.fetch_add(1, Ordering::Relaxed)
-        );
-        let bytes = registration(&id, &self.path, &self.font_path)?;
-        write_atomic(&registration_path, &bytes, false)
-            .map_err(|error| format!("Could not register Cinnaroids: {error}"))?;
-        let mut request = AttachRequest {
+        let status_path = registration_path.with_file_name(LIVE_ATTACHMENT_MARKER);
+        let existing = read_bounded_file(&registration_path, "module registration")?;
+        let acknowledged = read_bounded_file(&status_path, "module status")?
+            .filter(|bytes| bytes.len() <= REGISTRATION_BYTES)
+            .and_then(|bytes| serde_json::from_slice::<HostStatus>(&bytes).ok())
+            .filter(|status| {
+                status.version == 1
+                    && crate::client_process::client_is_running(status.client_pid, executable)
+            });
+        let reusable = existing
+            .as_deref()
+            .and_then(|bytes| {
+                matching_registration_id(
+                    bytes,
+                    &self.path,
+                    &self.font_path,
+                    self.assets_changed.load(Ordering::Relaxed),
+                )
+            })
+            .filter(|id| !acknowledgment_requires_refresh(id, acknowledged.as_ref()));
+        let id = match reusable {
+            Some(id) => id,
+            None => {
+                let id = format!(
+                    "{}-{}-{}",
+                    std::process::id(),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos(),
+                    WRITE_ID.fetch_add(1, Ordering::Relaxed)
+                );
+                let bytes = registration(&id, &self.path, &self.font_path)?;
+                write_atomic(&registration_path, &bytes, false)
+                    .map_err(|error| format!("Could not register Cinnaroids: {error}"))?;
+                id
+            }
+        };
+        self.assets_changed.store(false, Ordering::Relaxed);
+        Ok(AttachRequest {
             id,
             executable: executable.into(),
             client_pid,
-            status_path: registration_path.with_file_name(LIVE_ATTACHMENT_MARKER),
+            status_path,
             created: Instant::now(),
-        };
-        if client_pid.is_some() || !start_if_absent {
-            return Ok(request);
-        }
-        let logs = self.path.parent().unwrap().parent().unwrap().join("logs");
-        fs::create_dir_all(&logs)
-            .map_err(|error| format!("Could not create launch log: {error}"))?;
-        let log = File::create(logs.join("cinnabar.log"))
-            .map_err(|error| format!("Could not create launch log: {error}"))?;
-        let errors = log
-            .try_clone()
-            .map_err(|error| format!("Could not open launch log: {error}"))?;
-        let mut command = launch_command(executable)?;
-        if let Some(pid) = crate::client_process::running_client(executable)? {
-            request.client_pid = Some(pid);
-            return Ok(request);
-        }
-        let child = command
-            .stdin(Stdio::null())
-            .stdout(Stdio::from(log))
-            .stderr(Stdio::from(errors))
-            .creation_flags(0x0800_0000)
-            .spawn()
-            .map_err(|error| format!("Could not start Cinnabar: {error}"))?;
-        request.client_pid = Some(child.id());
-        Ok(request)
+        })
     }
 }
 
+fn read_bounded_file(path: &Path, description: &str) -> Result<Option<Vec<u8>>, String> {
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("Could not read {description}: {error}")),
+    };
+    let mut bytes = Vec::new();
+    file.take((REGISTRATION_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Could not read {description}: {error}"))?;
+    Ok(Some(bytes))
+}
+
+fn acknowledgment_requires_refresh(id: &str, acknowledged: Option<&HostStatus>) -> bool {
+    acknowledged.is_some_and(|status| {
+        // A failed request must change identity to leave the host's quarantine.
+        // Reconcile a live loaded request that disagrees with the file on disk.
+        (status.request_id == id && status.state == "error")
+            || (status.request_id != id && status.state == "loaded")
+    })
+}
+
+fn matching_registration_id(
+    bytes: &[u8],
+    component: &Path,
+    font: &Path,
+    assets_changed: bool,
+) -> Option<String> {
+    // Reopening an unchanged launcher must not reset an already-loaded module.
+    // Replaced assets require a fresh request so an old acknowledgment cannot satisfy it.
+    if assets_changed || bytes.len() > REGISTRATION_BYTES {
+        return None;
+    }
+    let current: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let id = current.get("request_id")?.as_str()?;
+    let expected: serde_json::Value =
+        serde_json::from_slice(&registration(id, component, font).ok()?).ok()?;
+    (current == expected).then(|| id.to_owned())
+}
+
 fn registration(id: &str, component: &Path, font: &Path) -> Result<Vec<u8>, String> {
-    if id.is_empty() || id.len() > 64 || !component.is_absolute() || !font.is_absolute() {
+    if id.is_empty()
+        || id.len() > 64
+        || id.chars().any(char::is_control)
+        || !component.is_absolute()
+        || !font.is_absolute()
+    {
         return Err("Invalid local module registration.".into());
     }
     let bytes = serde_json::to_vec_pretty(&serde_json::json!({
@@ -209,27 +262,15 @@ fn registration(id: &str, component: &Path, font: &Path) -> Result<Vec<u8>, Stri
     Ok(bytes)
 }
 
-fn launch_command(executable: &Path) -> Result<Command, String> {
-    let directory = executable.parent().ok_or("Cinnabar folder unavailable.")?;
-    let mut command = Command::new(executable);
-    command
-        .current_dir(directory)
-        .env_remove("CINNABAR_MOD_COMPONENT")
-        .env_remove("CINNABAR_MOD_FONT");
-    for grant in GRANTS {
-        command.env_remove(grant);
-    }
-    Ok(command)
-}
-
-fn install_component(path: &Path, bytes: &[u8]) -> Result<(), String> {
+fn install_component(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     if !bytes.starts_with(b"\0asm\x0d\0\x01\0") {
         return Err("Bundled Cinnaroids component is invalid.".into());
     }
     if fs::read(path).is_ok_and(|current| current == bytes) {
-        return Ok(());
+        return Ok(false);
     }
     write_atomic(path, bytes, false)
+        .map(|()| true)
         .map_err(|error| format!("Could not install Cinnaroids: {error}"))
 }
 
@@ -332,10 +373,12 @@ mod tests {
         fs::write(&path, b"old component").unwrap();
         let preferences = path.with_extension("settings.json");
         fs::write(&preferences, b"{\"cps\":25}").unwrap();
-        install_component(&path, COMPONENT).unwrap();
+        assert!(install_component(&path, COMPONENT).unwrap());
+        assert!(!install_component(&path, COMPONENT).unwrap());
         drop(ModComponent {
             path: path.clone(),
             font_path: directory.join("font.ttf"),
+            assets_changed: Arc::new(AtomicBool::new(false)),
         });
         assert_eq!(fs::read(&path).unwrap(), COMPONENT);
         assert_eq!(fs::read(preferences).unwrap(), b"{\"cps\":25}");
@@ -392,32 +435,40 @@ mod tests {
     }
 
     #[test]
-    fn installed_client_keeps_its_resources_and_uses_the_registered_loader() {
-        let directory = scratch();
-        let executable = directory.join("bedrock-client.exe");
-        let assets = directory.join("assets/compiled/vanilla-v2193.mcbea");
-        fs::create_dir_all(assets.parent().unwrap()).unwrap();
-        fs::write(&assets, b"carrier").unwrap();
-        let command = launch_command(&executable).unwrap();
-        assert_eq!(command.get_current_dir(), Some(directory.as_path()));
-        assert_eq!(command.get_args().count(), 0);
-        let environment: std::collections::HashMap<_, _> = command
-            .get_envs()
-            .map(|(key, value)| (key.to_os_string(), value.map(|value| value.to_os_string())))
-            .collect();
+    fn matching_instances_reuse_the_request_but_replaced_assets_require_a_fresh_ack() {
+        let component = Path::new("C:/Cinnaroids/mod.wasm");
+        let font = Path::new("C:/Cinnaroids/font.ttf");
+        let bytes = registration("first-instance", component, font).unwrap();
         assert_eq!(
-            environment.get(std::ffi::OsStr::new("CINNABAR_MOD_COMPONENT")),
-            Some(&None)
+            matching_registration_id(&bytes, component, font, false).as_deref(),
+            Some("first-instance")
         );
-        for grant in GRANTS {
-            assert_eq!(environment.get(std::ffi::OsStr::new(grant)), Some(&None));
+        assert!(matching_registration_id(&bytes, component, font, true).is_none());
+        for (field, value) in [
+            ("version", serde_json::json!(2)),
+            ("enabled", serde_json::json!(false)),
+            ("component", serde_json::json!("C:/Other/mod.wasm")),
+            ("font", serde_json::json!("C:/Other/font.ttf")),
+            ("grants", serde_json::json!({"controls": true})),
+            ("request_id", serde_json::json!("invalid\nid")),
+        ] {
+            let mut changed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            changed[field] = value;
+            assert!(
+                matching_registration_id(
+                    &serde_json::to_vec(&changed).unwrap(),
+                    component,
+                    font,
+                    false
+                )
+                .is_none(),
+                "accepted changed {field}"
+            );
         }
-        assert_eq!(
-            environment.get(std::ffi::OsStr::new("CINNABAR_MOD_FONT")),
-            Some(&None)
+        assert!(
+            matching_registration_id(&vec![b' '; REGISTRATION_BYTES + 1], component, font, false)
+                .is_none()
         );
-        assert_eq!(environment.len(), GRANTS.len() + 2);
-        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
@@ -439,6 +490,42 @@ mod tests {
     }
 
     #[test]
+    fn failed_or_divergent_live_acknowledgments_require_a_new_request() {
+        let mut status = HostStatus {
+            version: 1,
+            request_id: "current-request".into(),
+            client_pid: 100,
+            state: "loaded".into(),
+            message: None,
+        };
+        assert!(!acknowledgment_requires_refresh("current-request", None));
+        assert!(!acknowledgment_requires_refresh(
+            "current-request",
+            Some(&status)
+        ));
+        status.state = "error".into();
+        assert!(acknowledgment_requires_refresh(
+            "current-request",
+            Some(&status)
+        ));
+        // The previous error can remain while the host processes a fresh request.
+        assert!(!acknowledgment_requires_refresh(
+            "new-request",
+            Some(&status)
+        ));
+        status.state = "loaded".into();
+        assert!(acknowledgment_requires_refresh(
+            "new-request",
+            Some(&status)
+        ));
+        status.request_id = "new-request".into();
+        assert!(!acknowledgment_requires_refresh(
+            "new-request",
+            Some(&status)
+        ));
+    }
+
+    #[test]
     fn vanished_or_replaced_acknowledgment_cannot_leave_a_dead_client_attached() {
         let directory = scratch();
         let executable = directory.join("bedrock-client.exe");
@@ -452,7 +539,7 @@ mod tests {
         };
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Ready — start Cinnabar")
+            Some("Waiting for Cinnabar")
         );
         fs::write(
             &request.status_path,
@@ -461,12 +548,12 @@ mod tests {
         .unwrap();
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Ready — start Cinnabar")
+            Some("Waiting for Cinnabar")
         );
         fs::write(&request.status_path, b"invalid").unwrap();
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Ready — start Cinnabar")
+            Some("Waiting for Cinnabar")
         );
         fs::remove_dir_all(directory).unwrap();
     }

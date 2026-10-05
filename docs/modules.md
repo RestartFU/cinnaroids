@@ -1,6 +1,6 @@
 # In-game modules
 
-Open **Cinnaroids.exe** with your installed Cinnabar already running. It registers the embedded module automatically and shows **Attached** after the game acknowledges loading. **Start Cinnabar** starts the installed client only when no matching process is running.
+Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically registers the embedded module for the standard installation at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and shows **Attached** after the game acknowledges loading. It never starts the game or selects another installation.
 
 The host must include live local-module loading. Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
@@ -23,7 +23,7 @@ Reach changes the client's actor attack selection distance. It preserves block t
 
 The launcher installs `%LOCALAPPDATA%/Cinnaroids/mods/cinnaroids.component.wasm`. The host stores module preferences in its fixed companion, `cinnaroids.component.settings.json`. Valid preferences from the older `%LOCALAPPDATA%/CinnabarClicker/settings.json` migrate only if the companion is absent. Existing module preferences and the old file are preserved; runtime enabled switches are not migrated.
 
-When the launcher starts Cinnabar, output is in `%LOCALAPPDATA%/Cinnaroids/logs/cinnabar.log`. It atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction and settings grants. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the selected running client. The WASM component has no WASI or ambient operating-system access.
+The launcher atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction and settings grants. Matching launcher instances reuse an unchanged registration. Replaced assets, a failed live request, or a conflicting loaded acknowledgment require a fresh request. Attachment failures retry after 2, 4, and 8 seconds; a game restart or installed-client update resets that retry budget. Errors remain visible until recovery. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the standard installed running client. The WASM component has no WASI or ambient operating-system access.
 
 The panel uses the embedded OFL Inter Medium font, installed with its license in `%LOCALAPPDATA%/Cinnaroids/fonts/`. Registration selects it for the personal panel. The worker rasterizes it before attachment; the host updates its isolated font page without replacing game or server glyphs. Panel sizing follows display DPI independently of Minecraft's GUI scale.
 
@@ -31,6 +31,6 @@ The launcher uses the installed Cinnabar's resources without overriding its asse
 
 ## Build
 
-A source checkout needs Cinnabar's extended personal-mod API and live registration loader, built with `--features local-mods`, plus the matching Go binaries and installed resources. Select its installed `bedrock-client.exe` with **Choose client** if it is outside the standard installation folder.
+A source checkout needs Cinnabar's extended personal-mod API and live registration loader, built with `--features local-mods`, plus the matching Go binaries and resources in the standard installation folder.
 
 Rebuild the guest with `powershell -ExecutionPolicy Bypass -File scripts/build-cinnaroids.ps1`, then build the launcher with `cargo build --release --locked`. Guest tests use `cargo test --manifest-path mods/cinnaroids/Cargo.toml --locked`.
