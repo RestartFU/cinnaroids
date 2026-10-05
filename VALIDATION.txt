@@ -14,6 +14,13 @@ host failures preserve that bounded budget until a loaded acknowledgment.
 Matching loaded requests preserve identity. Replaced assets, failed live
 requests, and conflicting loaded acknowledgments receive a fresh request.
 
+The 2.1.1 locked release build and all 17 launcher tests passed. The new
+background executable remained alive with no visible main window, wrote
+one stable installed-path registration, and retained the existing game and
+Core processes. Module, font, and guest-preference hashes were unchanged.
+The existing game still held its earlier loading acknowledgment during
+this check; a fresh matching live acknowledgment remains unverified.
+
 Completed checks for live attachment:
 - 17 launcher tests: fixed installed path, process path matching, bounded
   registration, request reuse and reconciliation, acknowledgment lifetime,
