@@ -1,3 +1,12 @@
+Cinnaroids 2.2.2 — unload on launcher close
+===========================================
+
+GPUI shutdown disables the selected registration atomically under the attachment lock.
+Pending attachment cannot re-enable it during shutdown. Newer or foreign requests and
+saved preferences are preserved. 19 launcher tests and the locked release build pass.
+An isolated real host worker confirms live unload, a fresh host remaining disabled,
+and successful reload when enabled again. Forced process termination was not tested.
+
 Cinnaroids 2.2.1 — installed Cinnangles font
 ===========================================
 

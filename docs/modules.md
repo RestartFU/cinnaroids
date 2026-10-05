@@ -15,7 +15,7 @@ Slider values can also be typed: click the current number, enter a value, and pr
 
 To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
 
-**F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher leaves the running client and modules alone. Opening the module interface releases gameplay input so its controls can be used normally.
+**F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher disables its registration and unloads the modules while leaving Cinnabar running. They stay unloaded after a game restart until the launcher is opened again; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
 
 Aim assist reads player coordinates, selects a target within six blocks and a 30-degree cone, and smoothly steers toward the chest. Strength zero produces no motion. The API exposes positions without visibility or team information, so the module cannot filter occluded players or teammates. Menus, loss of cursor capture, and server-controlled cameras pause assistance.
 

@@ -8,7 +8,7 @@ If the launcher reports **No module acknowledgment**, restart Cinnabar once to l
 
 Run **Cinnaroids.exe --background** to register and monitor attachment without showing or focusing a launcher window. Open Cinnaroids normally to change its appearance.
 
-Press **Right Shift** in Cinnabar to open or close the module interface. Manage Clicker, Aim assist, Reach, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it leaves the running Cinnabar session and its module settings alone.
+Press **Right Shift** in Cinnabar to open or close the module interface. Manage Clicker, Aim assist, Reach, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it disables the registration and unloads the modules from Cinnabar. They stay unloaded after game restarts until Cinnaroids is opened again. Saved module settings are preserved.
 
 Click the number beside **CPS**, **Strength**, or **Distance** to type a value. Press **Enter** to apply it or **Escape** to cancel. Values stay within the slider's range and precision. Click **Mode** to open its options and choose **Continuous** or **While clicking**; Escape or a click outside dismisses the list.
 

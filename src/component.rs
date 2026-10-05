@@ -5,7 +5,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -22,6 +22,41 @@ const GRANTS: [&str; 5] = [
 const LIVE_ATTACHMENT_MARKER: &str = "local-mod.status.json";
 const REGISTRATION_BYTES: usize = 16 * 1024;
 static WRITE_ID: AtomicU64 = AtomicU64::new(0);
+static EXITING: AtomicBool = AtomicBool::new(false);
+static OWNED_REGISTRATION: Mutex<Option<(PathBuf, PathBuf, String)>> = Mutex::new(None);
+
+/// Retires only this launcher's selected request before GPUI exits.
+pub fn disable_on_exit() -> Result<(), String> {
+    EXITING.store(true, Ordering::Release);
+    let _lock = crate::client_process::RegistrationLock::acquire()?;
+    let owned = OWNED_REGISTRATION
+        .lock()
+        .map_err(|_| "Registration ownership unavailable")?;
+    if let Some((path, component, id)) = owned.as_ref() {
+        disable_owned(path, component, id)?;
+    }
+    Ok(())
+}
+
+fn disable_owned(path: &Path, component: &Path, id: &str) -> Result<(), String> {
+    let Some(bytes) = read_bounded_file(path, "module registration")? else {
+        return Ok(());
+    };
+    if bytes.len() > REGISTRATION_BYTES {
+        return Err("Module registration exceeds the size limit.".into());
+    }
+    let mut value: serde_json::Value =
+        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+    if value["request_id"].as_str() != Some(id)
+        || value["component"].as_str().map(Path::new) != Some(component)
+        || value["enabled"] != true
+    {
+        return Ok(());
+    }
+    value["enabled"] = false.into();
+    let bytes = serde_json::to_vec_pretty(&value).map_err(|error| error.to_string())?;
+    write_atomic(path, &bytes, false).map_err(|error| format!("Could not disable modules: {error}"))
+}
 
 #[derive(Clone)]
 pub struct ModComponent {
@@ -124,6 +159,9 @@ impl ModComponent {
             return Err("Cinnaroids requires the standard installed Cinnabar client.".into());
         }
         let _registration_lock = crate::client_process::RegistrationLock::acquire()?;
+        if EXITING.load(Ordering::Acquire) {
+            return Err("Cinnaroids is closing.".into());
+        }
         let mut file =
             File::open(executable).map_err(|error| format!("Could not read Cinnabar: {error}"))?;
         if !supports_modules(&mut file)
@@ -174,6 +212,10 @@ impl ModComponent {
             }
         };
         self.assets_changed.store(false, Ordering::Relaxed);
+        *OWNED_REGISTRATION
+            .lock()
+            .map_err(|_| "Registration ownership unavailable")? =
+            Some((registration_path, self.path.clone(), id.clone()));
         Ok(AttachRequest {
             id,
             executable: executable.into(),
@@ -462,6 +504,47 @@ mod tests {
         assert!(registration("request-2", Path::new("relative.wasm")).is_err());
         let oversized = PathBuf::from(format!("C:/{}", "x".repeat(REGISTRATION_BYTES)));
         assert!(registration("request-3", &oversized).is_err());
+    }
+
+    #[test]
+    fn closing_disables_owned_registration_without_removing_preferences() {
+        let directory = scratch();
+        let path = directory.join("local-mod.json");
+        let component = directory.join("module.wasm");
+        let preferences = component.with_extension("settings.json");
+        fs::write(&preferences, b"{\"cps\":24}").unwrap();
+        let original = registration("owned", &component).unwrap();
+        fs::write(&path, &original).unwrap();
+        disable_owned(&path, &component, "owned").unwrap();
+        let mut expected: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        expected["enabled"] = false.into();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap(),
+            expected
+        );
+        let disabled = fs::read(&path).unwrap();
+        disable_owned(&path, &component, "owned").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), disabled);
+        assert_eq!(fs::read(&preferences).unwrap(), b"{\"cps\":24}");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn closing_leaves_newer_or_foreign_registrations_untouched() {
+        let directory = scratch();
+        let path = directory.join("local-mod.json");
+        let component = directory.join("module.wasm");
+        disable_owned(&path, &component, "owned").unwrap();
+        for (id, registered_component) in [
+            ("newer", component.clone()),
+            ("owned", directory.join("other.wasm")),
+        ] {
+            let original = registration(id, &registered_component).unwrap();
+            fs::write(&path, &original).unwrap();
+            disable_owned(&path, &component, "owned").unwrap();
+            assert_eq!(fs::read(&path).unwrap(), original);
+        }
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

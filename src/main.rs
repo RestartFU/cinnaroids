@@ -443,6 +443,15 @@ fn main() {
     Application::new()
         .with_assets(Assets)
         .run(move |cx: &mut App| {
+            if !preview {
+                cx.on_app_quit(|_| {
+                    if let Err(error) = component::disable_on_exit() {
+                        eprintln!("{error}");
+                    }
+                    std::future::ready(())
+                })
+                .detach();
+            }
             let bounds = Bounds::centered(None, size(px(600.0), px(360.0)), cx);
             cx.open_window(
                 WindowOptions {
