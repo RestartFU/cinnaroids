@@ -11,6 +11,8 @@ Press **Right Shift** to open or close the module interface. It manages:
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its default toggle key is V.
 - **Appearance:** neutral dark mode by default, with a light option.
 
+Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Activation** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and **Right Shift** retain their reserved actions.
+
 To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
 
 **F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher leaves the running client and modules alone. Opening the module interface releases gameplay input so its controls can be used normally.

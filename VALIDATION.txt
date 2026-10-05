@@ -1,3 +1,13 @@
+Personal-panel dropdown and typed-value update
+=============================================
+
+Host dc877da7997a2e3db99971275529b45dc0397a3a adds explicit dropdown options and numeric editing.
+26 focused panel/font tests pass. Touched UI/client crates compile with tests and local-mods.
+Hidden native Windows GPU captures at 1280x720/DPI1 verify dropdown layering, draft/caret,
+invalid-value feedback and committed CPS updates. Independent code review found no blockers.
+Guest events and the existing launcher/component are unchanged. Live OS input and gameplay
+were not newly tested. Upstream: https://github.com/bedrock-mc/cinnabar/pull/136 (CI pending).
+
 Cinnaroids 2.2.0 — compact in-game menu and independent bindings
 ================================================================
 
