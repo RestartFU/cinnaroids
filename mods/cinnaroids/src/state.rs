@@ -369,7 +369,7 @@ impl State {
             },
             Control::Choice {
                 id: "aim_mode",
-                label: "Activation",
+                label: "Mode",
                 index: u32::from(self.preferences.aim_mode == AimMode::WhileClicking),
                 options: ["Continuous", "While clicking"],
             },

@@ -1,3 +1,12 @@
+Cinnaroids 2.2.1 — installed Cinnangles font
+===========================================
+
+The launcher registers font:null so the personal menu uses Cinnabar's installed
+Cinnangles Sans carrier instead of an Inter override. Old Inter registrations
+require a fresh request. 17 launcher tests pass and the locked release build passes.
+Hidden Windows GPU captures at 1280x720/DPI1 verify the font, unclipped Mode label
+and dropdown. The packaged component passes the real host callback probe.
+
 Personal-panel dropdown and typed-value update
 =============================================
 

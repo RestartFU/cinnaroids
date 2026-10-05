@@ -11,7 +11,7 @@ Press **Right Shift** to open or close the module interface. It manages:
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its default toggle key is V.
 - **Appearance:** neutral dark mode by default, with a light option.
 
-Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Activation** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and **Right Shift** retain their reserved actions.
+Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and **Right Shift** retain their reserved actions.
 
 To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
 
@@ -27,7 +27,7 @@ The launcher installs `%LOCALAPPDATA%/Cinnaroids/mods/cinnaroids.component.wasm`
 
 The launcher atomically writes `%LOCALAPPDATA%/Cinnabar/local-mod.json` with the component, font and explicit player, camera, controls, interaction and settings grants. Matching launcher instances reuse an unchanged registration. Replaced assets, a failed live request, or a conflicting loaded acknowledgment require a fresh request. Attachment failures retry after 2, 4, and 8 seconds; a game restart or installed-client update resets that retry budget. Errors remain visible until recovery. The running host polls and compiles on a worker and reports the request ID, client PID and loading outcome in `local-mod.status.json`. The launcher verifies that acknowledgment belongs to the standard installed running client. The WASM component has no WASI or ambient operating-system access.
 
-The panel uses the embedded OFL Inter Medium font, installed with its license in `%LOCALAPPDATA%/Cinnaroids/fonts/`. Registration selects it for the personal panel. The worker rasterizes it before attachment; the host updates its isolated font page without replacing game or server glyphs. Panel sizing follows display DPI independently of Minecraft's GUI scale.
+The panel uses Cinnabar's installed Cinnangles Sans font. Cinnaroids registers no private font override. Panel sizing follows display DPI independently of Minecraft's GUI scale.
 
 The launcher uses the installed Cinnabar's resources without overriding its asset path. Module preferences, client settings and caches remain in place. Client binaries and Minecraft assets are excluded from the public repository.
 

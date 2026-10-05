@@ -12,8 +12,6 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
-const PANEL_FONT: &[u8] = include_bytes!("../assets/fonts/Inter-Medium.ttf");
-const FONT_LICENSE: &[u8] = include_bytes!("../assets/fonts/Inter-OFL-1.1.txt");
 const GRANTS: [&str; 5] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
@@ -28,7 +26,6 @@ static WRITE_ID: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone)]
 pub struct ModComponent {
     path: PathBuf,
-    font_path: PathBuf,
     assets_changed: Arc<AtomicBool>,
 }
 
@@ -110,18 +107,7 @@ impl ModComponent {
         let base = std::env::var_os("LOCALAPPDATA").ok_or("Settings folder unavailable.")?;
         let base = PathBuf::from(base);
         let path = base.join("Cinnaroids/mods/cinnaroids.component.wasm");
-        let mut assets_changed = install_component(&path, COMPONENT)?;
-        let font_path = base.join("Cinnaroids/fonts/Inter-Medium.ttf");
-        for (path, bytes) in [
-            (&font_path, PANEL_FONT),
-            (&font_path.with_file_name("Inter-OFL-1.1.txt"), FONT_LICENSE),
-        ] {
-            if !fs::read(path).is_ok_and(|current| current == bytes) {
-                write_atomic(path, bytes, false)
-                    .map_err(|error| format!("Could not install panel font: {error}"))?;
-                assets_changed |= path == &font_path;
-            }
-        }
+        let assets_changed = install_component(&path, COMPONENT)?;
         migrate_preferences(
             &path.with_extension("settings.json"),
             &base.join("CinnabarClicker/settings.json"),
@@ -129,7 +115,6 @@ impl ModComponent {
         .map_err(|error| format!("Could not migrate module preferences: {error}"))?;
         Ok(Self {
             path,
-            font_path,
             assets_changed: Arc::new(AtomicBool::new(assets_changed)),
         })
     }
@@ -166,7 +151,6 @@ impl ModComponent {
                 matching_registration_id(
                     bytes,
                     &self.path,
-                    &self.font_path,
                     self.assets_changed.load(Ordering::Relaxed),
                 )
             })
@@ -183,7 +167,7 @@ impl ModComponent {
                         .as_nanos(),
                     WRITE_ID.fetch_add(1, Ordering::Relaxed)
                 );
-                let bytes = registration(&id, &self.path, &self.font_path)?;
+                let bytes = registration(&id, &self.path)?;
                 write_atomic(&registration_path, &bytes, false)
                     .map_err(|error| format!("Could not register Cinnaroids: {error}"))?;
                 id
@@ -225,7 +209,6 @@ fn acknowledgment_requires_refresh(id: &str, acknowledged: Option<&HostStatus>) 
 fn matching_registration_id(
     bytes: &[u8],
     component: &Path,
-    font: &Path,
     assets_changed: bool,
 ) -> Option<String> {
     // Reopening an unchanged launcher must not reset an already-loaded module.
@@ -236,22 +219,21 @@ fn matching_registration_id(
     let current: serde_json::Value = serde_json::from_slice(bytes).ok()?;
     let id = current.get("request_id")?.as_str()?;
     let expected: serde_json::Value =
-        serde_json::from_slice(&registration(id, component, font).ok()?).ok()?;
+        serde_json::from_slice(&registration(id, component).ok()?).ok()?;
     (current == expected).then(|| id.to_owned())
 }
 
-fn registration(id: &str, component: &Path, font: &Path) -> Result<Vec<u8>, String> {
+fn registration(id: &str, component: &Path) -> Result<Vec<u8>, String> {
     if id.is_empty()
         || id.len() > 64
         || id.chars().any(char::is_control)
         || !component.is_absolute()
-        || !font.is_absolute()
     {
         return Err("Invalid local module registration.".into());
     }
     let bytes = serde_json::to_vec_pretty(&serde_json::json!({
         "version": 1, "request_id": id, "enabled": true,
-        "component": component, "font": font,
+        "component": component, "font": null,
         "grants": {"environment": false, "players": true, "camera": true,
             "controls": true, "interaction": true, "settings": true}
     }))
@@ -377,7 +359,6 @@ mod tests {
         assert!(!install_component(&path, COMPONENT).unwrap());
         drop(ModComponent {
             path: path.clone(),
-            font_path: directory.join("font.ttf"),
             assets_changed: Arc::new(AtomicBool::new(false)),
         });
         assert_eq!(fs::read(&path).unwrap(), COMPONENT);
@@ -437,13 +418,12 @@ mod tests {
     #[test]
     fn matching_instances_reuse_the_request_but_replaced_assets_require_a_fresh_ack() {
         let component = Path::new("C:/Cinnaroids/mod.wasm");
-        let font = Path::new("C:/Cinnaroids/font.ttf");
-        let bytes = registration("first-instance", component, font).unwrap();
+        let bytes = registration("first-instance", component).unwrap();
         assert_eq!(
-            matching_registration_id(&bytes, component, font, false).as_deref(),
+            matching_registration_id(&bytes, component, false).as_deref(),
             Some("first-instance")
         );
-        assert!(matching_registration_id(&bytes, component, font, true).is_none());
+        assert!(matching_registration_id(&bytes, component, true).is_none());
         for (field, value) in [
             ("version", serde_json::json!(2)),
             ("enabled", serde_json::json!(false)),
@@ -455,18 +435,13 @@ mod tests {
             let mut changed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
             changed[field] = value;
             assert!(
-                matching_registration_id(
-                    &serde_json::to_vec(&changed).unwrap(),
-                    component,
-                    font,
-                    false
-                )
-                .is_none(),
+                matching_registration_id(&serde_json::to_vec(&changed).unwrap(), component, false)
+                    .is_none(),
                 "accepted changed {field}"
             );
         }
         assert!(
-            matching_registration_id(&vec![b' '; REGISTRATION_BYTES + 1], component, font, false)
+            matching_registration_id(&vec![b' '; REGISTRATION_BYTES + 1], component, false)
                 .is_none()
         );
     }
@@ -474,19 +449,19 @@ mod tests {
     #[test]
     fn registration_is_explicit_bounded_and_does_not_enable_gameplay_modules() {
         let component = Path::new("C:/Users/Test/Cinnaroids/mod.wasm");
-        let font = Path::new("C:/Users/Test/Cinnaroids/font.ttf");
-        let bytes = registration("request-1", component, font).unwrap();
+        let bytes = registration("request-1", component).unwrap();
         assert!(bytes.len() <= REGISTRATION_BYTES);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["request_id"], "request-1");
         assert_eq!(value["grants"]["controls"], true);
         assert_eq!(value["grants"]["environment"], false);
+        assert!(value["font"].is_null());
         assert!(value.get("clicker_enabled").is_none());
-        assert!(registration("", component, font).is_err());
-        assert!(registration(&"x".repeat(65), component, font).is_err());
-        assert!(registration("request-2", Path::new("relative.wasm"), font).is_err());
+        assert!(registration("", component).is_err());
+        assert!(registration(&"x".repeat(65), component).is_err());
+        assert!(registration("request-2", Path::new("relative.wasm")).is_err());
         let oversized = PathBuf::from(format!("C:/{}", "x".repeat(REGISTRATION_BYTES)));
-        assert!(registration("request-3", &oversized, font).is_err());
+        assert!(registration("request-3", &oversized).is_err());
     }
 
     #[test]
