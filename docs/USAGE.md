@@ -10,7 +10,7 @@ Run **Cinnaroids.exe --background** to register and monitor attachment without s
 
 Press **Right Shift** in Cinnabar to open or close the module interface. Manage Clicker, Aim assist, Reach, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it leaves the running Cinnabar session and its module settings alone.
 
-Press **Toggle key** and then a keyboard key to bind the clicker. Right Shift and F10 remain reserved. Escape is assignable during capture and closes the panel otherwise. Closing the panel or changing focus cancels capture.
+Press a module's **Keybind** keycap and then a keyboard key to change its binding. The defaults are F8 for Clicker, R for Aim assist, and V for Reach. Each binding is independent; keys already used by another module cannot be reassigned. Right Shift and F10 remain reserved. Escape is assignable during capture and closes the panel otherwise. Closing the panel or changing focus cancels capture.
 
 The launcher starts in neutral dark mode and also supports light mode. Drag its header to move it. Regular top-right controls minimize, maximize or restore, and close it.
 

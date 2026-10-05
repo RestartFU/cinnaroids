@@ -9,6 +9,8 @@ pub const PRODUCT_NAME: &str = "Cinnaroids";
 pub const PANEL_KEY: &str = "ShiftRight";
 pub const STOP_KEY: &str = "F10";
 const DEFAULT_CLICKER_KEY: &str = "F8";
+const DEFAULT_AIM_KEY: &str = "KeyR";
+const DEFAULT_REACH_KEY: &str = "KeyV";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
 const MAX_CPS: u8 = 30;
@@ -26,6 +28,8 @@ pub enum AimMode {
 pub struct Preferences {
     pub cps: u8,
     pub clicker_key: String,
+    pub aim_key: String,
+    pub reach_key: String,
     pub aim_strength: u8,
     pub aim_mode: AimMode,
     pub reach_blocks: f32,
@@ -37,6 +41,8 @@ impl Default for Preferences {
         Self {
             cps: 20,
             clicker_key: DEFAULT_CLICKER_KEY.into(),
+            aim_key: DEFAULT_AIM_KEY.into(),
+            reach_key: DEFAULT_REACH_KEY.into(),
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
             reach_blocks: MIN_REACH,
@@ -85,6 +91,26 @@ impl Preferences {
         if let Some(binding) = binding.filter(|binding| valid_binding(binding)) {
             preferences.clicker_key = binding;
         }
+        for (field, target) in [
+            ("aim_key", &mut preferences.aim_key),
+            ("reach_key", &mut preferences.reach_key),
+        ] {
+            if let Some(binding) = values.get(field).and_then(Value::as_str)
+                && valid_binding(binding)
+            {
+                *target = binding.into();
+            }
+        }
+        // Preserve the older clicker binding when adding the other module keys.
+        if preferences.aim_key == preferences.clicker_key {
+            preferences.aim_key = spare_binding(&[&preferences.clicker_key]);
+        }
+        if preferences.reach_key == preferences.clicker_key
+            || preferences.reach_key == preferences.aim_key
+        {
+            preferences.reach_key =
+                spare_binding(&[&preferences.clicker_key, &preferences.aim_key]);
+        }
         preferences
     }
 }
@@ -109,11 +135,18 @@ pub struct Modules {
     pub reach: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeybindTarget {
+    Clicker,
+    Aim,
+    Reach,
+}
+
 #[derive(Debug)]
 pub struct State {
     pub preferences: Preferences,
     pub modules: Modules,
-    pub capturing_key: bool,
+    pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
@@ -125,7 +158,7 @@ impl State {
         Self {
             preferences,
             modules: Modules::default(),
-            capturing_key: false,
+            capturing_key: None,
             panel_dirty: true,
             preferences_dirty: false,
             reservations_dirty: true,
@@ -135,8 +168,10 @@ impl State {
 
     /// The stop edge has priority over panel events, key capture and toggles.
     pub fn controls(&mut self, controls: Controls<'_>) {
-        if self.capturing_key && (!controls.focused || !controls.panel_open) {
-            self.capturing_key = false;
+        let cancelled_capture =
+            self.capturing_key.is_some() && (!controls.focused || !controls.panel_open);
+        if cancelled_capture {
+            self.capturing_key = None;
             self.panel_dirty = true;
         }
         if !controls.focused {
@@ -148,31 +183,60 @@ impl State {
             self.stop_all();
             return;
         }
+        if cancelled_capture {
+            return;
+        }
         if controls.panel_open {
             for event in controls.events {
                 self.event(event);
             }
         }
-        if self.capturing_key {
-            if let Some(key) = controls.keys.iter().find(|key| valid_binding(key)) {
-                self.preferences.clicker_key = key.clone();
-                self.capturing_key = false;
+        if let Some(target) = self.capturing_key {
+            if let Some(key) = controls.keys.iter().find(|key| valid_binding(key))
+                && !self.binding_conflicts(target, key)
+            {
+                *self.binding_mut(target) = key.clone();
+                self.capturing_key = None;
                 self.panel_dirty = true;
                 self.preferences_dirty = true;
                 self.reservations_dirty = true;
-                self.clicker.reset();
+                if target == KeybindTarget::Clicker {
+                    self.clicker.reset();
+                }
             }
             return;
         }
-        if controls
-            .keys
-            .iter()
-            .any(|key| *key == self.preferences.clicker_key)
-        {
-            self.modules.clicker = !self.modules.clicker;
-            self.clicker.reset();
-            self.panel_dirty = true;
+        for key in controls.keys {
+            if *key == self.preferences.clicker_key {
+                self.modules.clicker = !self.modules.clicker;
+                self.clicker.reset();
+                self.panel_dirty = true;
+            } else if *key == self.preferences.aim_key {
+                self.modules.aim = !self.modules.aim;
+                self.panel_dirty = true;
+            } else if *key == self.preferences.reach_key {
+                self.modules.reach = !self.modules.reach;
+                self.panel_dirty = true;
+            }
         }
+    }
+
+    fn binding_mut(&mut self, target: KeybindTarget) -> &mut String {
+        match target {
+            KeybindTarget::Clicker => &mut self.preferences.clicker_key,
+            KeybindTarget::Aim => &mut self.preferences.aim_key,
+            KeybindTarget::Reach => &mut self.preferences.reach_key,
+        }
+    }
+
+    fn binding_conflicts(&self, target: KeybindTarget, key: &str) -> bool {
+        [
+            (KeybindTarget::Clicker, &self.preferences.clicker_key),
+            (KeybindTarget::Aim, &self.preferences.aim_key),
+            (KeybindTarget::Reach, &self.preferences.reach_key),
+        ]
+        .iter()
+        .any(|(other, binding)| *other != target && key == *binding)
     }
 
     fn event(&mut self, event: &Event) {
@@ -186,8 +250,12 @@ impl State {
                 &mut self.preferences.cps,
                 value.round().clamp(f32::from(MIN_CPS), f32::from(MAX_CPS)) as u8,
             ),
-            "clicker_key" => {
-                self.capturing_key = true;
+            "clicker_key" | "aim_key" | "reach_key" => {
+                self.capturing_key = Some(match event.id.as_str() {
+                    "aim_key" => KeybindTarget::Aim,
+                    "reach_key" => KeybindTarget::Reach,
+                    _ => KeybindTarget::Clicker,
+                });
                 self.panel_dirty = true;
                 return;
             }
@@ -229,7 +297,7 @@ impl State {
 
     pub fn stop_all(&mut self) {
         self.modules = Modules::default();
-        self.capturing_key = false;
+        self.capturing_key = None;
         self.clicker.reset();
         self.panel_dirty = true;
     }
@@ -252,22 +320,20 @@ impl State {
     }
 
     pub fn reserved_keys(&self) -> Vec<String> {
-        vec![
-            PANEL_KEY.into(),
-            STOP_KEY.into(),
-            self.preferences.clicker_key.clone(),
-        ]
+        let mut keys = vec![PANEL_KEY.into(), STOP_KEY.into()];
+        for key in [
+            &self.preferences.clicker_key,
+            &self.preferences.aim_key,
+            &self.preferences.reach_key,
+        ] {
+            if !keys.contains(key) {
+                keys.push(key.clone());
+            }
+        }
+        keys
     }
 
     pub fn panel_json(&self) -> Result<String, serde_json::Error> {
-        let key_label = format!(
-            "Toggle key: {}",
-            if self.capturing_key {
-                "Press a key"
-            } else {
-                &self.preferences.clicker_key
-            }
-        );
         let controls = vec![
             Control::Toggle {
                 id: "clicker",
@@ -282,9 +348,11 @@ impl State {
                 max: f32::from(MAX_CPS),
                 step: 1.0,
             },
-            Control::Button {
+            Control::Keybind {
                 id: "clicker_key",
-                label: &key_label,
+                label: "Keybind",
+                key: &self.preferences.clicker_key,
+                capturing: self.capturing_key == Some(KeybindTarget::Clicker),
             },
             Control::Toggle {
                 id: "aim",
@@ -305,6 +373,12 @@ impl State {
                 index: u32::from(self.preferences.aim_mode == AimMode::WhileClicking),
                 options: ["Continuous", "While clicking"],
             },
+            Control::Keybind {
+                id: "aim_key",
+                label: "Keybind",
+                key: &self.preferences.aim_key,
+                capturing: self.capturing_key == Some(KeybindTarget::Aim),
+            },
             Control::Toggle {
                 id: "reach",
                 label: "Reach",
@@ -318,6 +392,12 @@ impl State {
                 max: mod_api::MAX_ENTITY_REACH_BLOCKS,
                 step: 0.1,
             },
+            Control::Keybind {
+                id: "reach_key",
+                label: "Keybind",
+                key: &self.preferences.reach_key,
+                capturing: self.capturing_key == Some(KeybindTarget::Reach),
+            },
             Control::Toggle {
                 id: "dark_mode",
                 label: "Dark mode",
@@ -328,16 +408,18 @@ impl State {
                 label: "Disable all",
             },
         ];
-        serde_json::to_string(&Panel {
+        let panel = Panel {
             title: PRODUCT_NAME,
             toggle_key: PANEL_KEY,
             dark: self.preferences.dark_mode,
-            capture_key: self.capturing_key,
+            capture_key: self.capturing_key.is_some(),
+            style: "compact",
             controls,
             sections: vec![
                 Section {
                     id: "clicker_section",
                     label: "Clicker",
+                    icon: "pointer",
                     category: "Combat",
                     toggle: Some("clicker"),
                     controls: &["cps", "clicker_key"],
@@ -345,26 +427,34 @@ impl State {
                 Section {
                     id: "aim_section",
                     label: "Aim assist",
+                    icon: "crosshair",
                     category: "Combat",
                     toggle: Some("aim"),
-                    controls: &["aim_strength", "aim_mode"],
+                    controls: &["aim_strength", "aim_mode", "aim_key"],
                 },
                 Section {
                     id: "reach_section",
                     label: "Reach",
+                    icon: "ruler",
                     category: "Combat",
                     toggle: Some("reach"),
-                    controls: &["reach_blocks"],
+                    controls: &["reach_blocks", "reach_key"],
                 },
                 Section {
                     id: "general_section",
                     label: "General",
+                    icon: "settings",
                     category: "Settings",
                     toggle: None,
                     controls: &["dark_mode", "stop_all"],
                 },
             ],
-        })
+        };
+        // This bounded twelve-control specification fits without buffer growth.
+        let mut json = Vec::with_capacity(4096);
+        serde_json::to_writer(&mut json, &panel)?;
+        // serde_json writes UTF-8 even when preferences contain arbitrary text.
+        Ok(String::from_utf8(json).expect("JSON serialization emits UTF-8"))
     }
 }
 
@@ -429,6 +519,14 @@ fn valid_binding(key: &str) -> bool {
         && key != STOP_KEY
 }
 
+fn spare_binding(used: &[&str]) -> String {
+    [DEFAULT_AIM_KEY, DEFAULT_REACH_KEY, "KeyB", "F7", "F9"]
+        .into_iter()
+        .find(|key| !used.contains(key))
+        .expect("there are more spare bindings than modules")
+        .into()
+}
+
 fn legacy_key(key: u64) -> Option<String> {
     Some(match key {
         0x30..=0x39 => format!("Digit{}", char::from_u32(key as u32)?),
@@ -467,6 +565,7 @@ struct Panel<'a> {
     toggle_key: &'a str,
     dark: bool,
     capture_key: bool,
+    style: &'a str,
     controls: Vec<Control<'a>>,
     sections: Vec<Section<'a>>,
 }
@@ -476,6 +575,7 @@ struct Section<'a> {
     id: &'a str,
     label: &'a str,
     category: &'a str,
+    icon: &'a str,
     toggle: Option<&'a str>,
     controls: &'a [&'a str],
 }
@@ -499,6 +599,12 @@ enum Control<'a> {
     Button {
         id: &'a str,
         label: &'a str,
+    },
+    Keybind {
+        id: &'a str,
+        label: &'a str,
+        key: &'a str,
+        capturing: bool,
     },
     Choice {
         id: &'a str,

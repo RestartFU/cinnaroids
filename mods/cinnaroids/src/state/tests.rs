@@ -33,7 +33,7 @@ fn preferences_restore_without_enabling_any_module() {
     assert_eq!(state.preferences.clicker_key, "KeyV");
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
-    assert_eq!(json.as_object().unwrap().len(), 6);
+    assert_eq!(json.as_object().unwrap().len(), 8);
     assert!(json.get("aim").is_none());
 }
 
@@ -79,7 +79,7 @@ fn emergency_stop_wins_over_every_other_edge() {
         &[("aim", 1.0), ("clicker_key", 1.0)],
     );
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
-    assert!(!state.capturing_key);
+    assert!(state.capturing_key.is_none());
     controls(&mut state, &[], &[("stop_all", 1.0), ("clicker", 1.0)]);
     assert!(!state.modules.clicker);
 }
@@ -89,13 +89,22 @@ fn key_capture_changes_the_binding_without_toggling_a_module() {
     let mut state = state();
     controls(&mut state, &[], &[("clicker_key", 1.0)]);
     controls(&mut state, &[PANEL_KEY], &[]);
-    assert!(state.capturing_key);
+    assert!(state.capturing_key.is_some());
     controls(&mut state, &["ControlRight"], &[]);
-    assert!(!state.capturing_key);
+    assert!(state.capturing_key.is_none());
     assert_eq!(state.preferences.clicker_key, "ControlRight");
     assert!(!state.modules.clicker);
     assert!(state.reservations_dirty && state.preferences_dirty);
-    assert_eq!(state.reserved_keys(), [PANEL_KEY, STOP_KEY, "ControlRight"]);
+    assert_eq!(
+        state.reserved_keys(),
+        [
+            PANEL_KEY,
+            STOP_KEY,
+            "ControlRight",
+            DEFAULT_AIM_KEY,
+            DEFAULT_REACH_KEY
+        ]
+    );
     controls(&mut state, &["ControlRight"], &[]);
     assert!(state.modules.clicker);
 }
@@ -112,7 +121,7 @@ fn escape_can_be_captured_without_disabling_or_toggling_modules() {
     assert_eq!(capturing["capture_key"], true);
     controls(&mut state, &["Escape"], &[]);
     assert_eq!(state.preferences.clicker_key, "Escape");
-    assert!(!state.capturing_key && !state.modules.clicker);
+    assert!(state.capturing_key.is_none() && !state.modules.clicker);
     assert!(state.modules.aim && state.modules.reach);
     assert!(state.reservations_dirty && state.preferences_dirty);
     let captured: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
@@ -140,7 +149,7 @@ fn closing_panel_or_losing_focus_cancels_capture_before_gameplay_keys() {
         let mut state = state();
         state.reservations_dirty = false;
         controls(&mut state, &[], &[("clicker_key", 1.0)]);
-        assert!(state.capturing_key);
+        assert!(state.capturing_key.is_some());
         state.panel_dirty = false;
         state.controls(Controls {
             focused,
@@ -148,7 +157,7 @@ fn closing_panel_or_losing_focus_cancels_capture_before_gameplay_keys() {
             keys: &["KeyW".into()],
             events: &[],
         });
-        assert!(!state.capturing_key);
+        assert!(state.capturing_key.is_none());
         assert!(state.panel_dirty);
         assert_eq!(state.preferences.clicker_key, DEFAULT_CLICKER_KEY);
         assert!(!state.reservations_dirty && !state.preferences_dirty);
@@ -176,7 +185,7 @@ fn closed_panel_cannot_start_key_capture_and_preserves_normal_toggle() {
             value: 1.0,
         }],
     });
-    assert!(!state.capturing_key);
+    assert!(state.capturing_key.is_none());
     assert!(state.modules.clicker);
     assert_eq!(state.preferences.clicker_key, DEFAULT_CLICKER_KEY);
 }
@@ -187,7 +196,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 10);
+    assert_eq!(json["controls"].as_array().unwrap().len(), 12);
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -291,4 +300,112 @@ fn clicker_disabled_and_invalid_duration_never_produce_a_press() {
     assert!(!cadence.update(false, 20, Some((1, 0, true, 0.0))));
     assert!(!cadence.update(false, 20, Some((1, 0, true, 1.0))));
     assert!(!cadence.update(true, 20, Some((1, 0, true, -1.0))));
+}
+
+#[test]
+fn every_module_has_a_persisted_independent_binding() {
+    let old = Preferences::from_json(r#"{"clicker_key":"KeyV","cps":23}"#);
+    assert_eq!(old.clicker_key, "KeyV");
+    assert_eq!(old.cps, 23);
+    assert_eq!(old.aim_key, DEFAULT_AIM_KEY);
+    assert_ne!(old.reach_key, old.clicker_key);
+    let saved =
+        Preferences::from_json(r#"{"clicker_key":"KeyC","aim_key":"KeyG","reach_key":"KeyH"}"#);
+    assert_eq!(
+        Preferences::from_json(&serde_json::to_string(&saved).unwrap()),
+        saved
+    );
+    for field in ["aim_key", "reach_key"] {
+        for invalid in ["F10", "ShiftRight", "", "Key:V"] {
+            let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
+            assert_eq!(prefs, Preferences::default());
+        }
+    }
+}
+
+#[test]
+fn capture_each_module_consumes_the_edge_without_any_toggle() {
+    for (id, target) in [
+        ("clicker_key", KeybindTarget::Clicker),
+        ("aim_key", KeybindTarget::Aim),
+        ("reach_key", KeybindTarget::Reach),
+    ] {
+        let mut state = state();
+        state.modules.aim = true;
+        controls(&mut state, &[], &[(id, 1.0)]);
+        assert_eq!(state.capturing_key, Some(target));
+        controls(&mut state, &["KeyG"], &[]);
+        assert_eq!(state.binding_mut(target).as_str(), "KeyG");
+        assert!(state.capturing_key.is_none());
+        assert!(!state.modules.clicker && state.modules.aim && !state.modules.reach);
+        controls(&mut state, &["KeyG"], &[]);
+        match target {
+            KeybindTarget::Clicker => {
+                assert!(state.modules.clicker && state.modules.aim && !state.modules.reach)
+            }
+            KeybindTarget::Aim => {
+                assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach)
+            }
+            KeybindTarget::Reach => {
+                assert!(!state.modules.clicker && state.modules.aim && state.modules.reach)
+            }
+        }
+    }
+}
+
+#[test]
+fn conflicting_binding_stays_in_capture_and_stop_still_wins() {
+    let mut state = state();
+    controls(&mut state, &[], &[("aim_key", 1.0)]);
+    controls(&mut state, &[DEFAULT_CLICKER_KEY], &[]);
+    assert_eq!(state.capturing_key, Some(KeybindTarget::Aim));
+    assert!(!state.modules.clicker && !state.modules.aim);
+    controls(&mut state, &[STOP_KEY, "KeyG"], &[]);
+    assert!(state.capturing_key.is_none());
+    assert_eq!(state.preferences.aim_key, DEFAULT_AIM_KEY);
+    assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
+}
+
+#[test]
+fn reservations_are_unique_even_for_programmatically_shared_bindings() {
+    let mut state = state();
+    state.preferences.aim_key = state.preferences.clicker_key.clone();
+    state.preferences.reach_key = state.preferences.clicker_key.clone();
+    assert_eq!(
+        state.reserved_keys(),
+        [PANEL_KEY, STOP_KEY, DEFAULT_CLICKER_KEY]
+    );
+}
+
+#[test]
+fn capture_loss_consumes_module_edges_but_preserves_emergency_stop() {
+    for id in ["clicker_key", "aim_key", "reach_key"] {
+        for (focused, panel_open) in [(true, false), (false, true)] {
+            let mut state = state();
+            controls(&mut state, &[], &[(id, 1.0)]);
+            state.controls(Controls {
+                focused,
+                panel_open,
+                keys: &[
+                    DEFAULT_CLICKER_KEY.into(),
+                    DEFAULT_AIM_KEY.into(),
+                    DEFAULT_REACH_KEY.into(),
+                ],
+                events: &[],
+            });
+            assert!(state.capturing_key.is_none());
+            assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
+            assert_eq!(state.preferences, Preferences::default());
+        }
+    }
+    let mut state = state();
+    state.modules.aim = true;
+    controls(&mut state, &[], &[("reach_key", 1.0)]);
+    state.controls(Controls {
+        focused: true,
+        panel_open: false,
+        keys: &[STOP_KEY.into()],
+        events: &[],
+    });
+    assert!(!state.modules.aim);
 }

@@ -2,16 +2,16 @@
 
 Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically registers the embedded module for the standard installation at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and shows **Attached** after the game acknowledges loading. It never starts the game or selects another installation.
 
-The host must include live local-module loading. Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
+The host must include live local-module loading and compact personal-panel controls ([host update](https://github.com/bedrock-mc/cinnabar/pull/133)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
 Press **Right Shift** to open or close the module interface. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key is configurable; F8 is the default.
-- **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation.
-- **Reach:** adjustable local attack distance, bounded at six blocks.
+- **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its default toggle key is R.
+- **Reach:** adjustable local attack distance, bounded at six blocks. Its default toggle key is V.
 - **Appearance:** neutral dark mode by default, with a light option.
 
-To change the clicker binding, press **Toggle key**, then press the next keyboard key. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
+To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
 
 **F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher leaves the running client and modules alone. Opening the module interface releases gameplay input so its controls can be used normally.
 

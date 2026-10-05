@@ -1,6 +1,6 @@
 [package]
 name = "cinnaroids-mod"
-version = "2.0.0"
+version = "2.2.0"
 edition = "2024"
 rust-version = "1.93.1"
 license = "MIT"
@@ -19,7 +19,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [profile.release]
-opt-level = "s"
+# Callback fuel is bounded by the host; optimize execution rather than file size.
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"

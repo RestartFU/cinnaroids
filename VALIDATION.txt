@@ -1,3 +1,28 @@
+Cinnaroids 2.2.0 — compact in-game menu and independent bindings
+================================================================
+
+The native Windows JSON-UI renderer verified the compact menu at 1280x720
+and 1920x1080, DPI 1. Inter text, vector icons, equal-height cards, sliders
+and keycaps remained sharp and unclipped. The short 640x480 view paginates.
+Dark, light, Settings, long bindings and capture indicators were inspected.
+GUI scales 2 and 4 produced identical 1280x720 GPU captures. All ten Combat
+controls emitted events through the actual rendered hit map.
+
+33 guest tests and 21 focused host panel/font regressions passed. The client
+and touched UI crates compile with tests and local-mods. The real packaged
+component passed initialization and 128-player callbacks within the existing
+100,000-fuel budget, including independent keys, clicks, F10 and restoration.
+Guest release optimization favors execution; panel JSON is preallocated.
+
+The updated installed client passed required-resource loading and stopped at
+the deliberately absent core endpoint. Existing game resources and module
+preferences were preserved. Hidden fixtures opened no game/network session
+and sent no desktop input. Live keyboard/focus and multiplayer behavior are
+not newly verified. Host source and CI: https://github.com/bedrock-mc/cinnabar/pull/133
+
+Previous validation
+===================
+
 Cinnaroids 2.1.1 — Windows x64
 Validation snapshot: 2026-10-05
 
