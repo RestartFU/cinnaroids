@@ -55,6 +55,7 @@ impl Guest for Cinnaroids {
             });
             publish(&mut modules);
             let _ = gameplay::set_packet_delay(modules.packet_delay_ms());
+            let _ = gameplay::set_show_real_position(modules.show_real_position());
 
             let snapshot = if controls.focused && controls.gameplay {
                 gameplay::read_frame().ok().flatten()

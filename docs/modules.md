@@ -2,7 +2,7 @@
 
 Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically registers the embedded module for the standard installation at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and shows **Attached** after the game acknowledges loading. It never starts the game or selects another installation.
 
-The host must include live local-module loading, compact personal-panel controls, and the packet-timing capability ([host update](https://github.com/bedrock-mc/cinnabar/pull/170)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
+The host must include live local-module loading, compact personal-panel controls, and the packet-timing capability ([host update](https://github.com/bedrock-mc/cinnabar/pull/171)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
 Press **Right Shift** to open or close the module interface. It manages:
 
@@ -22,7 +22,7 @@ Aim assist reads player coordinates, selects a target within six blocks and a 30
 
 Reach changes the client's actor attack selection distance. It preserves block targeting and normal server authority; a server can reject an attack outside its own range.
 
-FakeLag delays application packets in both directions while preserving their order; the selected delay adds to each direction separately. Login and transport acknowledgments continue normally. Turning it off or pressing F10 releases queued packets; closing the launcher removes the delay. A host heartbeat expires the delay if the client stops responding.
+FakeLag delays application packets in both directions while preserving their order; the selected delay adds to each direction separately. Login and transport acknowledgments continue normally. Turning it off or pressing F10 releases queued packets; closing the launcher removes the delay. A host heartbeat expires the delay if the client stops responding. **Show real position** draws a box at your own last movement position forwarded upstream, before newer movement leaves the delay queue. This is a sent-position witness, not a server acknowledgment; server corrections or rejected movement may differ. The box clears when FakeLag or this option is off, on disconnect, or when its position feed becomes stale.
 
 ## Runtime and settings
 

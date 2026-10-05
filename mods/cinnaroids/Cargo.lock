@@ -16,7 +16,7 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
 name = "cinnaroids-mod"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "mod-api",
  "serde",
@@ -116,7 +116,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mod-api"
 version = "0.1.7"
-source = "git+https://github.com/bedrock-mc/cinnabar?rev=7ded34e3173c2305a04e4a95184a4c9a989c9e06#7ded34e3173c2305a04e4a95184a4c9a989c9e06"
+source = "git+https://github.com/bedrock-mc/cinnabar?rev=0ca37340f5573b245c0ba1cc52c1739a9fea2df8#0ca37340f5573b245c0ba1cc52c1739a9fea2df8"
 dependencies = [
  "wit-bindgen",
 ]

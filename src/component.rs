@@ -12,13 +12,14 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
-const GRANTS: [&str; 6] = [
+const GRANTS: [&str; 7] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
     "CINNABAR_MOD_CONTROLS",
     "CINNABAR_MOD_INTERACTION",
     "CINNABAR_MOD_SETTINGS",
     "CINNABAR_MOD_PACKET_DELAY",
+    "CINNABAR_MOD_PACKET_DELAY_VISUAL",
 ];
 const LIVE_ATTACHMENT_MARKER: &str = "local-mod.status.json";
 const REGISTRATION_BYTES: usize = 16 * 1024;

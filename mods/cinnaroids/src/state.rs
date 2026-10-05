@@ -35,6 +35,7 @@ pub struct Preferences {
     pub reach_blocks: f32,
     pub dark_mode: bool,
     pub fake_lag_ms: u16,
+    pub show_real_position: bool,
 }
 
 impl Default for Preferences {
@@ -49,6 +50,7 @@ impl Default for Preferences {
             reach_blocks: MIN_REACH,
             dark_mode: true,
             fake_lag_ms: 100,
+            show_real_position: false,
         }
     }
 }
@@ -83,6 +85,9 @@ impl Preferences {
         }
         if let Some(value) = values.get("fake_lag_ms").and_then(Value::as_u64) {
             preferences.fake_lag_ms = value.min(u64::from(mod_api::MAX_PACKET_DELAY_MS)) as u16;
+        }
+        if let Some(value) = values.get("show_real_position").and_then(Value::as_bool) {
+            preferences.show_real_position = value;
         }
         let binding = values
             .get("clicker_key")
@@ -290,6 +295,7 @@ impl State {
                     .round()
                     .clamp(0.0, mod_api::MAX_PACKET_DELAY_MS as f32) as u16,
             ),
+            "show_real_position" => replace(&mut self.preferences.show_real_position, value >= 0.5),
             "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
             "stop_all" => {
                 self.stop_all();
@@ -329,6 +335,10 @@ impl State {
         } else {
             0
         }
+    }
+
+    pub fn show_real_position(&self) -> bool {
+        self.packet_delay_ms() != 0 && self.preferences.show_real_position
     }
 
     pub fn attack_reach(&self, gameplay: bool) -> Option<f32> {
@@ -433,6 +443,11 @@ impl State {
                 step: 1.0,
             },
             Control::Toggle {
+                id: "show_real_position",
+                label: "Show real position",
+                value: self.preferences.show_real_position,
+            },
+            Control::Toggle {
                 id: "dark_mode",
                 label: "Dark mode",
                 value: self.preferences.dark_mode,
@@ -480,7 +495,7 @@ impl State {
                     icon: "none",
                     category: "Combat",
                     toggle: Some("fake_lag"),
-                    controls: &["fake_lag_ms"],
+                    controls: &["fake_lag_ms", "show_real_position"],
                 },
                 Section {
                     id: "general_section",

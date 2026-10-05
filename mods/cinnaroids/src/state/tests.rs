@@ -33,7 +33,7 @@ fn preferences_restore_without_enabling_any_module() {
     assert_eq!(state.preferences.clicker_key, "KeyV");
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
-    assert_eq!(json.as_object().unwrap().len(), 9);
+    assert_eq!(json.as_object().unwrap().len(), 10);
     assert!(json.get("aim").is_none());
 }
 
@@ -196,7 +196,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 14);
+    assert_eq!(json["controls"].as_array().unwrap().len(), 15);
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -467,5 +467,38 @@ fn fake_lag_panel_exposes_millisecond_slider_and_toggle() {
         controls
             .iter()
             .any(|control| control["id"] == "fake_lag" && control["value"] == false)
+    );
+}
+
+#[test]
+fn real_position_preference_requires_live_nonzero_fake_lag() {
+    let mut state = State::new(Preferences::from_json(r#"{"show_real_position":true}"#));
+    assert!(!state.show_real_position());
+    controls(&mut state, &[], &[("fake_lag", 1.0)]);
+    assert!(state.show_real_position());
+    controls(&mut state, &[], &[("fake_lag_ms", 0.0)]);
+    assert!(!state.show_real_position());
+    controls(
+        &mut state,
+        &[],
+        &[("fake_lag_ms", 500.0), ("show_real_position", 0.0)],
+    );
+    assert!(!state.show_real_position());
+    assert!(state.preferences_dirty);
+    controls(&mut state, &[], &[("show_real_position", 1.0)]);
+    assert!(state.show_real_position());
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    assert!(Preferences::from_json(&saved).show_real_position);
+    state.stop_all();
+    assert!(!state.show_real_position());
+    assert!(state.preferences.show_real_position);
+    let panel: serde_json::Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    assert!(
+        panel["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|control| control["id"] == "show_real_position"
+                && control["label"] == "Show real position")
     );
 }
