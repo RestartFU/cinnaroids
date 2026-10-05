@@ -29,6 +29,6 @@ The preview uses Cinnabar's JSON-UI/rendering path with original panel
 controls, a plain background, and the licensed Inter Medium font. It contains no
 Minecraft artwork or connected-server footage.
 The compact menu capture uses host commit
-b19d796e8c51df1077fc7e25babc1e4cbb551fb1. GUI scales 2 and 4 produced
+05b97d7c6450205d1ad8517cc0d517d18a888338. GUI scales 2 and 4 produced
 identical captures; module switches are enabled only in the preview fixture.
 SHA-256: AACE3D4AC31A8E0904FDA702A1F7C22F5A93EC81811329CA02DA4C94D974AE1A
