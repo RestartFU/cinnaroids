@@ -12,7 +12,7 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
-const GRANTS: [&str; 7] = [
+const GRANTS: [&str; 8] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
     "CINNABAR_MOD_CONTROLS",
@@ -20,6 +20,7 @@ const GRANTS: [&str; 7] = [
     "CINNABAR_MOD_SETTINGS",
     "CINNABAR_MOD_PACKET_DELAY",
     "CINNABAR_MOD_PACKET_DELAY_VISUAL",
+    "CINNABAR_MOD_BLOCK_HIGHLIGHTS",
 ];
 const LIVE_ATTACHMENT_MARKER: &str = "local-mod.status.json";
 const REGISTRATION_BYTES: usize = 16 * 1024;
@@ -279,7 +280,8 @@ fn registration(id: &str, component: &Path) -> Result<Vec<u8>, String> {
         "version": 1, "request_id": id, "enabled": true,
         "component": component, "font": null,
         "grants": {"environment": false, "players": true, "camera": true,
-            "controls": true, "interaction": true, "settings": true, "packet_delay": true}
+            "controls": true, "interaction": true, "settings": true, "packet_delay": true,
+            "block_highlights": true}
     }))
     .map_err(|error| format!("Could not encode module registration: {error}"))?;
     if bytes.len() > REGISTRATION_BYTES {
@@ -498,6 +500,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["request_id"], "request-1");
         assert_eq!(value["grants"]["controls"], true);
+        assert_eq!(value["grants"]["block_highlights"], true);
         assert_eq!(value["grants"]["environment"], false);
         assert!(value["font"].is_null());
         assert!(value.get("clicker_enabled").is_none());

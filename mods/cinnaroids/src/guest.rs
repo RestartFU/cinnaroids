@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use mod_api::bindings::{
     Guest,
-    cinnabar::extension::{gameplay, hud, input, panel, settings},
+    cinnabar::extension::{gameplay, hud, input, panel, render, settings},
 };
 
 use crate::{
@@ -124,6 +124,26 @@ impl Guest for Cinnaroids {
 }
 
 fn publish(modules: &mut State) {
+    if modules.finder_dirty {
+        let spec = modules
+            .block_highlights()
+            .map(|spec| render::BlockHighlightSpec {
+                identifiers: spec.identifiers,
+                range: spec.range,
+                color: render::Rgba {
+                    r: spec.color[0],
+                    g: spec.color[1],
+                    b: spec.color[2],
+                    a: spec.color[3],
+                },
+            });
+        match render::set_block_highlights(spec.as_ref()) {
+            Ok(()) => modules.finder_dirty = false,
+            Err(error) => {
+                let _ = hud::set_label(&format!("Netherite Finder: {error}"));
+            }
+        }
+    }
     if modules.reservations_dirty && input::reserve_keys(&modules.reserved_keys()).is_ok() {
         modules.reservations_dirty = false;
     }

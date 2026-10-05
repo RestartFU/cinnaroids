@@ -1,3 +1,17 @@
+Cinnaroids 2.5.0 — solid pink Netherite Finder
+===========================================
+
+Visual → Netherite selects loaded ancient debris and netherite blocks, with
+opaque full-block pink cubes through terrain. Range is 1–128 blocks, default 64.
+Four loaded-terrain scan tests cover palettes, mutations, unloading, dimensions,
+bounded work and nearest-block output. Seven host permission/transaction tests,
+seventeen renderer tests, 37 guest tests and 19 launcher tests pass. Touched host
+crates compile with tests; the launcher release build and component validation pass.
+A hidden Windows DX12 capture at 1920x1080/DPI1 confirms pink solid faces, panel
+layering, Visual-tab navigation, readable title, range value and clearing.
+No remote-server or performance qualification run was used.
+Host source: a03220a8f6870d275da901f73c077b3a6f2564f6.
+Upstream: https://github.com/bedrock-mc/cinnabar/pull/191 (CI pending).
 Cinnaroids 2.4.1 — smooth 3D position marker
 ==========================================
 

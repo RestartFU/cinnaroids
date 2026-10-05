@@ -33,7 +33,7 @@ fn preferences_restore_without_enabling_any_module() {
     assert_eq!(state.preferences.clicker_key, "KeyV");
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
-    assert_eq!(json.as_object().unwrap().len(), 10);
+    assert_eq!(json["netherite_range"], 64);
     assert!(json.get("aim").is_none());
 }
 
@@ -196,7 +196,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 15);
+    assert_eq!(json["controls"].as_array().unwrap().len(), 17);
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -206,6 +206,39 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     assert!(state.panel_dirty && state.preferences_dirty);
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert!(!json["dark"].as_bool().unwrap());
+}
+
+#[test]
+fn netherite_finder_is_full_pink_loaded_block_selection_and_stop_clears_it() {
+    let mut state = state();
+    assert!(state.block_highlights().is_none());
+    state.finder_dirty = false;
+    state.preferences_dirty = false;
+    controls(&mut state, &[], &[("netherite", 1.0)]);
+    let spec = state.block_highlights().unwrap();
+    assert_eq!(
+        spec.identifiers,
+        ["minecraft:ancient_debris", "minecraft:netherite_block"]
+    );
+    assert_eq!(spec.range, 64.0);
+    assert_eq!(spec.color[3], 1.0);
+    assert!(spec.color[0] > spec.color[1] && spec.color[2] > spec.color[1]);
+    assert!(state.finder_dirty && !state.preferences_dirty);
+    controls(&mut state, &[], &[("netherite_range", 500.0)]);
+    assert_eq!(
+        state.block_highlights().unwrap().range,
+        mod_api::MAX_BLOCK_HIGHLIGHT_RANGE
+    );
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let restored = State::new(Preferences::from_json(&saved));
+    assert_eq!(
+        restored.preferences.netherite_range,
+        mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u8
+    );
+    assert!(restored.block_highlights().is_none());
+    state.finder_dirty = false;
+    controls(&mut state, &[STOP_KEY], &[]);
+    assert!(state.block_highlights().is_none() && state.finder_dirty);
 }
 
 #[test]
@@ -232,7 +265,7 @@ fn grouped_cards_expose_every_control_once_in_combat_or_settings() {
             assert!(assigned.insert(id.as_str().unwrap()));
         }
     }
-    assert_eq!(categories, HashSet::from(["Combat", "Settings"]));
+    assert_eq!(categories, HashSet::from(["Combat", "Settings", "Visual"]));
     let controls: HashSet<_> = json["controls"]
         .as_array()
         .unwrap()

@@ -1,6 +1,6 @@
 # Cinnaroids
 
-Clicker, player aim assist, reach, and FakeLag for Cinnabar, controlled in-game with **Right Shift**.
+Clicker, player aim assist, reach, FakeLag, and a solid pink Netherite Finder for Cinnabar, controlled in-game with **Right Shift**.
 
 ![Cinnaroids](assets/screenshot.png)
 

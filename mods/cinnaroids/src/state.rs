@@ -36,6 +36,7 @@ pub struct Preferences {
     pub dark_mode: bool,
     pub fake_lag_ms: u16,
     pub show_real_position: bool,
+    pub netherite_range: u8,
 }
 
 impl Default for Preferences {
@@ -51,6 +52,7 @@ impl Default for Preferences {
             dark_mode: true,
             fake_lag_ms: 100,
             show_real_position: false,
+            netherite_range: 64,
         }
     }
 }
@@ -88,6 +90,10 @@ impl Preferences {
         }
         if let Some(value) = values.get("show_real_position").and_then(Value::as_bool) {
             preferences.show_real_position = value;
+        }
+        if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
+            preferences.netherite_range =
+                value.clamp(1, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u64) as u8;
         }
         let binding = values
             .get("clicker_key")
@@ -144,6 +150,7 @@ pub struct Modules {
     pub aim: bool,
     pub reach: bool,
     pub fake_lag: bool,
+    pub netherite: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +168,7 @@ pub struct State {
     pub panel_dirty: bool,
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
+    pub finder_dirty: bool,
     clicker: ClickCadence,
 }
 
@@ -173,6 +181,7 @@ impl State {
             panel_dirty: true,
             preferences_dirty: false,
             reservations_dirty: true,
+            finder_dirty: true,
             clicker: ClickCadence::default(),
         }
     }
@@ -296,6 +305,11 @@ impl State {
                     .clamp(0.0, mod_api::MAX_PACKET_DELAY_MS as f32) as u16,
             ),
             "show_real_position" => replace(&mut self.preferences.show_real_position, value >= 0.5),
+            "netherite" => replace(&mut self.modules.netherite, value >= 0.5),
+            "netherite_range" => replace(
+                &mut self.preferences.netherite_range,
+                value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
+            ),
             "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
             "stop_all" => {
                 self.stop_all();
@@ -305,10 +319,16 @@ impl State {
         };
         if changed {
             self.panel_dirty = true;
+            if matches!(event.id.as_str(), "netherite" | "netherite_range") {
+                self.finder_dirty = true;
+            }
             if matches!(event.id.as_str(), "clicker" | "cps") {
                 self.clicker.reset();
             }
-            if !matches!(event.id.as_str(), "clicker" | "aim" | "reach" | "fake_lag") {
+            if !matches!(
+                event.id.as_str(),
+                "clicker" | "aim" | "reach" | "fake_lag" | "netherite"
+            ) {
                 self.preferences_dirty = true;
             }
         }
@@ -319,6 +339,7 @@ impl State {
         self.capturing_key = None;
         self.clicker.reset();
         self.panel_dirty = true;
+        self.finder_dirty = true;
     }
 
     pub fn aim_config(&self) -> Config {
@@ -339,6 +360,17 @@ impl State {
 
     pub fn show_real_position(&self) -> bool {
         self.packet_delay_ms() != 0 && self.preferences.show_real_position
+    }
+
+    pub fn block_highlights(&self) -> Option<mod_api::BlockHighlightSpec> {
+        self.modules.netherite.then(|| mod_api::BlockHighlightSpec {
+            identifiers: vec![
+                "minecraft:ancient_debris".into(),
+                "minecraft:netherite_block".into(),
+            ],
+            range: f32::from(self.preferences.netherite_range),
+            color: [1.0, 0.12, 0.55, 1.0],
+        })
     }
 
     pub fn attack_reach(&self, gameplay: bool) -> Option<f32> {
@@ -452,6 +484,19 @@ impl State {
                 label: "Dark mode",
                 value: self.preferences.dark_mode,
             },
+            Control::Toggle {
+                id: "netherite",
+                label: "Netherite",
+                value: self.modules.netherite,
+            },
+            Control::Slider {
+                id: "netherite_range",
+                label: "Range",
+                value: f32::from(self.preferences.netherite_range),
+                min: 1.0,
+                max: mod_api::MAX_BLOCK_HIGHLIGHT_RANGE,
+                step: 1.0,
+            },
             Control::Button {
                 id: "stop_all",
                 label: "Disable all",
@@ -504,6 +549,14 @@ impl State {
                     category: "Settings",
                     toggle: None,
                     controls: &["dark_mode", "stop_all"],
+                },
+                Section {
+                    id: "netherite_section",
+                    label: "Netherite",
+                    icon: "crosshair",
+                    category: "Visual",
+                    toggle: Some("netherite"),
+                    controls: &["netherite_range"],
                 },
             ],
         };
