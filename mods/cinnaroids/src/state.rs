@@ -4,6 +4,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::aim::Config;
+use crate::jump_reset::{DEFAULT_WINDOW_TICKS, MAX_WINDOW_TICKS, MIN_WINDOW_TICKS};
 
 pub const PRODUCT_NAME: &str = "Cinnaroids";
 pub const PANEL_KEY: &str = "ShiftRight";
@@ -11,6 +12,7 @@ pub const STOP_KEY: &str = "F10";
 const DEFAULT_CLICKER_KEY: &str = "F8";
 const DEFAULT_AIM_KEY: &str = "KeyR";
 const DEFAULT_REACH_KEY: &str = "KeyV";
+const DEFAULT_JUMP_RESET_KEY: &str = "KeyB";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
 const MAX_CPS: u8 = 30;
@@ -30,6 +32,8 @@ pub struct Preferences {
     pub clicker_key: String,
     pub aim_key: String,
     pub reach_key: String,
+    pub jump_reset_key: String,
+    pub jump_reset_window_ticks: u8,
     pub aim_strength: u8,
     pub aim_mode: AimMode,
     pub reach_blocks: f32,
@@ -46,6 +50,8 @@ impl Default for Preferences {
             clicker_key: DEFAULT_CLICKER_KEY.into(),
             aim_key: DEFAULT_AIM_KEY.into(),
             reach_key: DEFAULT_REACH_KEY.into(),
+            jump_reset_key: DEFAULT_JUMP_RESET_KEY.into(),
+            jump_reset_window_ticks: DEFAULT_WINDOW_TICKS,
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
             reach_blocks: MIN_REACH,
@@ -95,6 +101,13 @@ impl Preferences {
             preferences.netherite_range =
                 value.clamp(1, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u64) as u8;
         }
+        if let Some(value) = values
+            .get("jump_reset_window_ticks")
+            .and_then(Value::as_u64)
+        {
+            preferences.jump_reset_window_ticks =
+                value.clamp(u64::from(MIN_WINDOW_TICKS), u64::from(MAX_WINDOW_TICKS)) as u8;
+        }
         let binding = values
             .get("clicker_key")
             .or_else(|| values.get("toggle_key"))
@@ -110,6 +123,7 @@ impl Preferences {
         for (field, target) in [
             ("aim_key", &mut preferences.aim_key),
             ("reach_key", &mut preferences.reach_key),
+            ("jump_reset_key", &mut preferences.jump_reset_key),
         ] {
             if let Some(binding) = values.get(field).and_then(Value::as_str)
                 && valid_binding(binding)
@@ -126,6 +140,19 @@ impl Preferences {
         {
             preferences.reach_key =
                 spare_binding(&[&preferences.clicker_key, &preferences.aim_key]);
+        }
+        if [
+            &preferences.clicker_key,
+            &preferences.aim_key,
+            &preferences.reach_key,
+        ]
+        .contains(&&preferences.jump_reset_key)
+        {
+            preferences.jump_reset_key = spare_binding(&[
+                &preferences.clicker_key,
+                &preferences.aim_key,
+                &preferences.reach_key,
+            ]);
         }
         preferences
     }
@@ -152,6 +179,7 @@ pub struct Modules {
     pub fake_lag: bool,
     pub netherite: bool,
     pub fullbright: bool,
+    pub jump_reset: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -159,6 +187,7 @@ pub enum KeybindTarget {
     Clicker,
     Aim,
     Reach,
+    JumpReset,
 }
 
 #[derive(Debug)]
@@ -237,6 +266,9 @@ impl State {
             } else if *key == self.preferences.aim_key {
                 self.modules.aim = !self.modules.aim;
                 self.panel_dirty = true;
+            } else if *key == self.preferences.jump_reset_key {
+                self.modules.jump_reset = !self.modules.jump_reset;
+                self.panel_dirty = true;
             } else if *key == self.preferences.reach_key {
                 self.modules.reach = !self.modules.reach;
                 self.panel_dirty = true;
@@ -249,6 +281,7 @@ impl State {
             KeybindTarget::Clicker => &mut self.preferences.clicker_key,
             KeybindTarget::Aim => &mut self.preferences.aim_key,
             KeybindTarget::Reach => &mut self.preferences.reach_key,
+            KeybindTarget::JumpReset => &mut self.preferences.jump_reset_key,
         }
     }
 
@@ -257,6 +290,7 @@ impl State {
             (KeybindTarget::Clicker, &self.preferences.clicker_key),
             (KeybindTarget::Aim, &self.preferences.aim_key),
             (KeybindTarget::Reach, &self.preferences.reach_key),
+            (KeybindTarget::JumpReset, &self.preferences.jump_reset_key),
         ]
         .iter()
         .any(|(other, binding)| *other != target && key == *binding)
@@ -273,10 +307,11 @@ impl State {
                 &mut self.preferences.cps,
                 value.round().clamp(f32::from(MIN_CPS), f32::from(MAX_CPS)) as u8,
             ),
-            "clicker_key" | "aim_key" | "reach_key" => {
+            "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key" => {
                 self.capturing_key = Some(match event.id.as_str() {
                     "aim_key" => KeybindTarget::Aim,
                     "reach_key" => KeybindTarget::Reach,
+                    "jump_reset_key" => KeybindTarget::JumpReset,
                     _ => KeybindTarget::Clicker,
                 });
                 self.panel_dirty = true;
@@ -299,6 +334,14 @@ impl State {
             "reach_blocks" => replace(
                 &mut self.preferences.reach_blocks,
                 ((value * 10.0).round() / 10.0).clamp(MIN_REACH, mod_api::MAX_ENTITY_REACH_BLOCKS),
+            ),
+            "jump_reset" => replace(&mut self.modules.jump_reset, value >= 0.5),
+            "jump_reset_window_ticks" => replace(
+                &mut self.preferences.jump_reset_window_ticks,
+                value
+                    .round()
+                    .clamp(f32::from(MIN_WINDOW_TICKS), f32::from(MAX_WINDOW_TICKS))
+                    as u8,
             ),
             "fake_lag" => replace(&mut self.modules.fake_lag, value >= 0.5),
             "fake_lag_ms" => replace(
@@ -334,7 +377,13 @@ impl State {
             }
             if !matches!(
                 event.id.as_str(),
-                "clicker" | "aim" | "reach" | "fake_lag" | "netherite" | "fullbright"
+                "clicker"
+                    | "aim"
+                    | "reach"
+                    | "fake_lag"
+                    | "netherite"
+                    | "fullbright"
+                    | "jump_reset"
             ) {
                 self.preferences_dirty = true;
             }
@@ -396,6 +445,7 @@ impl State {
             &self.preferences.clicker_key,
             &self.preferences.aim_key,
             &self.preferences.reach_key,
+            &self.preferences.jump_reset_key,
         ] {
             if !keys.contains(key) {
                 keys.push(key.clone());
@@ -468,6 +518,25 @@ impl State {
                 label: "Keybind",
                 key: &self.preferences.reach_key,
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
+            },
+            Control::Toggle {
+                id: "jump_reset",
+                label: "Auto Jump Reset",
+                value: self.modules.jump_reset,
+            },
+            Control::Slider {
+                id: "jump_reset_window_ticks",
+                label: "Hit window (ticks)",
+                value: f32::from(self.preferences.jump_reset_window_ticks),
+                min: f32::from(MIN_WINDOW_TICKS),
+                max: f32::from(MAX_WINDOW_TICKS),
+                step: 1.0,
+            },
+            Control::Keybind {
+                id: "jump_reset_key",
+                label: "Keybind",
+                key: &self.preferences.jump_reset_key,
+                capturing: self.capturing_key == Some(KeybindTarget::JumpReset),
             },
             Control::Toggle {
                 id: "fake_lag",
@@ -546,6 +615,14 @@ impl State {
                     category: "Combat",
                     toggle: Some("reach"),
                     controls: &["reach_blocks", "reach_key"],
+                },
+                Section {
+                    id: "jump_reset_section",
+                    label: "Auto Jump Reset",
+                    icon: "none",
+                    category: "Movement",
+                    toggle: Some("jump_reset"),
+                    controls: &["jump_reset_window_ticks", "jump_reset_key"],
                 },
                 Section {
                     id: "fake_lag_section",
@@ -647,11 +724,17 @@ fn valid_binding(key: &str) -> bool {
 }
 
 fn spare_binding(used: &[&str]) -> String {
-    [DEFAULT_AIM_KEY, DEFAULT_REACH_KEY, "KeyB", "F7", "F9"]
-        .into_iter()
-        .find(|key| !used.contains(key))
-        .expect("there are more spare bindings than modules")
-        .into()
+    [
+        DEFAULT_AIM_KEY,
+        DEFAULT_REACH_KEY,
+        DEFAULT_JUMP_RESET_KEY,
+        "F7",
+        "F9",
+    ]
+    .into_iter()
+    .find(|key| !used.contains(key))
+    .expect("there are more spare bindings than modules")
+    .into()
 }
 
 fn legacy_key(key: u64) -> Option<String> {

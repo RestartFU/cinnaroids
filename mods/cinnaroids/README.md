@@ -1,9 +1,11 @@
 # Cinnaroids component
 
-Rust WASM modules for Cinnabar's granted local API. Press Right Shift for the in-game panel: Clicker, CPS, toggle key, Aim assist strength and activation, Reach distance, and dark mode. F10 disables all modules. Every module starts disabled; preferences save through the component's fixed companion settings file.
+Rust WASM modules for Cinnabar's granted local API. Press Right Shift for the in-game panel: Clicker, CPS, toggle key, Aim assist strength and activation, Reach distance, Auto Jump Reset, and dark mode. F10 disables all modules. Every module starts disabled; preferences save through the component's fixed companion settings file.
 
 Clicker adds attack presses only while Attack is held, through the normal interaction path. It preserves the first physical press, sends at most one repeat per frame, and drops missed repeats after a stall. Reach changes local actor picking and attack admission from 3–6 blocks; the host retains wall checks and ordinary server transactions. Server validation still determines accepted hits.
 
 Aim assist uses remote player positions within six blocks and a 30° cone, favors the smallest view angle, and keeps its target until another is at least 2° closer. Strength zero produces no motion. Frame time is clamped to 100 ms and rotation stays within the host's 0.25-radian per-axis budget. The API does not provide aim target block visibility or teams. Missing gameplay and session/dimension changes reset target selection.
+
+Auto Jump Reset watches new server motion and requests one ordinary jump when grounded within its 1–10 tick hit window (default 4). B toggles it; it starts disabled. It discards stale hits across missing gameplay, ineligible movement, held manual jump and session changes. It does not modify velocity: ground friction and directional sprint input determine any reduction in horizontal knockback. It requires the host's explicit movement grant and cannot guarantee vertical-only knockback.
 
 Build from the repository root with `./scripts/build-cinnaroids.ps1`; test with `cargo test --manifest-path mods/cinnaroids/Cargo.toml -p cinnaroids-mod --locked`. Rust 1.93.1 and `wasm32-unknown-unknown` are pinned. The result is `assets/cinnaroids.component.wasm`; packaging validates the component and rejects WASI imports. It has no AI model or operating-system mouse injection.

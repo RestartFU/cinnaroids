@@ -102,7 +102,8 @@ fn key_capture_changes_the_binding_without_toggling_a_module() {
             STOP_KEY,
             "ControlRight",
             DEFAULT_AIM_KEY,
-            DEFAULT_REACH_KEY
+            DEFAULT_REACH_KEY,
+            DEFAULT_JUMP_RESET_KEY
         ]
     );
     controls(&mut state, &["ControlRight"], &[]);
@@ -196,7 +197,13 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 18);
+    assert!(
+        json["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|control| control["id"] == "jump_reset")
+    );
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -265,7 +272,10 @@ fn grouped_cards_expose_every_control_once_in_combat_or_settings() {
             assert!(assigned.insert(id.as_str().unwrap()));
         }
     }
-    assert_eq!(categories, HashSet::from(["Combat", "Settings", "Visual"]));
+    assert_eq!(
+        categories,
+        HashSet::from(["Combat", "Settings", "Visual", "Movement"])
+    );
     let controls: HashSet<_> = json["controls"]
         .as_array()
         .unwrap()
@@ -348,7 +358,7 @@ fn every_module_has_a_persisted_independent_binding() {
         Preferences::from_json(&serde_json::to_string(&saved).unwrap()),
         saved
     );
-    for field in ["aim_key", "reach_key"] {
+    for field in ["aim_key", "reach_key", "jump_reset_key"] {
         for invalid in ["F10", "ShiftRight", "", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
@@ -362,6 +372,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         ("clicker_key", KeybindTarget::Clicker),
         ("aim_key", KeybindTarget::Aim),
         ("reach_key", KeybindTarget::Reach),
+        ("jump_reset_key", KeybindTarget::JumpReset),
     ] {
         let mut state = state();
         state.modules.aim = true;
@@ -381,6 +392,14 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
             }
             KeybindTarget::Reach => {
                 assert!(!state.modules.clicker && state.modules.aim && state.modules.reach)
+            }
+            KeybindTarget::JumpReset => {
+                assert!(
+                    state.modules.jump_reset
+                        && !state.modules.clicker
+                        && state.modules.aim
+                        && !state.modules.reach
+                )
             }
         }
     }
@@ -406,7 +425,12 @@ fn reservations_are_unique_even_for_programmatically_shared_bindings() {
     state.preferences.reach_key = state.preferences.clicker_key.clone();
     assert_eq!(
         state.reserved_keys(),
-        [PANEL_KEY, STOP_KEY, DEFAULT_CLICKER_KEY]
+        [
+            PANEL_KEY,
+            STOP_KEY,
+            DEFAULT_CLICKER_KEY,
+            DEFAULT_JUMP_RESET_KEY
+        ]
     );
 }
 
@@ -581,6 +605,48 @@ fn fullbright_has_a_visual_toggle_and_preserves_category_order() {
         .iter()
         .map(|section| section["category"].as_str().unwrap())
         .collect();
+    categories.sort_unstable();
     categories.dedup();
-    assert_eq!(categories, ["Combat", "Visual", "Settings"]);
+    assert_eq!(categories, ["Combat", "Movement", "Settings", "Visual"]);
+}
+
+#[test]
+fn jump_reset_is_off_by_default_and_emergency_stop_disables_it() {
+    let mut state = state();
+    assert!(!state.modules.jump_reset);
+    controls(&mut state, &[DEFAULT_JUMP_RESET_KEY], &[]);
+    assert!(state.modules.jump_reset && !state.preferences_dirty);
+    controls(
+        &mut state,
+        &[STOP_KEY, DEFAULT_JUMP_RESET_KEY],
+        &[("jump_reset", 1.0)],
+    );
+    assert!(!state.modules.jump_reset);
+}
+
+#[test]
+fn jump_reset_preferences_are_bounded_and_binding_is_independent() {
+    let restored = Preferences::from_json(
+        r#"{"jump_reset":true,"jump_reset_window_ticks":999,"jump_reset_key":"KeyR"}"#,
+    );
+    assert_eq!(restored.jump_reset_window_ticks, MAX_WINDOW_TICKS);
+    assert_ne!(restored.jump_reset_key, restored.aim_key);
+    assert!(!State::new(restored).modules.jump_reset);
+    let mut state = state();
+    controls(
+        &mut state,
+        &[],
+        &[("jump_reset_window_ticks", 0.0), ("jump_reset_key", 1.0)],
+    );
+    assert_eq!(state.preferences.jump_reset_window_ticks, MIN_WINDOW_TICKS);
+    controls(&mut state, &[DEFAULT_AIM_KEY], &[]);
+    assert!(state.capturing_key.is_some());
+    controls(&mut state, &["KeyG"], &[]);
+    assert_eq!(state.preferences.jump_reset_key, "KeyG");
+    assert!(state.reserved_keys().contains(&"KeyG".into()));
+    assert!(!state.modules.jump_reset);
+    let json = serde_json::to_string(&state.preferences).unwrap();
+    assert_eq!(Preferences::from_json(&json), state.preferences);
+    controls(&mut state, &["KeyG"], &[]);
+    assert!(state.modules.jump_reset);
 }

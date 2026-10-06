@@ -9,11 +9,13 @@ use mod_api::bindings::{
 
 use crate::{
     aim::{AimAssist, Frame, Player, Vec3},
+    jump_reset::{Frame as JumpFrame, JumpReset},
     state::{Controls, Event, Preferences, State},
 };
 
 thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
+    static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
 }
 
@@ -30,11 +32,14 @@ impl Guest for Cinnaroids {
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
         AIM.with(|aim| aim.borrow_mut().reset());
+        JUMP_RESET.with(|reset| reset.borrow_mut().reset());
     }
 
     fn frame() {
         let Ok(controls) = input::read_controls() else {
             AIM.with(|aim| aim.borrow_mut().reset());
+            JUMP_RESET.with(|reset| reset.borrow_mut().reset());
+            let _ = gameplay::cancel_jump();
             return;
         };
         MODULES.with(|modules| {
@@ -74,6 +79,40 @@ impl Guest for Cinnaroids {
             if modules.attack_pulse(cadence) {
                 let _ = gameplay::pulse_attack();
             }
+
+            let movement = if controls.focused && controls.gameplay && !controls.panel_open {
+                gameplay::read_movement().ok().flatten()
+            } else {
+                None
+            };
+            if !modules.modules.jump_reset
+                || movement
+                    .as_ref()
+                    .is_none_or(|frame| !frame.eligible || frame.jump_held)
+            {
+                let _ = gameplay::cancel_jump();
+            }
+            JUMP_RESET.with(|reset| {
+                let mut reset = reset.borrow_mut();
+                let frame = movement.map(|frame| JumpFrame {
+                    session: frame.session,
+                    dimension: frame.dimension,
+                    tick: frame.tick,
+                    knockback_sequence: frame.knockback_sequence,
+                    on_ground: frame.on_ground,
+                    jump_held: frame.jump_held,
+                    eligible: frame.eligible,
+                    velocity: [frame.velocity.x, frame.velocity.y, frame.velocity.z],
+                });
+                if reset.update(
+                    modules.modules.jump_reset,
+                    modules.preferences.jump_reset_window_ticks,
+                    frame,
+                ) && gameplay::pulse_jump().is_err()
+                {
+                    reset.reset();
+                }
+            });
 
             let Some(snapshot) = snapshot else {
                 AIM.with(|aim| aim.borrow_mut().reset());

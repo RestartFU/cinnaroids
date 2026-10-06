@@ -115,8 +115,8 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mod-api"
-version = "0.1.9"
-source = "git+https://github.com/RestartFU/cinnabar?rev=5824af6cfe855c61cd4b8dd532e5ceebdfe7fb01#5824af6cfe855c61cd4b8dd532e5ceebdfe7fb01"
+version = "0.1.10"
+source = "git+https://github.com/bedrock-mc/cinnabar?rev=f62129951a4a03937a08bd0e8f2374591a635580#f62129951a4a03937a08bd0e8f2374591a635580"
 dependencies = [
  "wit-bindgen",
 ]
