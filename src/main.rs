@@ -247,9 +247,14 @@ impl Launcher {
                         s.attachment = Some(request);
                     }
                     Err(error) => {
-                        s.retry.failed(Instant::now());
+                        if error == component::UNSUPPORTED_CLIENT {
+                            s.retry.reset();
+                            s.status = "Cinnabar detected — modules unavailable".into();
+                        } else {
+                            s.retry.failed(Instant::now());
+                            s.status = "Attachment unavailable".into();
+                        }
                         s.error = Some(error);
-                        s.status = "Attachment unavailable".into();
                     }
                 }
                 cx.notify();
@@ -291,6 +296,12 @@ impl Launcher {
                     .items_center()
                     .gap(px(9.0))
                     .window_control_area(WindowControlArea::Drag)
+                    .when(cfg!(target_os = "linux"), |titlebar| {
+                        titlebar.on_mouse_down(MouseButton::Left, |_, window, cx| {
+                            window.start_window_move();
+                            cx.stop_propagation();
+                        })
+                    })
                     .child(Self::icon("mark.svg", self.accent(), 15.0))
                     .child(div().font_weight(FontWeight::MEDIUM).child(PRODUCT_NAME)),
             )

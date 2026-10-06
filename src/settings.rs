@@ -12,7 +12,7 @@ pub struct Settings {
     pub cinnabar_path: Option<PathBuf>,
 }
 
-/// Always watch the standard installation, including before its executable exists.
+/// Always watch the platform's standard installation, including before it exists.
 pub fn installed_client_path() -> Option<PathBuf> {
     #[cfg(windows)]
     {
@@ -31,9 +31,23 @@ pub fn installed_client_path() -> Option<PathBuf> {
             "/Applications/Cinnabar.app/Contents/MacOS/bedrock-client",
         ));
         #[cfg(target_os = "linux")]
-        return std::env::var_os("HOME")
-            .map(|home| PathBuf::from(home).join(".local/bin/bedrock-client"));
+        return data_directory().map(|data| {
+            linux_installed_client_in(&data, std::env::var_os("HOME").as_deref().map(Path::new))
+        });
     }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_installed_client_in(data: &Path, home: Option<&Path>) -> PathBuf {
+    let installed = data.join("cinnabar/app/bin/bedrock-client");
+    // Retain support for older installations that exposed the executable directly.
+    if !installed.is_file()
+        && let Some(legacy) = home.map(|home| home.join(".local/bin/bedrock-client"))
+        && legacy.is_file()
+    {
+        return legacy;
+    }
+    installed
 }
 
 #[cfg(any(windows, test))]
@@ -53,6 +67,28 @@ pub fn data_directory() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     return std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join("Library/Application Support"));
+}
+
+/// Cinnabar's loader watches its config root, which differs from data on Linux.
+pub fn registration_path() -> Option<PathBuf> {
+    #[cfg(target_os = "linux")]
+    return linux_registration_in(
+        std::env::var_os("XDG_CONFIG_HOME")
+            .as_deref()
+            .map(Path::new),
+        std::env::var_os("HOME").as_deref().map(Path::new),
+    );
+    #[cfg(not(target_os = "linux"))]
+    return data_directory().map(|base| base.join("Cinnabar/local-mod.json"));
+}
+
+#[cfg(target_os = "linux")]
+fn linux_registration_in(config: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
+    config
+        .filter(|path| path.is_absolute())
+        .map(Path::to_path_buf)
+        .or_else(|| home.map(|home| home.join(".config")))
+        .map(|config| config.join("cinnabar/local-mod.json"))
 }
 
 impl Default for Settings {
@@ -144,6 +180,47 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static ID: AtomicU64 = AtomicU64::new(0);
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_discovery_follows_the_installer_layout_and_prefers_it_over_legacy() {
+        let directory = std::env::temp_dir().join(format!(
+            "cinnaroids-linux-layout-{}-{}",
+            std::process::id(),
+            ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        let home = directory.join("home");
+        let data = directory.join("custom-data");
+        let installed = data.join("cinnabar/app/bin/bedrock-client");
+        let legacy = home.join(".local/bin/bedrock-client");
+        assert_eq!(linux_installed_client_in(&data, Some(&home)), installed);
+        fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        fs::write(&legacy, b"old client").unwrap();
+        assert_eq!(linux_installed_client_in(&data, Some(&home)), legacy);
+        fs::create_dir_all(installed.parent().unwrap()).unwrap();
+        fs::write(&installed, b"installed client").unwrap();
+        assert_eq!(linux_installed_client_in(&data, Some(&home)), installed);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_registration_uses_config_instead_of_data_and_ignores_relative_xdg_paths() {
+        let home = Path::new("/home/test");
+        assert_eq!(
+            linux_registration_in(None, Some(home)),
+            Some(home.join(".config/cinnabar/local-mod.json"))
+        );
+        assert_eq!(
+            linux_registration_in(Some(Path::new("/custom/config")), Some(home)),
+            Some(PathBuf::from("/custom/config/cinnabar/local-mod.json"))
+        );
+        assert_eq!(
+            linux_registration_in(Some(Path::new("relative")), Some(home)),
+            linux_registration_in(None, Some(home))
+        );
+        assert_eq!(linux_registration_in(None, None), None);
+    }
 
     #[test]
     fn old_module_fields_do_not_become_launcher_controls() {

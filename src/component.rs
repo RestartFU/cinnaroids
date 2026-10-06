@@ -12,6 +12,7 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
+pub const UNSUPPORTED_CLIENT: &str = "This Cinnabar build does not support Cinnaroids modules. A module-enabled Cinnabar build is required.";
 const GRANTS: [&str; 9] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
@@ -170,13 +171,11 @@ impl ModComponent {
         if !supports_modules(&mut file)
             .map_err(|error| format!("Could not read Cinnabar: {error}"))?
         {
-            return Err(
-                "Your installed Cinnabar needs the live-module update. Restart it once after updating.".into(),
-            );
+            return Err(UNSUPPORTED_CLIENT.into());
         }
         let client_pid = crate::client_process::running_client(executable)?;
-        let base = crate::settings::data_directory().ok_or("Settings folder unavailable.")?;
-        let registration_path = base.join("Cinnabar/local-mod.json");
+        let registration_path =
+            crate::settings::registration_path().ok_or("Settings folder unavailable.")?;
         let status_path = registration_path.with_file_name(LIVE_ATTACHMENT_MARKER);
         let existing = read_bounded_file(&registration_path, "module registration")?;
         let acknowledged = read_bounded_file(&status_path, "module status")?
