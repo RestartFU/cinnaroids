@@ -1,6 +1,6 @@
 [package]
 name = "cinnaroids-mod"
-version = "2.6.1"
+version = "2.6.2"
 edition = "2024"
 rust-version = "1.93.1"
 license = "MIT"
