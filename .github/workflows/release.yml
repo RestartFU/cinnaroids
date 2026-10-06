@@ -119,6 +119,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
       - uses: actions/download-artifact@v5
         with:
           pattern: release-*
@@ -133,10 +137,11 @@ jobs:
           set -euo pipefail
           cd dist
           sha256sum --check --strict *.sha256
+          cp ../scripts/install.sh .
           if gh api --include "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release-response" 2> "$RUNNER_TEMP/release-error"; then
             gh release upload "$RELEASE_TAG" --clobber ./*
           elif grep -Eq '^HTTP/[^ ]+ 404\b' "$RUNNER_TEMP/release-response" || grep -Fq '(HTTP 404)' "$RUNNER_TEMP/release-error"; then
-            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes ./*
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes --notes-file ../docs/install.md ./*
           else
             cat "$RUNNER_TEMP/release-error" >&2
             exit 1
