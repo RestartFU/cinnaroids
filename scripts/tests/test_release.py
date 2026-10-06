@@ -3,6 +3,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tarfile
@@ -38,6 +39,23 @@ class ReleaseTests(unittest.TestCase):
             destination = self.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, destination)
+        # Keep a fixed fixture version as the repository's release version advances.
+        source_version = tomllib.loads((self.root / "Cargo.toml").read_text())["package"]["version"]
+        for folder, name in [(Path("."), "cinnaroids"), (Path("mods/cinnaroids"), "cinnaroids-mod")]:
+            manifest = self.root / folder / "Cargo.toml"
+            manifest.write_text(version.replace_version(manifest.read_text(), source_version, "2.6.0"))
+            lock = self.root / folder / "Cargo.lock"
+            blocks = re.split(r"(?m)(?=^\[\[package\]\]\s*$)", lock.read_text())
+            for index, block in enumerate(blocks):
+                if block.startswith("[[package]]"):
+                    package = tomllib.loads(block)["package"][0]
+                    if package["name"] == name and "source" not in package:
+                        blocks[index] = version.replace_version(block, source_version, "2.6.0")
+            lock.write_text("".join(blocks))
+        resource = self.root / "app.rc"
+        resource.write_text(resource.read_text()
+            .replace(source_version.replace(".", ",") + ",0", "2,6,0,0")
+            .replace('"' + source_version + '\\0"', '"2.6.0\\0"'))
         self.remote = Path(self.temporary.name) / "remote.git"
         self.git("init", "--initial-branch=main")
         self.git("config", "user.name", "Release test")
