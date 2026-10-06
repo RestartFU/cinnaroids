@@ -1,8 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#[cfg(windows)]
+mod client_process;
+#[cfg(unix)]
+#[path = "client_process_unix.rs"]
 mod client_process;
 mod component;
 mod settings;
+#[cfg(windows)]
 mod window_frame;
+#[cfg(unix)]
+mod window_frame {
+    pub fn configure(_: &gpui::Window) {}
+}
 
 use component::{AttachRequest, ModComponent};
 use gpui::{prelude::*, *};

@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Increment patch, minor, or major and publish a release
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      commit: ${{ steps.release.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Check release automation
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Prepare version, commit and tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BUMP: ${{ inputs.bump || 'patch' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/prepare-release.py
+
+  build:
+    name: Build ${{ matrix.platform }} ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux, arch: x86_64, runner: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
+          - { platform: windows, arch: x86_64, runner: windows-2025, target: x86_64-pc-windows-msvc }
+          - { platform: macos, arch: arm64, runner: macos-15, target: aarch64-apple-darwin }
+          - { platform: macos, arch: x86_64, runner: macos-15-intel, target: x86_64-apple-darwin }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }},wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+          workspaces: |
+            . -> target
+            mods/cinnaroids -> target
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang g++ cmake pkg-config libasound2-dev libfontconfig1-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libssl-dev
+      - name: Build the embedded WASM component from source
+        run: |
+          cargo build --manifest-path mods/cinnaroids/Cargo.toml --locked --release -p cinnaroids-mod --target wasm32-unknown-unknown
+          cargo run --manifest-path mods/cinnaroids/Cargo.toml --locked --release -p cinnaroids-pack -- mods/cinnaroids/target/wasm32-unknown-unknown/release/cinnaroids_mod.wasm assets/cinnaroids.component.wasm
+      - name: Test the module and launcher
+        run: |
+          cargo test --manifest-path mods/cinnaroids/Cargo.toml --locked -p cinnaroids-mod
+          cargo test --locked --target "${{ matrix.target }}"
+      - name: Compile the executable
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+      - name: Package executable and notices
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: python scripts/package-release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Publish release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum --check --strict *.sha256
+          if gh api --include "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release-response" 2> "$RUNNER_TEMP/release-error"; then
+            gh release upload "$RELEASE_TAG" --clobber ./*
+          elif grep -Eq '^HTTP/[^ ]+ 404\b' "$RUNNER_TEMP/release-response" || grep -Fq '(HTTP 404)' "$RUNNER_TEMP/release-error"; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes ./*
+          else
+            cat "$RUNNER_TEMP/release-error" >&2
+            exit 1
+          fi

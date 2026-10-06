@@ -143,8 +143,7 @@ impl AttachRequest {
 
 impl ModComponent {
     pub fn new() -> Result<Self, String> {
-        let base = std::env::var_os("LOCALAPPDATA").ok_or("Settings folder unavailable.")?;
-        let base = PathBuf::from(base);
+        let base = crate::settings::data_directory().ok_or("Settings folder unavailable.")?;
         let path = base.join("Cinnaroids/mods/cinnaroids.component.wasm");
         let assets_changed = install_component(&path, COMPONENT)?;
         migrate_preferences(
@@ -176,8 +175,8 @@ impl ModComponent {
             );
         }
         let client_pid = crate::client_process::running_client(executable)?;
-        let base = std::env::var_os("LOCALAPPDATA").ok_or("Settings folder unavailable.")?;
-        let registration_path = PathBuf::from(base).join("Cinnabar/local-mod.json");
+        let base = crate::settings::data_directory().ok_or("Settings folder unavailable.")?;
+        let registration_path = base.join("Cinnabar/local-mod.json");
         let status_path = registration_path.with_file_name(LIVE_ATTACHMENT_MARKER);
         let existing = read_bounded_file(&registration_path, "module registration")?;
         let acknowledged = read_bounded_file(&status_path, "module status")?
@@ -464,7 +463,8 @@ mod tests {
 
     #[test]
     fn matching_instances_reuse_the_request_but_replaced_assets_require_a_fresh_ack() {
-        let component = Path::new("C:/Cinnaroids/mod.wasm");
+        let component_path = std::env::temp_dir().join("Cinnaroids/mod.wasm");
+        let component = component_path.as_path();
         let bytes = registration("first-instance", component).unwrap();
         assert_eq!(
             matching_registration_id(&bytes, component, false).as_deref(),
@@ -495,7 +495,8 @@ mod tests {
 
     #[test]
     fn registration_is_explicit_bounded_and_does_not_enable_gameplay_modules() {
-        let component = Path::new("C:/Users/Test/Cinnaroids/mod.wasm");
+        let component_path = std::env::temp_dir().join("Cinnaroids/mod.wasm");
+        let component = component_path.as_path();
         let bytes = registration("request-1", component).unwrap();
         assert!(bytes.len() <= REGISTRATION_BYTES);
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -509,7 +510,7 @@ mod tests {
         assert!(registration("", component).is_err());
         assert!(registration(&"x".repeat(65), component).is_err());
         assert!(registration("request-2", Path::new("relative.wasm")).is_err());
-        let oversized = PathBuf::from(format!("C:/{}", "x".repeat(REGISTRATION_BYTES)));
+        let oversized = std::env::temp_dir().join("x".repeat(REGISTRATION_BYTES));
         assert!(registration("request-3", &oversized).is_err());
     }
 

@@ -14,13 +14,45 @@ pub struct Settings {
 
 /// Always watch the standard installation, including before its executable exists.
 pub fn installed_client_path() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA")
-        .filter(|base| !base.is_empty())
-        .map(|base| installed_client_in(Path::new(&base)))
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA")
+            .filter(|base| !base.is_empty())
+            .map(|base| installed_client_in(Path::new(&base)))
+    }
+    #[cfg(unix)]
+    {
+        if let Some(path) = std::env::var_os("CINNABAR_EXECUTABLE").filter(|path| !path.is_empty())
+        {
+            return Some(PathBuf::from(path));
+        }
+        #[cfg(target_os = "macos")]
+        return Some(PathBuf::from(
+            "/Applications/Cinnabar.app/Contents/MacOS/bedrock-client",
+        ));
+        #[cfg(target_os = "linux")]
+        return std::env::var_os("HOME")
+            .map(|home| PathBuf::from(home).join(".local/bin/bedrock-client"));
+    }
 }
 
+#[cfg(any(windows, test))]
 fn installed_client_in(local_app_data: &Path) -> PathBuf {
     local_app_data.join("Programs/Cinnabar/bedrock-client.exe")
+}
+
+/// Per-user storage shared by preferences, component installation and registration.
+pub fn data_directory() -> Option<PathBuf> {
+    #[cfg(windows)]
+    return std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    #[cfg(target_os = "linux")]
+    return std::env::var_os("XDG_DATA_HOME")
+        .filter(|base| !base.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+    #[cfg(target_os = "macos")]
+    return std::env::var_os("HOME")
+        .map(|home| PathBuf::from(home).join("Library/Application Support"));
 }
 
 impl Default for Settings {
@@ -34,15 +66,13 @@ impl Default for Settings {
 
 impl Settings {
     pub fn path() -> Option<PathBuf> {
-        std::env::var_os("LOCALAPPDATA")
-            .map(|base| PathBuf::from(base).join("Cinnaroids/settings.json"))
+        data_directory().map(|base| base.join("Cinnaroids/settings.json"))
     }
 
     pub fn load() -> (Self, Option<String>) {
-        let Some(base) = std::env::var_os("LOCALAPPDATA") else {
+        let Some(base) = data_directory() else {
             return (Self::default(), Some("Settings folder unavailable.".into()));
         };
-        let base = PathBuf::from(base);
         Self::load_from(
             &base.join("Cinnaroids/settings.json"),
             &base.join("CinnabarClicker/settings.json"),
