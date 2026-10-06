@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "cinnaroids"
-version = "2.5.1"
+version = "2.6.0"
 dependencies = [
  "embed-resource",
  "gpui",

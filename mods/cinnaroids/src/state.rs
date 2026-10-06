@@ -151,6 +151,7 @@ pub struct Modules {
     pub reach: bool,
     pub fake_lag: bool,
     pub netherite: bool,
+    pub fullbright: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,6 +170,7 @@ pub struct State {
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
     pub finder_dirty: bool,
+    pub fullbright_dirty: bool,
     clicker: ClickCadence,
 }
 
@@ -182,6 +184,7 @@ impl State {
             preferences_dirty: false,
             reservations_dirty: true,
             finder_dirty: true,
+            fullbright_dirty: true,
             clicker: ClickCadence::default(),
         }
     }
@@ -306,6 +309,7 @@ impl State {
             ),
             "show_real_position" => replace(&mut self.preferences.show_real_position, value >= 0.5),
             "netherite" => replace(&mut self.modules.netherite, value >= 0.5),
+            "fullbright" => replace(&mut self.modules.fullbright, value >= 0.5),
             "netherite_range" => replace(
                 &mut self.preferences.netherite_range,
                 value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
@@ -319,6 +323,9 @@ impl State {
         };
         if changed {
             self.panel_dirty = true;
+            if event.id == "fullbright" {
+                self.fullbright_dirty = true;
+            }
             if matches!(event.id.as_str(), "netherite" | "netherite_range") {
                 self.finder_dirty = true;
             }
@@ -327,7 +334,7 @@ impl State {
             }
             if !matches!(
                 event.id.as_str(),
-                "clicker" | "aim" | "reach" | "fake_lag" | "netherite"
+                "clicker" | "aim" | "reach" | "fake_lag" | "netherite" | "fullbright"
             ) {
                 self.preferences_dirty = true;
             }
@@ -340,6 +347,7 @@ impl State {
         self.clicker.reset();
         self.panel_dirty = true;
         self.finder_dirty = true;
+        self.fullbright_dirty = true;
     }
 
     pub fn aim_config(&self) -> Config {
@@ -497,6 +505,11 @@ impl State {
                 max: mod_api::MAX_BLOCK_HIGHLIGHT_RANGE,
                 step: 1.0,
             },
+            Control::Toggle {
+                id: "fullbright",
+                label: "Fullbright",
+                value: self.modules.fullbright,
+            },
             Control::Button {
                 id: "stop_all",
                 label: "Disable all",
@@ -549,6 +562,14 @@ impl State {
                     category: "Visual",
                     toggle: Some("netherite"),
                     controls: &["netherite_range"],
+                },
+                Section {
+                    id: "fullbright_section",
+                    label: "Fullbright",
+                    icon: "none",
+                    category: "Visual",
+                    toggle: Some("fullbright"),
+                    controls: &[],
                 },
                 Section {
                     id: "general_section",

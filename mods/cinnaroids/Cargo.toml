@@ -1,6 +1,6 @@
 [package]
 name = "cinnaroids-mod"
-version = "2.5.1"
+version = "2.6.0"
 edition = "2024"
 rust-version = "1.93.1"
 license = "MIT"
@@ -14,7 +14,7 @@ resolver = "3"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-mod-api = { git = "https://github.com/RestartFU/cinnabar", rev = "a03220a8f6870d275da901f73c077b3a6f2564f6" }
+mod-api = { git = "https://github.com/RestartFU/cinnabar", rev = "5824af6cfe855c61cd4b8dd532e5ceebdfe7fb01" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

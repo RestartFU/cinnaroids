@@ -4,7 +4,7 @@ use std::cell::RefCell;
 
 use mod_api::bindings::{
     Guest,
-    cinnabar::extension::{gameplay, hud, input, panel, render, settings},
+    cinnabar::extension::{environment, gameplay, hud, input, panel, render, settings},
 };
 
 use crate::{
@@ -124,6 +124,14 @@ impl Guest for Cinnaroids {
 }
 
 fn publish(modules: &mut State) {
+    if modules.fullbright_dirty {
+        match environment::set_fullbright(modules.modules.fullbright) {
+            Ok(()) => modules.fullbright_dirty = false,
+            Err(error) => {
+                let _ = hud::set_label(&format!("Fullbright: {error}"));
+            }
+        }
+    }
     if modules.finder_dirty {
         let spec = modules
             .block_highlights()

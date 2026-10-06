@@ -196,7 +196,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
     assert_eq!(json["toggle_key"], PANEL_KEY);
-    assert_eq!(json["controls"].as_array().unwrap().len(), 17);
+    assert_eq!(json["controls"].as_array().unwrap().len(), 18);
     assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 16 * 1024);
     state.panel_dirty = false;
@@ -534,4 +534,53 @@ fn real_position_preference_requires_live_nonzero_fake_lag() {
             .any(|control| control["id"] == "show_real_position"
                 && control["label"] == "Show real position")
     );
+}
+
+#[test]
+fn fullbright_is_runtime_only_independent_and_stopped_by_f10() {
+    let mut state = State::new(Preferences::from_json(r#"{"fullbright":true}"#));
+    assert!(!state.modules.fullbright);
+    assert!(state.fullbright_dirty);
+    state.fullbright_dirty = false;
+    controls(&mut state, &[], &[("fullbright", 1.0)]);
+    assert!(state.modules.fullbright && state.fullbright_dirty);
+    assert!(!state.modules.netherite && !state.modules.clicker);
+    assert!(!state.preferences_dirty);
+    state.fullbright_dirty = false;
+    controls(&mut state, &[], &[("netherite", 1.0)]);
+    assert!(state.modules.fullbright && state.modules.netherite);
+    assert!(!state.fullbright_dirty);
+    controls(&mut state, &[], &[("fullbright", f32::NAN)]);
+    assert!(state.modules.fullbright);
+    controls(&mut state, &[STOP_KEY], &[]);
+    assert!(!state.modules.fullbright && state.fullbright_dirty);
+    assert!(!state.modules.netherite);
+    let saved = serde_json::to_value(&state.preferences).unwrap();
+    assert!(saved.get("fullbright").is_none());
+}
+
+#[test]
+fn fullbright_has_a_visual_toggle_and_preserves_category_order() {
+    let panel: Value = serde_json::from_str(&state().panel_json().unwrap()).unwrap();
+    assert!(
+        panel["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|control| control["id"] == "fullbright"
+                && control["value"] == false
+                && control["label"] == "Fullbright")
+    );
+    let sections = panel["sections"].as_array().unwrap();
+    let fullbright = sections
+        .iter()
+        .find(|section| section["toggle"] == "fullbright")
+        .unwrap();
+    assert_eq!(fullbright["category"], "Visual");
+    let mut categories: Vec<&str> = sections
+        .iter()
+        .map(|section| section["category"].as_str().unwrap())
+        .collect();
+    categories.dedup();
+    assert_eq!(categories, ["Combat", "Visual", "Settings"]);
 }

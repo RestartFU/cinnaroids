@@ -23,11 +23,15 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 settings: true,
                 packet_delay: true,
                 block_highlights: true,
+                fullbright: true,
                 ..Default::default()
             },
         )
         .unwrap_or_else(|error| panic!("init settings {settings}: {error:#}"));
         for (id, value) in [
+            ("fullbright", 1.0),
+            ("fullbright", 0.0),
+            ("fullbright", 1.0),
             ("netherite", 1.0),
             ("netherite_range", 128.0),
             ("dark_mode", 1.0),
@@ -45,8 +49,27 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             host.frame_with_controls(false, None, controls)
                 .unwrap_or_else(|error| panic!("event {id}, settings {settings}: {error:#}"));
             assert!(host.is_active());
-            assert!(host.panel().is_some());
+            assert_eq!(host.panel().unwrap().controls.len(), 18);
+            if id == "netherite" || id == "netherite_range" {
+                let spec = host.block_highlights().unwrap();
+                assert_eq!(
+                    spec.identifiers,
+                    ["minecraft:ancient_debris", "minecraft:netherite_block"]
+                );
+                assert_eq!(spec.color, [1.0, 0.12, 0.55, 1.0]);
+                if id == "netherite_range" {
+                    assert_eq!(spec.range, 128.0);
+                }
+                assert!(host.fullbright(), "Finder does not disable Fullbright");
+            }
+            if id == "fullbright" {
+                assert_eq!(host.fullbright(), value >= 0.5);
+            }
+            if id == "stop_all" {
+                assert!(!host.fullbright());
+            }
         }
         assert!(host.block_highlights().is_none());
+        assert!(!host.fullbright());
     }
 }

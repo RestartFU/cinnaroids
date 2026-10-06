@@ -16,7 +16,7 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
 name = "cinnaroids-mod"
-version = "2.5.1"
+version = "2.6.0"
 dependencies = [
  "mod-api",
  "serde",
@@ -116,7 +116,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mod-api"
 version = "0.1.9"
-source = "git+https://github.com/RestartFU/cinnabar?rev=a03220a8f6870d275da901f73c077b3a6f2564f6#a03220a8f6870d275da901f73c077b3a6f2564f6"
+source = "git+https://github.com/RestartFU/cinnabar?rev=5824af6cfe855c61cd4b8dd532e5ceebdfe7fb01#5824af6cfe855c61cd4b8dd532e5ceebdfe7fb01"
 dependencies = [
  "wit-bindgen",
 ]
