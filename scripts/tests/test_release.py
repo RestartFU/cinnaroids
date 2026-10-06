@@ -156,8 +156,13 @@ class ReleaseTests(unittest.TestCase):
                     executable = next(item for item in bundle.getmembers() if item.name.endswith("/cinnaroids"))
                     self.assertEqual(executable.mode & 0o777, 0o755)
             else:
-                with zipfile.ZipFile(archive) as bundle:
+                self.assertEqual(archive.suffix, ".exe")
+                self.assertEqual(archive.read_bytes(), b"test executable")
+                notices = archive.with_name(archive.stem + "-notices.zip")
+                self.assertEqual(notices.with_name(notices.name + ".sha256").read_text().split()[0], hashlib.sha256(notices.read_bytes()).hexdigest())
+                with zipfile.ZipFile(notices) as bundle:
                     files = bundle.namelist()
+                    self.assertFalse(any(path.endswith(".exe") for path in files))
             for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "licenses/example.txt"]:
                 self.assertTrue(any(path.endswith("/" + name) for path in files))
 

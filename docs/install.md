@@ -16,4 +16,4 @@ To install a specific version:
 curl -fsSL https://github.com/RestartFU/cinnaroids/releases/latest/download/install.sh | sh -s -- --version 2.6.2
 ```
 
-Windows: download and extract the `windows-x86_64.zip` archive, then run `Cinnaroids.exe`.
+Windows: download and run `Cinnaroids-X.Y.Z-windows-x86_64.exe`. The module and UI assets are embedded, so the executable runs on its own. License notices are available in the separate `windows-x86_64-notices.zip` download.

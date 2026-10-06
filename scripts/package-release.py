@@ -45,7 +45,15 @@ def package(root: Path, version: str, platform: str, arch: str, target: str) -> 
         shutil.copy2(root / name, staging / name)
     shutil.copytree(root / "licenses", staging / "licenses")
     # The WASM component and UI assets are embedded in the executable.
-    if platform == "linux":
+    if platform == "windows":
+        archive = dist / (staging.name + ".exe")
+        shutil.move(destination, archive)
+        notices = dist / (staging.name + "-notices.zip")
+        with zipfile.ZipFile(notices, "w", zipfile.ZIP_DEFLATED) as output:
+            for path in sorted(staging.rglob("*")):
+                output.write(path, path.relative_to(dist))
+        checksum(notices)
+    elif platform == "linux":
         archive = dist / (staging.name + ".tar.gz")
         with tarfile.open(archive, "w:gz") as output:
             output.add(staging, arcname=staging.name)
@@ -54,10 +62,14 @@ def package(root: Path, version: str, platform: str, arch: str, target: str) -> 
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
             for path in sorted(staging.rglob("*")):
                 output.write(path, path.relative_to(dist))
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    archive.with_name(archive.name + ".sha256").write_text(f"{digest}  {archive.name}\n")
+    checksum(archive)
     shutil.rmtree(staging)
     return archive
+
+
+def checksum(artifact: Path) -> None:
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    artifact.with_name(artifact.name + ".sha256").write_text(f"{digest}  {artifact.name}\n")
 
 
 if __name__ == "__main__":
