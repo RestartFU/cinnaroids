@@ -12,29 +12,66 @@ pub struct Settings {
     pub cinnabar_path: Option<PathBuf>,
 }
 
-/// Always watch the platform's standard installation, including before it exists.
-pub fn installed_client_path() -> Option<PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("LOCALAPPDATA")
-            .filter(|base| !base.is_empty())
-            .map(|base| installed_client_in(Path::new(&base)))
+/// Candidate installations in preference order; process discovery chooses a running client.
+pub fn installed_client_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(path) = std::env::var_os("ZENO_EXECUTABLE").filter(|path| !path.is_empty()) {
+        paths.push(PathBuf::from(path));
+    } else if let Some(data) = data_directory() {
+        paths.push(zeno_client_in(&data));
     }
-    #[cfg(unix)]
-    {
-        if let Some(path) = std::env::var_os("CINNABAR_EXECUTABLE").filter(|path| !path.is_empty())
-        {
-            return Some(PathBuf::from(path));
+    if let Some(path) = installed_client_path() {
+        if !paths.contains(&path) {
+            paths.push(path);
         }
-        #[cfg(target_os = "macos")]
-        return Some(PathBuf::from(
-            "/Applications/Cinnabar.app/Contents/MacOS/bedrock-client",
-        ));
-        #[cfg(target_os = "linux")]
-        return data_directory().map(|data| {
-            linux_installed_client_in(&data, std::env::var_os("HOME").as_deref().map(Path::new))
-        });
     }
+    paths
+}
+
+/// Watch Cinnabar's platform installation, including before it exists.
+pub fn installed_client_path() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("CINNABAR_EXECUTABLE").filter(|path| !path.is_empty()) {
+        return Some(PathBuf::from(path));
+    }
+    #[cfg(windows)]
+    return data_directory().map(|base| installed_client_in(&base));
+    #[cfg(target_os = "macos")]
+    return Some(PathBuf::from(
+        "/Applications/Cinnabar.app/Contents/MacOS/bedrock-client",
+    ));
+    #[cfg(target_os = "linux")]
+    return data_directory().map(|data| {
+        linux_installed_client_in(&data, std::env::var_os("HOME").as_deref().map(Path::new))
+    });
+}
+
+/// Zeno stores its bundled runtime separately from the Cinnabar installation.
+fn zeno_client_in(data: &Path) -> PathBuf {
+    let root = data.join("ZenoClient/runtime");
+    #[cfg(target_os = "linux")]
+    return root.join("bin/bedrock-client");
+    #[cfg(windows)]
+    return root.join("bedrock-client.exe");
+    #[cfg(target_os = "macos")]
+    return root.join("ZenoRuntime.app/Contents/MacOS/bedrock-client");
+}
+
+/// Route a request to the selected runtime's own user config root.
+pub fn registration_path_for(executable: &Path) -> Option<PathBuf> {
+    let is_zeno = std::env::var_os("ZENO_EXECUTABLE")
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+        .as_deref()
+        == Some(executable)
+        || data_directory().is_some_and(|data| zeno_client_in(&data) == executable);
+    if is_zeno {
+        let root = std::env::var_os("ZENO_USER_ROOT")
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| data_directory().map(|data| data.join("ZenoClient/game")))?;
+        return Some(root.join("config/local-mod.json"));
+    }
+    registration_path()
 }
 
 #[cfg(target_os = "linux")]
@@ -180,6 +217,40 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn zeno_discovery_and_registration_stay_in_zenos_private_storage() {
+        let data = data_directory().unwrap();
+        let executable = zeno_client_in(&data);
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            executable,
+            data.join("ZenoClient/runtime/bin/bedrock-client")
+        );
+        #[cfg(windows)]
+        assert_eq!(
+            executable,
+            data.join("ZenoClient/runtime/bedrock-client.exe")
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            executable,
+            data.join("ZenoClient/runtime/ZenoRuntime.app/Contents/MacOS/bedrock-client")
+        );
+        if std::env::var_os("ZENO_USER_ROOT").is_none() {
+            assert_eq!(
+                registration_path_for(&executable),
+                Some(data.join("ZenoClient/game/config/local-mod.json"))
+            );
+        }
+        if let Some(cinnabar) = installed_client_path() {
+            assert_eq!(registration_path_for(&cinnabar), registration_path());
+            assert_ne!(
+                registration_path_for(&cinnabar),
+                registration_path_for(&executable)
+            );
+        }
+    }
 
     #[cfg(target_os = "linux")]
     #[test]

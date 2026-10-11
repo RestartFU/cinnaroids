@@ -47,7 +47,7 @@ fn legacy_preferences_are_tolerated_and_bounds_are_restored() {
     assert_eq!(prefs.aim_strength, 100);
     assert_eq!(prefs.reach_blocks, mod_api::MAX_ENTITY_REACH_BLOCKS);
     assert!(!prefs.dark_mode);
-    for key in ["F10", "ShiftRight"] {
+    for key in ["F10"] {
         let prefs = Preferences::from_json(&format!(r#"{{"clicker_key":"{key}"}}"#));
         assert_eq!(prefs.clicker_key, DEFAULT_CLICKER_KEY);
     }
@@ -359,7 +359,7 @@ fn every_module_has_a_persisted_independent_binding() {
         saved
     );
     for field in ["aim_key", "reach_key", "jump_reset_key"] {
-        for invalid in ["F10", "ShiftRight", "", "Key:V"] {
+        for invalid in ["F10", "", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
         }
@@ -384,6 +384,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         assert!(!state.modules.clicker && state.modules.aim && !state.modules.reach);
         controls(&mut state, &["KeyG"], &[]);
         match target {
+            KeybindTarget::Menu => unreachable!(),
             KeybindTarget::Clicker => {
                 assert!(state.modules.clicker && state.modules.aim && !state.modules.reach)
             }
@@ -649,4 +650,51 @@ fn jump_reset_preferences_are_bounded_and_binding_is_independent() {
     assert_eq!(Preferences::from_json(&json), state.preferences);
     controls(&mut state, &["KeyG"], &[]);
     assert!(state.modules.jump_reset);
+}
+
+#[test]
+fn menu_binding_capture_updates_panel_reservations_and_saved_preferences() {
+    let mut state = state();
+    controls(&mut state, &[], &[("menu_key", 1.0)]);
+    controls(&mut state, &[DEFAULT_CLICKER_KEY], &[]);
+    assert_eq!(state.capturing_key, Some(KeybindTarget::Menu));
+    controls(&mut state, &["F6"], &[]);
+    assert!(state.capturing_key.is_none());
+    assert_eq!(state.preferences.menu_key, "F6");
+    assert!(state.preferences_dirty && state.reservations_dirty && state.panel_dirty);
+    assert!(!state.reserved_keys().contains(&PANEL_KEY.into()));
+    assert!(state.reserved_keys().contains(&"F6".into()));
+    let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    assert_eq!(panel["toggle_key"], "F6");
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    assert_eq!(Preferences::from_json(&saved), state.preferences);
+}
+
+#[test]
+fn menu_defaults_avoid_zeno_and_restore_invalid_preferences_independently() {
+    assert_ne!(Preferences::default().menu_key, "ShiftRight");
+    for key in ["F10", "", "Key:V"] {
+        let prefs = Preferences::from_json(&format!(r#"{{"menu_key":"{key}","cps":17}}"#));
+        assert_eq!(prefs.menu_key, PANEL_KEY);
+        assert_eq!(prefs.cps, 17);
+    }
+    let prefs = Preferences::from_json(r#"{"menu_key":"F6","clicker_key":"F6"}"#);
+    assert_ne!(prefs.menu_key, prefs.clicker_key);
+    assert_eq!(
+        Preferences::from_json(r#"{"menu_key":"ShiftRight"}"#).menu_key,
+        "ShiftRight"
+    );
+}
+
+#[test]
+fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
+    let prefs = Preferences::from_json(r#"{"clicker_key":"F7","aim_key":"F6"}"#);
+    assert_eq!(prefs.clicker_key, "F7");
+    assert_eq!(prefs.aim_key, "F6");
+    assert_ne!(prefs.menu_key, prefs.clicker_key);
+    assert_ne!(prefs.menu_key, prefs.aim_key);
+    assert_eq!(
+        Preferences::from_json(&serde_json::to_string(&prefs).unwrap()),
+        prefs
+    );
 }

@@ -1,10 +1,10 @@
 # Cinnaroids
 
-Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar, controlled in-game with **Right Shift**.
+Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar and Zeno Client, controlled in-game with **F7**.
 
 ![Cinnaroids](assets/screenshot.png)
 
-Open the **Cinnaroids launcher** before or while your installed Cinnabar is running. It attaches automatically to the standard installation; press **Right Shift** to manage modules. **F10** stops all modules. Cinnaroids never starts the game.
+Open the **Cinnaroids launcher** before or while your installed Cinnabar or Zeno Client is running. It attaches automatically to the standard installation; press **F7** to manage modules. **F10** stops all modules. Cinnaroids never starts the game.
 
 Combat keybinds: **F8** Clicker, **R** Aim assist, **V** Reach. **B** toggles Auto Jump Reset in the Movement tab.
 
@@ -20,8 +20,12 @@ Installs without sudo to `~/.local/bin/cinnaroids` on Linux or `~/Applications/C
 
 Release builds are available for Linux and Windows x86_64, and macOS Intel and Apple Silicon. Linux ships a `.tar.gz`, Windows a standalone `.exe` with license notices in a separate `-notices.zip`, and macOS a `.zip` containing `Cinnaroids.app`. Each download includes a SHA-256 checksum. The Windows executable embeds the module and UI assets and runs directly. Linux requires Vulkan drivers, Fontconfig, Wayland or X11, and xkbcommon. macOS bundles use ad-hoc signing and are not notarized.
 
-On Linux, the launcher watches `$XDG_DATA_HOME/cinnabar/app/bin/bedrock-client` (default `~/.local/share/cinnabar/app/bin/bedrock-client`) and registers modules under `$XDG_CONFIG_HOME/cinnabar` (default `~/.config/cinnabar`). Older installations at `~/.local/bin/bedrock-client` are also supported. On macOS it watches `/Applications/Cinnabar.app/Contents/MacOS/bedrock-client`. Set `CINNABAR_EXECUTABLE` to the absolute path of your installed Cinnabar executable if it lives elsewhere. Attachment requires a Cinnabar build that supports the local module registration protocol; a client without it is detected and reported as incompatible.
+On Linux, the launcher watches `$XDG_DATA_HOME/cinnabar/app/bin/bedrock-client` (default `~/.local/share/cinnabar/app/bin/bedrock-client`) and registers modules under `$XDG_CONFIG_HOME/cinnabar` (default `~/.config/cinnabar`). Older installations at `~/.local/bin/bedrock-client` are also supported. On macOS it watches `/Applications/Cinnabar.app/Contents/MacOS/bedrock-client`. Set `CINNABAR_EXECUTABLE` to the absolute path of your installed Cinnabar executable if it lives elsewhere. Attachment requires a Cinnabar build that supports independent local module registration; a client without it is detected and reported as incompatible.
 
 To publish, open **Actions → Release → Run workflow** and choose **patch** (default), **minor**, or **major**. The workflow uses the default branch, updates launcher and module manifests, lockfiles and Windows resources, commits and tags `vX.Y.Z`, builds the embedded WASM component and all four native executables, then publishes a GitHub release with `install.sh`. A pushed `vX.Y.Z` tag also releases when it matches the source version. Re-run failed jobs to retry; a new manual run also recovers an unpublished tag at the branch's HEAD without bumping twice. The repository token needs permission to push the release commit and tag to the default branch.
 
 Release automation checks: `python3 -m unittest discover -s scripts/tests -v`.
+
+Change **Settings → General → Menu key** by clicking the keycap and pressing a key. The binding saves across restarts. F7 is the default so Zeno can keep Right Shift. Choose a key unused by the other client’s modules. F10 remains the emergency stop.
+
+Zeno’s runtime is detected under the per-user `ZenoClient/runtime` directory, and registration uses `ZenoClient/game/config/local-mod.json`. `ZENO_EXECUTABLE` overrides the runtime path; `ZENO_USER_ROOT` overrides its game user root. Cinnabar continues to use its own config directory. If both clients run, Zeno takes priority. Companion attachment requires a runtime with the generic multi-module registration API; update Zeno’s bundled runtime as well as Cinnabar.

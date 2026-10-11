@@ -1,18 +1,18 @@
 # Cinnaroids
 
-Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically attaches only to `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe`. The status changes to **Attached** after the running game confirms loading. It uses that client's existing resources and settings.
+Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically attaches to Cinnabar or Zeno Client’s private runtime. The status changes to **Attached** after the running game confirms loading. It uses that client's existing resources and settings.
 
-Attachment is automatic; there are no connection buttons or custom client paths. Cinnaroids waits for Cinnabar to open and handles game restarts and installed-client updates. It never starts the game. Older clients need one update with live local-module support and a restart.
+Attachment is automatic; the launcher prefers a running client, with Zeno first if both are running. Cinnaroids waits for Cinnabar to open and handles game restarts and installed-client updates. It never starts the game. Older clients need one update with live local-module support and a restart.
 
 If the launcher reports **No module acknowledgment**, restart Cinnabar once to load the updated executable. The launcher detects installed-client updates automatically and retries attachment.
 
 Run **Cinnaroids.exe --background** to register and monitor attachment without showing or focusing a launcher window. Open Cinnaroids normally to change its appearance.
 
-Press **Right Shift** in Cinnabar to open or close the module interface. Manage Combat and Visual modules, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it disables the registration and unloads the modules from Cinnabar. They stay unloaded after game restarts until Cinnaroids is opened again. Saved module settings are preserved.
+Press **F7** in either client to open or close the module interface. Manage Combat and Visual modules, key bindings, and module settings there. **F10** stops all modules. The launcher has no input hooks or module switches; closing it disables the registration and unloads the modules from Cinnabar. They stay unloaded after game restarts until Cinnaroids is opened again. Saved module settings are preserved.
 
 Click the number beside **CPS**, **Strength**, or **Distance** to type a value. Press **Enter** to apply it or **Escape** to cancel. Values stay within the slider's range and precision. Click **Mode** to open its options and choose **Continuous** or **While clicking**; Escape or a click outside dismisses the list.
 
-Press a module's **Keybind** keycap and then a keyboard key to change its binding. The defaults are F8 for Clicker, R for Aim assist, and V for Reach. Each binding is independent; keys already used by another module cannot be reassigned. Right Shift and F10 remain reserved. Escape is assignable during capture and closes the panel otherwise. Closing the panel or changing focus cancels capture.
+Press a module's **Keybind** keycap and then a keyboard key to change its binding. The defaults are F8 for Clicker, R for Aim assist, and V for Reach. Each binding is independent; keys already used by another module cannot be reassigned. The configured menu key and F10 remain reserved. Escape is assignable during capture and closes the panel otherwise. Closing the panel or changing focus cancels capture.
 
 The launcher starts in neutral dark mode and also supports light mode. Drag its header to move it. Regular top-right controls minimize, maximize or restore, and close it.
 
@@ -34,3 +34,5 @@ The binary is `target/release/cinnaroids.exe`; distribute it as **Cinnaroids.exe
 The launcher uses Windows' native outer outline with GPUI's existing resize and maximize behavior. The frame helper removes the redundant top border. Windows transparency and graphics support determine the backdrop effect.
 
 The application source and original assets use the MIT license in LICENSE.txt. Dependency notices are in THIRD_PARTY_NOTICES.txt. This independent project is separate from the Cinnabar client.
+
+Change **Settings → General → Menu key** by clicking the keycap and pressing a key. The binding saves across restarts. F7 is the default so Zeno can keep Right Shift. Choose a key unused by the other client’s modules. F10 remains the emergency stop.

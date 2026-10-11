@@ -12,7 +12,7 @@ use std::{
 };
 
 const COMPONENT: &[u8] = include_bytes!("../assets/cinnaroids.component.wasm");
-pub const UNSUPPORTED_CLIENT: &str = "This Cinnabar build does not support Cinnaroids modules. A module-enabled Cinnabar build is required.";
+pub const UNSUPPORTED_CLIENT: &str = "This client build does not support companion modules. Update Cinnabar or Zeno Client to a build with independent module registration.";
 const GRANTS: [&str; 10] = [
     "CINNABAR_MOD_PLAYERS",
     "CINNABAR_MOD_CAMERA",
@@ -26,6 +26,7 @@ const GRANTS: [&str; 10] = [
     "CINNABAR_MOD_MOVEMENT",
 ];
 const LIVE_ATTACHMENT_MARKER: &str = "local-mod.status.json";
+const COMPANION_CAPABILITY_MARKER: &str = "independent_registration";
 const REGISTRATION_BYTES: usize = 16 * 1024;
 static WRITE_ID: AtomicU64 = AtomicU64::new(0);
 static EXITING: AtomicBool = AtomicBool::new(false);
@@ -113,15 +114,17 @@ impl AttachRequest {
             return self.waiting_status();
         }
         if !crate::client_process::client_is_running(status.client_pid, &self.executable) {
-            return Ok(Some("Waiting for Cinnabar".into()));
+            return Ok(Some("Waiting for client".into()));
         }
         match status.state.as_str() {
-            "loaded" => Ok(Some("Attached — Right Shift opens modules".into())),
+            "loaded" => Ok(Some(
+                "Attached — configure Menu key in module Settings (default F7)".into(),
+            )),
             "disabled" => Ok(Some("Modules disabled".into())),
             "error" => Err(status
                 .message
                 .filter(|message| message.len() <= 1024)
-                .unwrap_or_else(|| "Cinnabar could not load the module.".into())),
+                .unwrap_or_else(|| "Client could not load the module.".into())),
             _ => Ok(None),
         }
     }
@@ -132,12 +135,12 @@ impl AttachRequest {
         Ok(Some(
             if crate::client_process::running_client(&self.executable)?.is_some() {
                 if self.created.elapsed() >= Duration::from_secs(30) {
-                    "No module acknowledgment — restart Cinnabar once".into()
+                    "No module acknowledgment — restart the client once".into()
                 } else {
-                    "Waiting for Cinnabar to load modules".into()
+                    "Waiting for client to load modules".into()
                 }
             } else {
-                "Waiting for Cinnabar".into()
+                "Waiting for client".into()
             },
         ))
     }
@@ -160,24 +163,39 @@ impl ModComponent {
     }
 
     pub fn attach(&self, executable: &Path) -> Result<AttachRequest, String> {
-        if crate::settings::installed_client_path().as_deref() != Some(executable) {
-            return Err("Cinnaroids requires the standard installed Cinnabar client.".into());
+        if !crate::settings::installed_client_paths()
+            .iter()
+            .any(|path| path == executable)
+        {
+            return Err(
+                "Cinnaroids requires the installed Cinnabar or Zeno Client runtime.".into(),
+            );
         }
         let _registration_lock = crate::client_process::RegistrationLock::acquire()?;
         if EXITING.load(Ordering::Acquire) {
             return Err("Cinnaroids is closing.".into());
         }
         let mut file =
-            File::open(executable).map_err(|error| format!("Could not read Cinnabar: {error}"))?;
+            File::open(executable).map_err(|error| format!("Could not read client: {error}"))?;
         if !supports_modules(&mut file)
-            .map_err(|error| format!("Could not read Cinnabar: {error}"))?
+            .map_err(|error| format!("Could not read client: {error}"))?
         {
             return Err(UNSUPPORTED_CLIENT.into());
         }
         let client_pid = crate::client_process::running_client(executable)?;
-        let registration_path =
-            crate::settings::registration_path().ok_or("Settings folder unavailable.")?;
+        let registration_path = crate::settings::registration_path_for(executable)
+            .ok_or("Settings folder unavailable.")?;
         let status_path = registration_path.with_file_name(LIVE_ATTACHMENT_MARKER);
+        {
+            let owned = OWNED_REGISTRATION
+                .lock()
+                .map_err(|_| "Registration ownership unavailable")?;
+            if let Some((previous, component, id)) = owned.as_ref()
+                && *previous != registration_path
+            {
+                disable_owned(previous, component, id)?;
+            }
+        }
         let existing = read_bounded_file(&registration_path, "module registration")?;
         let acknowledged = read_bounded_file(&status_path, "module status")?
             .filter(|bytes| bytes.len() <= REGISTRATION_BYTES)
@@ -359,7 +377,10 @@ fn write_atomic(path: &Path, bytes: &[u8], only_if_absent: bool) -> std::io::Res
 
 /// Refuse older and default-feature clients before creating an unsupported session.
 fn supports_modules(reader: &mut impl Read) -> std::io::Result<bool> {
-    let signatures: Vec<_> = GRANTS.into_iter().chain([LIVE_ATTACHMENT_MARKER]).collect();
+    let signatures: Vec<_> = GRANTS
+        .into_iter()
+        .chain([LIVE_ATTACHMENT_MARKER, COMPANION_CAPABILITY_MARKER])
+        .collect();
     let mut found = vec![false; signatures.len()];
     let mut buffer = vec![0u8; 64 * 1024 + 32];
     let mut retained = 0;
@@ -451,7 +472,7 @@ mod tests {
         }
         let bytes = GRANTS
             .into_iter()
-            .chain([LIVE_ATTACHMENT_MARKER])
+            .chain([LIVE_ATTACHMENT_MARKER, COMPANION_CAPABILITY_MARKER])
             .collect::<Vec<_>>()
             .join("\0")
             .into_bytes();
@@ -606,7 +627,7 @@ mod tests {
         };
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Waiting for Cinnabar")
+            Some("Waiting for client")
         );
         fs::write(
             &request.status_path,
@@ -615,12 +636,12 @@ mod tests {
         .unwrap();
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Waiting for Cinnabar")
+            Some("Waiting for client")
         );
         fs::write(&request.status_path, b"invalid").unwrap();
         assert_eq!(
             request.status().unwrap().as_deref(),
-            Some("Waiting for Cinnabar")
+            Some("Waiting for client")
         );
         fs::remove_dir_all(directory).unwrap();
     }
