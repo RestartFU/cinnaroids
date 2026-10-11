@@ -2,9 +2,9 @@
 
 Open **Cinnaroids.exe** before or while Cinnabar is running. It automatically registers the embedded module for the standard installation at `%LOCALAPPDATA%/Programs/Cinnabar/bedrock-client.exe` and shows **Attached** after the game acknowledges loading. It never starts the game or selects another installation.
 
-The host must include live local-module loading, compact personal-panel controls, the [movement capability](https://github.com/bedrock-mc/cinnabar/pull/259), and the packet-timing capability ([host update](https://github.com/bedrock-mc/cinnabar/pull/171)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
+The host must include [independent module registration](https://github.com/bedrock-mc/cinnabar/pull/708), compact personal-panel controls, the [movement capability](https://github.com/bedrock-mc/cinnabar/pull/259), and the packet-timing capability ([host update](https://github.com/bedrock-mc/cinnabar/pull/171)). Older installations need one update and restart; subsequent attachments work while the game is running. The launcher does not change a running process's memory or load a DLL into it.
 
-Press **Right Shift** to open or close the module interface. It manages:
+Press **F7** to open or close the module interface. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key is configurable; F8 is the default.
 - **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its default toggle key is R.
@@ -15,11 +15,11 @@ Press **Right Shift** to open or close the module interface. It manages:
 - **Auto Jump Reset:** in the Movement tab, jump once on the first eligible ground contact after new server knockback. Default toggle key is B. The hit window is 1–10 simulation ticks (default 4); it starts off.
 - **Appearance:** neutral dark mode by default, with a light option.
 
-Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and **Right Shift** retain their reserved actions.
+Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and the configured menu key retain their reserved actions.
 
-To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. **Right Shift** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
+To change a module's binding, press its **Keybind** keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. The configured **Menu key** and **F10** are reserved for the panel and emergency stop. **Escape** can be assigned during key capture; otherwise it closes the panel. Closing the panel or leaving the game window cancels key capture.
 
-**F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher disables its registration and unloads the modules while leaving Cinnabar running. They stay unloaded after a game restart until the launcher is opened again; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
+**F10** stops all modules. Enabled switches are runtime state and start off for a new session. Closing the launcher disables its registration and unloads the modules while leaving the client running. They stay unloaded after a game restart until the launcher is opened again; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
 
 Aim assist reads player coordinates, selects a target within six blocks and a 30-degree cone, and smoothly steers toward the chest. Strength zero produces no motion. The API exposes positions without visibility or team information, so the module cannot filter occluded players or teammates. Menus, loss of cursor capture, and server-controlled cameras pause assistance.
 
@@ -46,3 +46,5 @@ A source checkout needs Cinnabar's extended personal-mod API and live registrati
 Rebuild the guest with `powershell -ExecutionPolicy Bypass -File scripts/build-cinnaroids.ps1`, then build the launcher with `cargo build --release --locked`. Guest tests use `cargo test --manifest-path mods/cinnaroids/Cargo.toml --locked`.
 
 To check the actual WASM execution budget against a matching Cinnabar source checkout, run `scripts/verify-host-budget.ps1 -HostRepo PATH`. It tests startup with saved preferences and subsequent panel changes without starting a game. Builds under Codex pass its shared Cargo wrapper through `-CargoWrapper`.
+
+Change **Settings → General → Menu key** by clicking the keycap and pressing a key. The binding saves across restarts. F7 is the default so Zeno can keep Right Shift. Choose a key unused by the other client’s modules. F10 remains the emergency stop.

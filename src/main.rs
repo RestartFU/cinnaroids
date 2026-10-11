@@ -90,20 +90,27 @@ impl ClientWatch {
 }
 
 fn observe_installed_client() -> Result<Option<ClientWatch>, String> {
-    let Some(executable) = settings::installed_client_path() else {
-        return Ok(None);
-    };
-    let revision = executable_revision(&executable);
-    let client_pid = if revision.is_some() {
-        client_process::running_client(&executable)?
-    } else {
-        None
-    };
-    Ok(Some(ClientWatch {
-        executable,
-        revision,
-        client_pid,
-    }))
+    let mut installed = None;
+    for executable in settings::installed_client_paths() {
+        let revision = executable_revision(&executable);
+        let client_pid = if revision.is_some() {
+            client_process::running_client(&executable)?
+        } else {
+            None
+        };
+        let watch = ClientWatch {
+            executable,
+            revision,
+            client_pid,
+        };
+        if watch.client_pid.is_some() {
+            return Ok(Some(watch));
+        }
+        if installed.is_none() && watch.revision.is_some() {
+            installed = Some(watch);
+        }
+    }
+    Ok(installed)
 }
 
 fn executable_revision(path: &Path) -> Option<ExecutableRevision> {
@@ -239,17 +246,17 @@ impl Launcher {
                     Ok(request) => {
                         s.retry.registered();
                         s.status = if request.client_pid.is_some() {
-                            "Waiting for Cinnabar to load modules".into()
+                            "Waiting for client to load modules".into()
                         } else {
                             s.error = None;
-                            "Waiting for Cinnabar".into()
+                            "Waiting for client".into()
                         };
                         s.attachment = Some(request);
                     }
                     Err(error) => {
                         if error == component::UNSUPPORTED_CLIENT {
                             s.retry.reset();
-                            s.status = "Cinnabar detected — modules unavailable".into();
+                            s.status = "Client detected — modules unavailable".into();
                         } else {
                             s.retry.failed(Instant::now());
                             s.status = "Attachment unavailable".into();
@@ -401,10 +408,10 @@ impl Render for Launcher {
                                 div()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_size(px(15.0))
-                                    .child("Cinnabar"),
+                                    .child("Cinnabar / Zeno Client"),
                             )
                             .child(div().mt(px(8.0)).text_color(rgb(self.muted())).child(
-                                "Attaches automatically. Right Shift opens modules in-game.",
+                                "Attaches automatically. Default menu key: F7. Change Menu key under Settings.",
                             )),
                     )
                     .child(
@@ -545,7 +552,7 @@ fn main() {
                                                     if s.error.as_ref() != Some(&error) {
                                                         s.error = Some(error);
                                                         s.status =
-                                                            "Could not inspect Cinnabar".into();
+                                                            "Could not inspect client".into();
                                                         cx.notify();
                                                     }
                                                     return;
@@ -573,9 +580,9 @@ fn main() {
                                             if !installed {
                                                 s.retry.reset();
                                                 s.attachment = None;
-                                                if s.status != "Waiting for installed Cinnabar" {
+                                                if s.status != "Waiting for installed Cinnabar or Zeno Client" {
                                                     s.status =
-                                                        "Waiting for installed Cinnabar".into();
+                                                        "Waiting for installed Cinnabar or Zeno Client".into();
                                                     cx.notify();
                                                 }
                                                 return;

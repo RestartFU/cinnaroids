@@ -1,4 +1,4 @@
-use mod_host::{ControlEvent, ModGrants, ModHost, empty_controls};
+use mod_host::{empty_controls, ControlEvent, ModGrants, ModHost};
 
 #[test]
 fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
@@ -6,6 +6,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
     for settings in [
         "{}",
+        r#"{"clicker_key":"F7","aim_key":"F6","menu_key":"F7"}"#,
         r#"{"cps":20,"toggle_key":"VK:119","aim_strength":100,"aim_mode":"continuous","dark_mode":true}"#,
         r#"{"cps":30,"clicker_key":"NumpadSubtract","aim_key":"ArrowRight","reach_key":"NumpadDecimal","aim_strength":100,"aim_mode":"continuous","reach_blocks":6,"dark_mode":false,"fake_lag_ms":1000,"show_real_position":true,"netherite_range":128}"#,
     ] {
@@ -52,13 +53,12 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             host.frame_with_controls(false, None, controls)
                 .unwrap_or_else(|error| panic!("event {id}, settings {settings}: {error:#}"));
             assert!(host.is_active());
-            assert!(
-                host.panel()
-                    .unwrap()
-                    .controls
-                    .iter()
-                    .any(|control| control.id() == "jump_reset")
-            );
+            assert!(host
+                .panel()
+                .unwrap()
+                .controls
+                .iter()
+                .any(|control| control.id() == "jump_reset"));
             if id == "netherite" || id == "netherite_range" {
                 let spec = host.block_highlights().unwrap();
                 assert_eq!(
@@ -150,6 +150,7 @@ fn jump_reset_uses_the_real_component_movement_imports_and_stops_at_f10() {
             false,
             Some(frame()),
             Vec::new(),
+            None,
             Some(movement(tick, sequence, grounded)),
             controls,
         )
@@ -165,10 +166,55 @@ fn jump_reset_uses_the_real_component_movement_imports_and_stops_at_f10() {
         false,
         Some(frame()),
         Vec::new(),
+        None,
         Some(movement(13, 2, true)),
         controls,
     )
     .unwrap();
     assert!(!host.take_jump_pulse());
     assert!(host.take_jump_cancel());
+}
+
+#[test]
+fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
+    let component =
+        std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("menu.wasm");
+    let mut host = ModHost::load_snapshot_with_grants(
+        &path,
+        &component,
+        ModGrants {
+            controls: true,
+            settings: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut controls = empty_controls();
+    controls.focused = true;
+    host.frame_with_controls(false, None, controls).unwrap();
+    assert_eq!(host.panel().unwrap().toggle_key, "F7");
+    let mut controls = empty_controls();
+    controls.focused = true;
+    controls.panel_open = true;
+    controls.events.push(ControlEvent {
+        id: "menu_key".into(),
+        value: 1.0,
+    });
+    host.frame_with_controls(false, None, controls).unwrap();
+    assert!(host.panel().unwrap().capture_key);
+    let mut controls = empty_controls();
+    controls.focused = true;
+    controls.panel_open = true;
+    controls.keys_pressed.push("F6".into());
+    host.frame_with_controls(false, None, controls).unwrap();
+    assert!(host.is_active());
+    assert_eq!(host.panel().unwrap().toggle_key, "F6");
+    assert!(!host.panel().unwrap().capture_key);
+    assert!(host.reserved_keys().contains(&"F6".into()));
+    assert!(!host.reserved_keys().contains(&"F7".into()));
+    let preferences: serde_json::Value =
+        serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+    assert_eq!(preferences["menu_key"], "F6");
 }

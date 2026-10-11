@@ -7,7 +7,7 @@ use crate::aim::Config;
 use crate::jump_reset::{DEFAULT_WINDOW_TICKS, MAX_WINDOW_TICKS, MIN_WINDOW_TICKS};
 
 pub const PRODUCT_NAME: &str = "Cinnaroids";
-pub const PANEL_KEY: &str = "ShiftRight";
+pub const PANEL_KEY: &str = "F7";
 pub const STOP_KEY: &str = "F10";
 const DEFAULT_CLICKER_KEY: &str = "F8";
 const DEFAULT_AIM_KEY: &str = "KeyR";
@@ -29,6 +29,7 @@ pub enum AimMode {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Preferences {
     pub cps: u8,
+    pub menu_key: String,
     pub clicker_key: String,
     pub aim_key: String,
     pub reach_key: String,
@@ -47,6 +48,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             cps: 20,
+            menu_key: PANEL_KEY.into(),
             clicker_key: DEFAULT_CLICKER_KEY.into(),
             aim_key: DEFAULT_AIM_KEY.into(),
             reach_key: DEFAULT_REACH_KEY.into(),
@@ -108,6 +110,11 @@ impl Preferences {
             preferences.jump_reset_window_ticks =
                 value.clamp(u64::from(MIN_WINDOW_TICKS), u64::from(MAX_WINDOW_TICKS)) as u8;
         }
+        if let Some(key) = values.get("menu_key").and_then(Value::as_str)
+            && valid_binding(key)
+        {
+            preferences.menu_key = key.into();
+        }
         let binding = values
             .get("clicker_key")
             .or_else(|| values.get("toggle_key"))
@@ -154,6 +161,28 @@ impl Preferences {
                 &preferences.reach_key,
             ]);
         }
+        if [
+            &preferences.clicker_key,
+            &preferences.aim_key,
+            &preferences.reach_key,
+            &preferences.jump_reset_key,
+        ]
+        .contains(&&preferences.menu_key)
+        {
+            preferences.menu_key = [PANEL_KEY, "F6", "F5", "F4", "F3"]
+                .into_iter()
+                .find(|key| {
+                    ![
+                        preferences.clicker_key.as_str(),
+                        preferences.aim_key.as_str(),
+                        preferences.reach_key.as_str(),
+                        preferences.jump_reset_key.as_str(),
+                    ]
+                    .contains(key)
+                })
+                .expect("more menu fallbacks than module bindings")
+                .into();
+        }
         preferences
     }
 }
@@ -184,6 +213,7 @@ pub struct Modules {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeybindTarget {
+    Menu,
     Clicker,
     Aim,
     Reach,
@@ -278,6 +308,7 @@ impl State {
 
     fn binding_mut(&mut self, target: KeybindTarget) -> &mut String {
         match target {
+            KeybindTarget::Menu => &mut self.preferences.menu_key,
             KeybindTarget::Clicker => &mut self.preferences.clicker_key,
             KeybindTarget::Aim => &mut self.preferences.aim_key,
             KeybindTarget::Reach => &mut self.preferences.reach_key,
@@ -287,6 +318,7 @@ impl State {
 
     fn binding_conflicts(&self, target: KeybindTarget, key: &str) -> bool {
         [
+            (KeybindTarget::Menu, &self.preferences.menu_key),
             (KeybindTarget::Clicker, &self.preferences.clicker_key),
             (KeybindTarget::Aim, &self.preferences.aim_key),
             (KeybindTarget::Reach, &self.preferences.reach_key),
@@ -307,8 +339,9 @@ impl State {
                 &mut self.preferences.cps,
                 value.round().clamp(f32::from(MIN_CPS), f32::from(MAX_CPS)) as u8,
             ),
-            "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key" => {
+            "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key" => {
                 self.capturing_key = Some(match event.id.as_str() {
+                    "menu_key" => KeybindTarget::Menu,
                     "aim_key" => KeybindTarget::Aim,
                     "reach_key" => KeybindTarget::Reach,
                     "jump_reset_key" => KeybindTarget::JumpReset,
@@ -440,7 +473,7 @@ impl State {
     }
 
     pub fn reserved_keys(&self) -> Vec<String> {
-        let mut keys = vec![PANEL_KEY.into(), STOP_KEY.into()];
+        let mut keys = vec![self.preferences.menu_key.clone(), STOP_KEY.into()];
         for key in [
             &self.preferences.clicker_key,
             &self.preferences.aim_key,
@@ -456,6 +489,12 @@ impl State {
 
     pub fn panel_json(&self) -> Result<String, serde_json::Error> {
         let controls = vec![
+            Control::Keybind {
+                id: "menu_key",
+                label: "Menu key",
+                key: &self.preferences.menu_key,
+                capturing: self.capturing_key == Some(KeybindTarget::Menu),
+            },
             Control::Toggle {
                 id: "clicker",
                 label: "Clicker",
@@ -586,7 +625,7 @@ impl State {
         ];
         let panel = Panel {
             title: PRODUCT_NAME,
-            toggle_key: PANEL_KEY,
+            toggle_key: &self.preferences.menu_key,
             dark: self.preferences.dark_mode,
             capture_key: self.capturing_key.is_some(),
             style: "compact",
@@ -654,7 +693,7 @@ impl State {
                     icon: "settings",
                     category: "Settings",
                     toggle: None,
-                    controls: &["dark_mode", "stop_all"],
+                    controls: &["menu_key", "dark_mode", "stop_all"],
                 },
             ],
         };
@@ -719,7 +758,6 @@ fn valid_binding(key: &str) -> bool {
     !key.is_empty()
         && key.len() <= mod_api::MAX_CONTROL_KEY_BYTES
         && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        && key != PANEL_KEY
         && key != STOP_KEY
 }
 
@@ -762,7 +800,7 @@ fn legacy_key(key: u64) -> Option<String> {
         0x2D => "Insert".into(),
         0x2E => "Delete".into(),
         0x60..=0x69 => format!("Numpad{}", key - 0x60),
-        0xA1 => PANEL_KEY.into(),
+        0xA1 => "ShiftRight".into(),
         0xA3 => "ControlRight".into(),
         0xA5 => "AltRight".into(),
         _ => return None,

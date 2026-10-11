@@ -2,7 +2,7 @@
 name = "cinnaroids-pack"
 version = "2.0.0"
 edition = "2024"
-rust-version = "1.93.1"
+rust-version = "1.99.0"
 license = "MIT"
 publish = false
 
