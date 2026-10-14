@@ -15,9 +15,9 @@ const DEFAULT_REACH_KEY: &str = "KeyV";
 const DEFAULT_JUMP_RESET_KEY: &str = "KeyB";
 /// Pressed while capturing to remove a module binding instead of assigning one.
 const CLEAR_KEY: &str = "Escape";
-/// Host pointer names delivered through control frames; never module toggle keys.
+/// Host pointer names delivered through control frames; excluded from panel-open toggles.
 const POINTER_KEYS: [&str; 3] = ["MouseLeft", "MouseRight", "MouseMiddle"];
-/// Panel text for a removed binding, since empty keys cannot be reserved.
+/// Panel text for a removed binding.
 const CLEARED_KEY_LABEL: &str = "None";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
@@ -296,23 +296,14 @@ impl State {
                 if key == CLEAR_KEY {
                     if target != KeybindTarget::Menu {
                         *self.binding_mut(target) = String::new();
-                        self.preferences_dirty = true;
-                        self.reservations_dirty = true;
-                        if target == KeybindTarget::Clicker {
-                            self.clicker.reset();
-                        }
+                        self.end_capture(target);
+                    } else {
+                        self.capturing_key = None;
+                        self.panel_dirty = true;
                     }
-                    self.capturing_key = None;
-                    self.panel_dirty = true;
                 } else if !self.binding_conflicts(target, key) {
                     *self.binding_mut(target) = key.clone();
-                    self.capturing_key = None;
-                    self.panel_dirty = true;
-                    self.preferences_dirty = true;
-                    self.reservations_dirty = true;
-                    if target == KeybindTarget::Clicker {
-                        self.clicker.reset();
-                    }
+                    self.end_capture(target);
                 }
             }
             return;
@@ -346,6 +337,17 @@ impl State {
             KeybindTarget::Aim => &mut self.preferences.aim_key,
             KeybindTarget::Reach => &mut self.preferences.reach_key,
             KeybindTarget::JumpReset => &mut self.preferences.jump_reset_key,
+        }
+    }
+
+    /// Ends a capture after applying or clearing a binding, republishing and saving the result.
+    fn end_capture(&mut self, target: KeybindTarget) {
+        self.capturing_key = None;
+        self.panel_dirty = true;
+        self.preferences_dirty = true;
+        self.reservations_dirty = true;
+        if target == KeybindTarget::Clicker {
+            self.clicker.reset();
         }
     }
 
@@ -527,7 +529,7 @@ impl State {
             Control::Keybind {
                 id: "menu_key",
                 label: "Menu key",
-                key: key_label(&self.preferences.menu_key),
+                key: &self.preferences.menu_key,
                 capturing: self.capturing_key == Some(KeybindTarget::Menu),
             },
             Control::Toggle {
