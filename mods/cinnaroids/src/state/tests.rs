@@ -111,7 +111,61 @@ fn key_capture_changes_the_binding_without_toggling_a_module() {
 }
 
 #[test]
-fn escape_can_be_captured_without_disabling_or_toggling_modules() {
+fn starting_capture_ignores_the_pointer_edge_that_opened_it() {
+    let mut state = state();
+    // The keycap click for a mouse-bound module arrives with its pointer edge.
+    state.preferences.clicker_key = "MouseLeft".into();
+    controls(&mut state, &["MouseLeft"], &[("clicker_key", 1.0)]);
+    assert_eq!(state.capturing_key, Some(KeybindTarget::Clicker));
+    assert_eq!(state.preferences.clicker_key, "MouseLeft");
+    assert!(!state.modules.clicker);
+    // A later press rebinds normally.
+    controls(&mut state, &["KeyG"], &[]);
+    assert_eq!(state.preferences.clicker_key, "KeyG");
+    assert!(state.capturing_key.is_none());
+    // Clicking the keycap of a keyboard binding never steals the click.
+    controls(&mut state, &["MouseLeft"], &[("aim_key", 1.0)]);
+    assert_eq!(state.capturing_key, Some(KeybindTarget::Aim));
+    assert_eq!(state.preferences.aim_key, DEFAULT_AIM_KEY);
+    controls(&mut state, &["MouseLeft"], &[]);
+    assert_eq!(state.preferences.aim_key, "MouseLeft");
+}
+
+#[test]
+fn pointer_edges_never_toggle_modules_while_the_panel_is_open() {
+    let mut state = state();
+    state.preferences.clicker_key = "MouseLeft".into();
+    state.preferences.aim_key = "MouseRight".into();
+    // A panel click emits the widget event and the pointer press edge together.
+    controls(&mut state, &["MouseLeft"], &[("clicker", 1.0)]);
+    assert!(state.modules.clicker);
+    controls(&mut state, &["MouseRight"], &[]);
+    assert!(state.modules.clicker && !state.modules.aim);
+    // Gameplay presses keep toggling while the panel is closed.
+    state.controls(Controls {
+        focused: true,
+        panel_open: false,
+        keys: &["MouseRight".into()],
+        events: &[],
+    });
+    assert!(state.modules.aim);
+}
+
+#[test]
+fn escape_cancels_menu_capture_without_clearing_the_panel_key() {
+    let mut state = state();
+    state.preferences_dirty = false;
+    state.reservations_dirty = false;
+    controls(&mut state, &[], &[("menu_key", 1.0)]);
+    controls(&mut state, &["Escape"], &[]);
+    assert!(state.capturing_key.is_none());
+    assert_eq!(state.preferences.menu_key, PANEL_KEY);
+    assert!(!state.preferences_dirty && !state.reservations_dirty);
+    assert!(state.panel_dirty);
+}
+
+#[test]
+fn escape_clears_a_module_binding_without_disabling_or_toggling_modules() {
     let mut state = state();
     state.modules.aim = true;
     state.modules.reach = true;
@@ -121,12 +175,26 @@ fn escape_can_be_captured_without_disabling_or_toggling_modules() {
     let capturing: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(capturing["capture_key"], true);
     controls(&mut state, &["Escape"], &[]);
-    assert_eq!(state.preferences.clicker_key, "Escape");
+    assert_eq!(state.preferences.clicker_key, "");
     assert!(state.capturing_key.is_none() && !state.modules.clicker);
     assert!(state.modules.aim && state.modules.reach);
-    assert!(state.reservations_dirty && state.preferences_dirty);
+    assert!(state.reservations_dirty && state.preferences_dirty && state.panel_dirty);
     let captured: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(captured["capture_key"], false);
+    let keycap = captured["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|control| control["id"] == "clicker_key")
+        .unwrap();
+    assert_eq!(keycap["key"], CLEARED_KEY_LABEL);
+    controls(&mut state, &["Escape"], &[]);
+    assert!(!state.modules.clicker && state.modules.aim && state.modules.reach);
+    controls(&mut state, &[], &[("clicker_key", 1.0)]);
+    controls(&mut state, &["KeyG"], &[]);
+    assert_eq!(state.preferences.clicker_key, "KeyG");
+    assert!(state.reserved_keys().contains(&"KeyG".into()));
+    assert!(!state.reserved_keys().iter().any(String::is_empty));
 }
 
 #[test]
@@ -359,11 +427,27 @@ fn every_module_has_a_persisted_independent_binding() {
         saved
     );
     for field in ["aim_key", "reach_key", "jump_reset_key"] {
-        for invalid in ["F10", "", "Key:V"] {
+        for invalid in ["F10", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
         }
     }
+    let cleared = Preferences::from_json(
+        r#"{"clicker_key":"","aim_key":"","reach_key":"","jump_reset_key":""}"#,
+    );
+    assert!(cleared.clicker_key.is_empty());
+    assert!(cleared.aim_key.is_empty() && cleared.reach_key.is_empty());
+    assert!(cleared.jump_reset_key.is_empty());
+    assert_eq!(cleared.menu_key, PANEL_KEY);
+    assert_eq!(
+        Preferences::from_json(&serde_json::to_string(&cleared).unwrap()),
+        cleared
+    );
+    let state = State::new(cleared);
+    assert_eq!(
+        state.reserved_keys(),
+        [PANEL_KEY.to_string(), STOP_KEY.to_string()]
+    );
 }
 
 #[test]

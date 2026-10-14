@@ -13,6 +13,12 @@ const DEFAULT_CLICKER_KEY: &str = "F8";
 const DEFAULT_AIM_KEY: &str = "KeyR";
 const DEFAULT_REACH_KEY: &str = "KeyV";
 const DEFAULT_JUMP_RESET_KEY: &str = "KeyB";
+/// Pressed while capturing to remove a module binding instead of assigning one.
+const CLEAR_KEY: &str = "Escape";
+/// Host pointer names delivered through control frames; excluded from panel-open toggles.
+const POINTER_KEYS: [&str; 3] = ["MouseLeft", "MouseRight", "MouseMiddle"];
+/// Panel text for a removed binding.
+const CLEARED_KEY_LABEL: &str = "None";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
 const MAX_CPS: u8 = 30;
@@ -124,7 +130,9 @@ impl Preferences {
                     .map(str::to_owned)
                     .or_else(|| value.as_u64().and_then(legacy_key))
             });
-        if let Some(binding) = binding.filter(|binding| valid_binding(binding)) {
+        if let Some(binding) =
+            binding.filter(|binding| binding.is_empty() || valid_binding(binding))
+        {
             preferences.clicker_key = binding;
         }
         for (field, target) in [
@@ -133,27 +141,30 @@ impl Preferences {
             ("jump_reset_key", &mut preferences.jump_reset_key),
         ] {
             if let Some(binding) = values.get(field).and_then(Value::as_str)
-                && valid_binding(binding)
+                && (binding.is_empty() || valid_binding(binding))
             {
                 *target = binding.into();
             }
         }
         // Preserve the older clicker binding when adding the other module keys.
-        if preferences.aim_key == preferences.clicker_key {
+        // Cleared bindings hold no key and may safely repeat across modules.
+        if !preferences.aim_key.is_empty() && preferences.aim_key == preferences.clicker_key {
             preferences.aim_key = spare_binding(&[&preferences.clicker_key]);
         }
-        if preferences.reach_key == preferences.clicker_key
-            || preferences.reach_key == preferences.aim_key
+        if !preferences.reach_key.is_empty()
+            && (preferences.reach_key == preferences.clicker_key
+                || preferences.reach_key == preferences.aim_key)
         {
             preferences.reach_key =
                 spare_binding(&[&preferences.clicker_key, &preferences.aim_key]);
         }
-        if [
-            &preferences.clicker_key,
-            &preferences.aim_key,
-            &preferences.reach_key,
-        ]
-        .contains(&&preferences.jump_reset_key)
+        if !preferences.jump_reset_key.is_empty()
+            && [
+                &preferences.clicker_key,
+                &preferences.aim_key,
+                &preferences.reach_key,
+            ]
+            .contains(&&preferences.jump_reset_key)
         {
             preferences.jump_reset_key = spare_binding(&[
                 &preferences.clicker_key,
@@ -249,6 +260,7 @@ impl State {
     }
 
     /// The stop edge has priority over panel events, key capture and toggles.
+    /// Escape ends a capture: it clears a module binding and cancels menu capture.
     pub fn controls(&mut self, controls: Controls<'_>) {
         let cancelled_capture =
             self.capturing_key.is_some() && (!controls.focused || !controls.panel_open);
@@ -268,27 +280,39 @@ impl State {
         if cancelled_capture {
             return;
         }
+        // A capture that begins this frame must not consume the initiating press:
+        // the host delivers the keycap click's pointer edge alongside its event.
+        let mut capture_started = false;
         if controls.panel_open {
             for event in controls.events {
-                self.event(event);
+                capture_started |= self.event(event);
             }
         }
         if let Some(target) = self.capturing_key {
-            if let Some(key) = controls.keys.iter().find(|key| valid_binding(key))
-                && !self.binding_conflicts(target, key)
-            {
-                *self.binding_mut(target) = key.clone();
-                self.capturing_key = None;
-                self.panel_dirty = true;
-                self.preferences_dirty = true;
-                self.reservations_dirty = true;
-                if target == KeybindTarget::Clicker {
-                    self.clicker.reset();
+            if capture_started {
+                return;
+            }
+            if let Some(key) = controls.keys.iter().find(|key| valid_binding(key)) {
+                if key == CLEAR_KEY {
+                    if target != KeybindTarget::Menu {
+                        *self.binding_mut(target) = String::new();
+                        self.end_capture(target);
+                    } else {
+                        self.capturing_key = None;
+                        self.panel_dirty = true;
+                    }
+                } else if !self.binding_conflicts(target, key) {
+                    *self.binding_mut(target) = key.clone();
+                    self.end_capture(target);
                 }
             }
             return;
         }
         for key in controls.keys {
+            // Panel pointer presses drive widgets, not gameplay toggles.
+            if controls.panel_open && POINTER_KEYS.contains(&key.as_str()) {
+                continue;
+            }
             if *key == self.preferences.clicker_key {
                 self.modules.clicker = !self.modules.clicker;
                 self.clicker.reset();
@@ -316,6 +340,17 @@ impl State {
         }
     }
 
+    /// Ends a capture after applying or clearing a binding, republishing and saving the result.
+    fn end_capture(&mut self, target: KeybindTarget) {
+        self.capturing_key = None;
+        self.panel_dirty = true;
+        self.preferences_dirty = true;
+        self.reservations_dirty = true;
+        if target == KeybindTarget::Clicker {
+            self.clicker.reset();
+        }
+    }
+
     fn binding_conflicts(&self, target: KeybindTarget, key: &str) -> bool {
         [
             (KeybindTarget::Menu, &self.preferences.menu_key),
@@ -328,10 +363,11 @@ impl State {
         .any(|(other, binding)| *other != target && key == *binding)
     }
 
-    fn event(&mut self, event: &Event) {
+    /// Returns whether the event began or re-selected a keybind capture.
+    fn event(&mut self, event: &Event) -> bool {
         let value = event.value;
         if !value.is_finite() {
-            return;
+            return false;
         }
         let changed = match event.id.as_str() {
             "clicker" => replace(&mut self.modules.clicker, value >= 0.5),
@@ -348,7 +384,7 @@ impl State {
                     _ => KeybindTarget::Clicker,
                 });
                 self.panel_dirty = true;
-                return;
+                return true;
             }
             "aim" => replace(&mut self.modules.aim, value >= 0.5),
             "aim_strength" => replace(
@@ -393,7 +429,7 @@ impl State {
             "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
             "stop_all" => {
                 self.stop_all();
-                return;
+                return false;
             }
             _ => false,
         };
@@ -421,6 +457,7 @@ impl State {
                 self.preferences_dirty = true;
             }
         }
+        false
     }
 
     pub fn stop_all(&mut self) {
@@ -480,7 +517,7 @@ impl State {
             &self.preferences.reach_key,
             &self.preferences.jump_reset_key,
         ] {
-            if !keys.contains(key) {
+            if !key.is_empty() && !keys.contains(key) {
                 keys.push(key.clone());
             }
         }
@@ -511,7 +548,7 @@ impl State {
             Control::Keybind {
                 id: "clicker_key",
                 label: "Keybind",
-                key: &self.preferences.clicker_key,
+                key: key_label(&self.preferences.clicker_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Clicker),
             },
             Control::Toggle {
@@ -536,7 +573,7 @@ impl State {
             Control::Keybind {
                 id: "aim_key",
                 label: "Keybind",
-                key: &self.preferences.aim_key,
+                key: key_label(&self.preferences.aim_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Aim),
             },
             Control::Toggle {
@@ -555,7 +592,7 @@ impl State {
             Control::Keybind {
                 id: "reach_key",
                 label: "Keybind",
-                key: &self.preferences.reach_key,
+                key: key_label(&self.preferences.reach_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
             },
             Control::Toggle {
@@ -574,7 +611,7 @@ impl State {
             Control::Keybind {
                 id: "jump_reset_key",
                 label: "Keybind",
-                key: &self.preferences.jump_reset_key,
+                key: key_label(&self.preferences.jump_reset_key),
                 capturing: self.capturing_key == Some(KeybindTarget::JumpReset),
             },
             Control::Toggle {
@@ -759,6 +796,14 @@ fn valid_binding(key: &str) -> bool {
         && key.len() <= mod_api::MAX_CONTROL_KEY_BYTES
         && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
         && key != STOP_KEY
+}
+
+fn key_label(key: &str) -> &str {
+    if key.is_empty() {
+        CLEARED_KEY_LABEL
+    } else {
+        key
+    }
 }
 
 fn spare_binding(used: &[&str]) -> String {
