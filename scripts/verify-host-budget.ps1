@@ -6,7 +6,7 @@ New-Item -ItemType Directory -Force -Path $tests | Out-Null
 $fixture = Join-Path $tests 'cinnaroids_callback_budget.rs'
 if (Test-Path -LiteralPath $fixture) { throw "Test fixture already exists: $fixture" }
 $previous = $env:CINNAROIDS_BUDGET_COMPONENT
-$env:CINNAROIDS_BUDGET_COMPONENT = (Resolve-Path (Join-Path $PSScriptRoot '../assets/cinnaroids.component.wasm')).Path
+$env:CINNAROIDS_BUDGET_COMPONENT = (Resolve-Path (Join-Path $PSScriptRoot '../dist/cinnaroids.wasm')).Path
 try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'host-budget.rs') -Destination $fixture
     Push-Location -LiteralPath $repo

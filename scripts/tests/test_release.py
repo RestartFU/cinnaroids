@@ -6,12 +6,10 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 import tomllib
 import unittest
 from unittest.mock import patch
-import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,27 +33,22 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name) / "checkout"
         self.root.mkdir()
-        for name in ["Cargo.toml", "Cargo.lock", "mods/cinnaroids/Cargo.toml", "mods/cinnaroids/Cargo.lock", "mods/cinnaroids/pack/Cargo.toml", "app.rc", "scripts/bump-version.py"]:
+        for name in ["Cargo.toml", "Cargo.lock", "mods/cinnaroids/Cargo.toml", "mods/cinnaroids/pack/Cargo.toml", "scripts/bump-version.py"]:
             destination = self.root / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, destination)
         # Keep a fixed fixture version as the repository's release version advances.
-        source_version = tomllib.loads((self.root / "Cargo.toml").read_text())["package"]["version"]
-        for folder, name in [(Path("."), "cinnaroids"), (Path("mods/cinnaroids"), "cinnaroids-mod")]:
-            manifest = self.root / folder / "Cargo.toml"
-            manifest.write_text(version.replace_version(manifest.read_text(), source_version, "2.6.0"))
-            lock = self.root / folder / "Cargo.lock"
-            blocks = re.split(r"(?m)(?=^\[\[package\]\]\s*$)", lock.read_text())
-            for index, block in enumerate(blocks):
-                if block.startswith("[[package]]"):
-                    package = tomllib.loads(block)["package"][0]
-                    if package["name"] == name and "source" not in package:
-                        blocks[index] = version.replace_version(block, source_version, "2.6.0")
-            lock.write_text("".join(blocks))
-        resource = self.root / "app.rc"
-        resource.write_text(resource.read_text()
-            .replace(source_version.replace(".", ",") + ",0", "2,6,0,0")
-            .replace('"' + source_version + '\\0"', '"2.6.0\\0"'))
+        source_version = tomllib.loads((self.root / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+        manifest = self.root / "Cargo.toml"
+        manifest.write_text(version.replace_version(manifest.read_text(), source_version, "2.6.0"))
+        lock = self.root / "Cargo.lock"
+        blocks = re.split(r"(?m)(?=^\[\[package\]\]\s*$)", lock.read_text())
+        for index, block in enumerate(blocks):
+            if block.startswith("[[package]]"):
+                package = tomllib.loads(block)["package"][0]
+                if package["name"] in {"cinnaroids-mod", "cinnaroids-pack"} and "source" not in package:
+                    blocks[index] = version.replace_version(block, source_version, "2.6.0")
+        lock.write_text("".join(blocks))
         self.remote = Path(self.temporary.name) / "remote.git"
         self.git("init", "--initial-branch=main")
         self.git("config", "user.name", "Release test")
@@ -78,18 +71,18 @@ class ReleaseTests(unittest.TestCase):
     def git(self, *args):
         return subprocess.run(["git", *args], cwd=self.root, check=True, capture_output=True, text=True).stdout.strip()
 
-    def test_bump_levels_keep_module_locks_and_resources_in_sync(self):
+    def test_bump_levels_keep_workspace_and_lock_in_sync(self):
         self.assertEqual(version.bump(self.root, "patch", True), "2.6.1")
         self.assertEqual(version.bump(self.root, "minor", True), "2.7.0")
         self.assertEqual(version.bump(self.root, "major", True), "3.0.0")
         self.assertEqual(version.bump(self.root, "current"), "2.6.0")
         version.bump(self.root, "minor")
         self.assertEqual(version.bump(self.root, "current"), "2.7.0")
-        self.assertIn("FILEVERSION 2,7,0,0", (self.root / "app.rc").read_text())
-        self.assertEqual(tomllib.loads((self.root / "mods/cinnaroids/pack/Cargo.toml").read_text())["package"]["version"], "2.0.0")
+        packages = tomllib.loads((self.root / "Cargo.lock").read_text())["package"]
+        self.assertEqual([p["version"] for p in packages if p["name"].startswith("cinnaroids-")], ["2.7.0", "2.7.0"])
 
     def test_mismatched_module_prevents_partial_version_updates(self):
-        path = self.root / "mods/cinnaroids/Cargo.toml"
+        path = self.root / "Cargo.lock"
         path.write_text(path.read_text().replace('version = "2.6.0"', 'version = "2.5.0"'))
         before = (self.root / "Cargo.toml").read_bytes()
         with self.assertRaises(ValueError):
@@ -137,53 +130,38 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(prepare, "command", return_value=response):
             self.assertFalse(prepare.release_exists("test/repo", "v1.0.0"))
 
-    def test_archives_include_executable_notices_and_valid_checksum(self):
+    def test_release_is_a_component_with_valid_checksum(self):
         import hashlib
-        for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "README.md"]:
-            (self.root / name).write_text(name)
-        (self.root / "licenses").mkdir()
-        (self.root / "licenses/example.txt").write_text("Example license")
-        for platform, target in [("linux", "x86_64-unknown-linux-gnu"), ("windows", "x86_64-pc-windows-msvc")]:
-            binary = self.root / "target" / target / "release" / ("cinnaroids.exe" if platform == "windows" else "cinnaroids")
-            binary.parent.mkdir(parents=True)
-            binary.write_bytes(b"test executable")
-            archive = packaging.package(self.root, "2.6.0", platform, "x86_64", target)
-            checksum = archive.with_name(archive.name + ".sha256").read_text().split()[0]
-            self.assertEqual(checksum, hashlib.sha256(archive.read_bytes()).hexdigest())
-            if platform == "linux":
-                with tarfile.open(archive) as bundle:
-                    files = bundle.getnames()
-                    executable = next(item for item in bundle.getmembers() if item.name.endswith("/cinnaroids"))
-                    self.assertEqual(executable.mode & 0o777, 0o755)
-            else:
-                self.assertEqual(archive.suffix, ".exe")
-                self.assertEqual(archive.read_bytes(), b"test executable")
-                notices = archive.with_name(archive.stem + "-notices.zip")
-                self.assertEqual(notices.with_name(notices.name + ".sha256").read_text().split()[0], hashlib.sha256(notices.read_bytes()).hexdigest())
-                with zipfile.ZipFile(notices) as bundle:
-                    files = bundle.namelist()
-                    self.assertFalse(any(path.endswith(".exe") for path in files))
-            for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "licenses/example.txt"]:
-                self.assertTrue(any(path.endswith("/" + name) for path in files))
+        artifact = self.root / "dist/cinnaroids.wasm"
+        artifact.parent.mkdir()
+        artifact.write_bytes(b"\0asm\x0d\0\x01\0")
+        self.assertEqual(packaging.package(self.root), artifact)
+        self.assertEqual(artifact.with_suffix(".wasm.sha256").read_text(),
+                         f"{hashlib.sha256(artifact.read_bytes()).hexdigest()}  cinnaroids.wasm\n")
+        self.assertEqual(sorted(p.name for p in artifact.parent.iterdir()),
+                         ["cinnaroids.wasm", "cinnaroids.wasm.sha256"])
 
-    def test_macos_bundle_has_matching_version_and_executable(self):
-        import plistlib
-        for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "README.md"]:
+    def test_core_module_cannot_be_released_as_a_component(self):
+        artifact = self.root / "dist/cinnaroids.wasm"
+        artifact.parent.mkdir()
+        artifact.write_bytes(b"\0asm\x01\0\0\0")
+        with self.assertRaisesRegex(ValueError, "WebAssembly component"):
+            packaging.package(self.root)
+        self.assertFalse(artifact.with_suffix(".wasm.sha256").exists())
+
+    def test_notices_include_every_locked_dependency_license(self):
+        for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt"]:
             (self.root / name).write_text(name)
-        (self.root / "licenses").mkdir()
-        binary = self.root / "target/aarch64-apple-darwin/release/cinnaroids"
-        binary.parent.mkdir(parents=True)
-        binary.write_bytes(b"test executable")
-        with patch.object(packaging.subprocess, "run") as signing:
-            archive = packaging.package(self.root, "2.6.0", "macos", "arm64", "aarch64-apple-darwin")
-            self.assertEqual(signing.call_count, 2)
-        with zipfile.ZipFile(archive) as bundle:
-            plist = next(path for path in bundle.namelist() if path.endswith("/Contents/Info.plist"))
-            info = plistlib.loads(bundle.read(plist))
-            self.assertEqual(info["CFBundleShortVersionString"], "2.6.0")
-            self.assertEqual(info["CFBundleExecutable"], "cinnaroids")
-            binary = next(path for path in bundle.namelist() if path.endswith("/Contents/MacOS/cinnaroids"))
-            self.assertEqual(bundle.getinfo(binary).external_attr >> 16 & 0o777, 0o755)
+        (self.root / "Cargo.lock").write_text(
+            'version = 4\n[[package]]\nname = "example"\nversion = "1.0.0"\nsource = "registry"\n')
+        with self.assertRaisesRegex(ValueError, "missing dependency licenses"):
+            packaging.notices(self.root)
+        directory = self.root / "licenses/example-1.0.0"
+        directory.mkdir(parents=True)
+        (directory / "LICENSE").write_text("Example copyright and license")
+        notices = packaging.notices(self.root).decode()
+        self.assertIn("Example copyright and license", notices)
+        self.assertIn("LICENSE.txt", notices)
 
 
 if __name__ == "__main__":

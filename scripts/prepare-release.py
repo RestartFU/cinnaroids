@@ -99,7 +99,7 @@ def dispatch(default_branch: str, bump: str) -> tuple[str, str]:
         configure_identity()
         if version(bump) != target:
             raise ReleaseError("version changed while preparing the release")
-        git("add", "--", "Cargo.toml", "Cargo.lock", "mods/cinnaroids/Cargo.toml", "mods/cinnaroids/Cargo.lock", "app.rc")
+        git("add", "--", "Cargo.toml", "Cargo.lock")
         git("commit", "-m", f"chore: release {tag}")
         head = git("rev-parse", "HEAD")
         git("tag", "-a", tag, "-m", f"Cinnaroids {tag}")

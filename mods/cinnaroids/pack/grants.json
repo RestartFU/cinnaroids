@@ -1,0 +1,12 @@
+{
+  "hud": true,
+  "players": true,
+  "camera": true,
+  "controls": true,
+  "interaction": true,
+  "movement": true,
+  "settings": true,
+  "packet_delay": true,
+  "block_highlights": true,
+  "fullbright": true
+}

@@ -1,27 +1,15 @@
 [package]
 name = "cinnaroids-mod"
-version = "2.6.5"
-edition = "2024"
-rust-version = "1.99.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 license = "MIT"
 publish = false
-
-[workspace]
-members = ["pack"]
-resolver = "3"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-mod-api = { git = "https://github.com/bedrock-mc/cinnabar", rev = "b5dd214021a42e802d2a3ca6982981f26035f8f3" }
+mod-api.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-[profile.release]
-# Callback fuel is bounded by the host; optimize execution rather than file size.
-opt-level = 3
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = "debuginfo"

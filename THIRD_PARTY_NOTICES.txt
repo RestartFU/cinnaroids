@@ -1,20 +1,19 @@
 Cinnaroids — Third-party notices
 ====================================
 
-This application uses GPUI and other Rust packages. Its own source and
-independently drawn branding assets are covered by the root LICENSE.txt.
-Upstream package licenses and notices are retained under
-licenses/<name-version>/. Files are copied unchanged from exact locally
-downloaded crate versions. Where a crate omitted standalone license files,
-some were retrieved from the exact published crate VCS commit; their source
-URLs are recorded in the corresponding UPSTREAM_SOURCE.txt.
+Cinnaroids is a WASM module for Cinnabar. Its own source and original branding
+assets are covered by LICENSE.txt. The Cinnabar mod-api SDK is covered by the
+PolyForm Noncommercial License 1.0.0 in licenses/mod-api-0.1.20/LICENSE.
+SDK source: https://github.com/bedrock-mc/cinnabar/tree/4ec3296c5598056743fb72bffd2d20243f1d1c8a/crates/mod-api
 
-This inventory covers every external package in Cargo.lock, including
-optional dependencies, build tools, and dependencies for other platforms.
-An entry in this inventory does not imply that package is linked into the
-Windows executable. Refer to Cargo.toml for enabled application features.
-License expressions, authors, and repositories below come from each exact
-published crate Cargo.toml; copyright holders are not inferred from authors.
+The packaged WASM embeds this notice, the project license, and the unchanged
+license files for every external package in the current Cargo.lock. Retained
+licenses and the inventory below also cover dependencies and fonts from earlier
+launcher releases; their inclusion does not mean they are linked into the module.
+No private font is included in the WASM; the panel uses Cinnabar's installed font.
+
+Historical launcher attribution and inventory
+---------------------------------------------
 
 Panel typeface
 --------------

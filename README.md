@@ -1,31 +1,23 @@
 # Cinnaroids
 
-Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar and Zeno Client, controlled in-game with **F7**.
+Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar, controlled in-game with **F7**.
 
 ![Cinnaroids](assets/screenshot.png)
 
-Open the **Cinnaroids launcher** before or while your installed Cinnabar or Zeno Client is running. It attaches automatically to the standard installation; press **F7** to manage modules. **F10** stops all modules. Cinnaroids never starts the game.
+Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest), then open **Settings → Mods → Import** in an updated Cinnabar. Select the file, review its requested permissions, and enable it. Cinnabar manages loading and settings; no launcher is needed. [Installation and updates](docs/install.md).
 
-Combat keybinds: **F8** Clicker, **R** Aim assist, **V** Reach. **B** toggles Auto Jump Reset in the Movement tab.
+**F7** opens the panel; **F10** stops all modules. Default combat bindings are **F8** Clicker, **R** Aim assist, and **V** Reach. **B** toggles Auto Jump Reset. Modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
-Rust + GPUI launcher and a WASM module. Build: `cargo run --release --locked`. [Setup](docs/modules.md).
-
-Install the latest release on **Linux or macOS**:
+Build with Rust 1.99.0, the `wasm32-unknown-unknown` target, and Python 3.11 or newer:
 
 ```sh
-curl -fsSL https://github.com/RestartFU/cinnaroids/releases/latest/download/install.sh | sh
+python3 scripts/build-cinnaroids.py
+cargo test --locked -p cinnaroids-mod
+python3 -m unittest discover -s scripts/tests -v
 ```
 
-Installs without sudo to `~/.local/bin/cinnaroids` on Linux or `~/Applications/Cinnaroids.app` on macOS, with architecture detection and checksum verification. Run it again to update. [Installation details](docs/install.md).
+The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `4ec3296c5598056743fb72bffd2d20243f1d1c8a`.
 
-Release builds are available for Linux and Windows x86_64, and macOS Intel and Apple Silicon. Linux ships a `.tar.gz`, Windows a standalone `.exe` with license notices in a separate `-notices.zip`, and macOS a `.zip` containing `Cinnaroids.app`. Each download includes a SHA-256 checksum. The Windows executable embeds the module and UI assets and runs directly. Linux requires Vulkan drivers, Fontconfig, Wayland or X11, and xkbcommon. macOS bundles use ad-hoc signing and are not notarized.
+To publish, open **Actions → Release → Run workflow** and select **patch**, **minor**, or **major**. The workflow bumps the shared workspace version and lockfile, commits and tags `vX.Y.Z`, tests and builds the module, then publishes the WASM and checksum. A matching pushed version tag also releases. Failed jobs can be re-run; a manual run recovers an unpublished tag at the default branch's HEAD without bumping twice.
 
-On Linux, the launcher watches `$XDG_DATA_HOME/cinnabar/app/bin/bedrock-client` (default `~/.local/share/cinnabar/app/bin/bedrock-client`) and registers modules under `$XDG_CONFIG_HOME/cinnabar` (default `~/.config/cinnabar`). Older installations at `~/.local/bin/bedrock-client` are also supported. On macOS it watches `/Applications/Cinnabar.app/Contents/MacOS/bedrock-client`. Set `CINNABAR_EXECUTABLE` to the absolute path of your installed Cinnabar executable if it lives elsewhere. Attachment requires a Cinnabar build that supports independent local module registration; a client without it is detected and reported as incompatible.
-
-To publish, open **Actions → Release → Run workflow** and choose **patch** (default), **minor**, or **major**. The workflow uses the default branch, updates launcher and module manifests, lockfiles and Windows resources, commits and tags `vX.Y.Z`, builds the embedded WASM component and all four native executables, then publishes a GitHub release with `install.sh`. A pushed `vX.Y.Z` tag also releases when it matches the source version. Re-run failed jobs to retry; a new manual run also recovers an unpublished tag at the branch's HEAD without bumping twice. The repository token needs permission to push the release commit and tag to the default branch.
-
-Release automation checks: `python3 -m unittest discover -s scripts/tests -v`.
-
-Change **Settings → General → Menu key** by clicking the keycap and pressing a key. The binding saves across restarts. F7 is the default so Zeno can keep Right Shift. Choose a key unused by the other client’s modules. F10 remains the emergency stop.
-
-Zeno’s runtime is detected under the per-user `ZenoClient/runtime` directory, and registration uses `ZenoClient/game/config/local-mod.json`. `ZENO_EXECUTABLE` overrides the runtime path; `ZENO_USER_ROOT` overrides its game user root. Cinnabar continues to use its own config directory. If both clients run, Zeno takes priority. Companion attachment requires a runtime with the generic multi-module registration API; update Zeno’s bundled runtime as well as Cinnabar.
+Cinnaroids source and original assets use the MIT license. The Cinnabar SDK has its own PolyForm Noncommercial license; see [third-party notices](THIRD_PARTY_NOTICES.txt). Cinnaroids is independent of Cinnabar and its maintainers.

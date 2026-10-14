@@ -218,3 +218,29 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
     assert_eq!(preferences["menu_key"], "F6");
 }
+
+#[test]
+fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
+    let source = std::path::PathBuf::from(
+        std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap(),
+    );
+    let declarations = mod_host::declarations(&source).unwrap();
+    assert_eq!(declarations.metadata.name.as_deref(), Some("Cinnaroids"));
+    assert!(declarations.metadata.version.is_some());
+    assert!(declarations.metadata.icon.is_some());
+    let grants = declarations.requested.unwrap().expect("explicit import permissions");
+    assert!(grants.controls && grants.settings && grants.hud);
+    assert!(grants.players && grants.camera && grants.interaction);
+    assert!(grants.packet_delay && grants.movement);
+    assert!(grants.fullbright && grants.block_highlights);
+    assert!(!grants.environment && !grants.render && !grants.player_state);
+    let directory = tempfile::tempdir().unwrap();
+    let installed = directory.path().join("cinnaroids.wasm");
+    let component = std::fs::read(&source).unwrap();
+    let mut host = ModHost::load_snapshot_with_grants(&installed, &component, grants).unwrap();
+    let mut controls = empty_controls();
+    controls.focused = true;
+    host.frame_with_controls(false, None, controls).unwrap();
+    assert!(host.is_active());
+    assert_eq!(host.panel().unwrap().toggle_key, "F7");
+}

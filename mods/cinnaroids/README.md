@@ -1,12 +1,14 @@
 # Cinnaroids component
 
-Rust WASM modules for Cinnabar's granted local API. Press F7 for the in-game panel: Clicker, CPS, toggle key, Aim assist strength and activation, Reach distance, Auto Jump Reset, and dark mode. F10 disables all modules. Every module starts disabled; preferences save through the component's fixed companion settings file.
+Rust WASM modules for Cinnabar's granted local API. Import the finished component through **Settings → Mods → Import**, approve its permissions and enable it. **F7** opens its panel and **F10** stops all modules. Preferences persist; enabled switches start off when the component initializes.
 
-Clicker adds attack presses only while Attack is held, through the normal interaction path. It preserves the first physical press, sends at most one repeat per frame, and drops missed repeats after a stall. Reach changes local actor picking and attack admission from 3–6 blocks; the host retains wall checks and ordinary server transactions. Server validation still determines accepted hits.
+From the repository root:
 
-Aim assist uses remote player positions within six blocks and a 30° cone, favors the smallest view angle, and keeps its target until another is at least 2° closer. Strength zero produces no motion. Frame time is clamped to 100 ms and rotation stays within the host's 0.25-radian per-axis budget. The API does not provide aim target block visibility or teams. Missing gameplay and session/dimension changes reset target selection.
+```sh
+python3 scripts/build-cinnaroids.py
+cargo test --locked -p cinnaroids-mod
+```
 
-Auto Jump Reset watches new server motion and requests one ordinary jump when grounded within its 1–10 tick hit window (default 4). B toggles it; it starts disabled. It discards stale hits across missing gameplay, ineligible movement, held manual jump and session changes. It does not modify velocity: ground friction and directional sprint input determine any reduction in horizontal knockback. It requires the host's explicit movement grant and cannot guarantee vertical-only knockback.
+Rust 1.99.0 and `wasm32-unknown-unknown` are pinned in the root toolchain file. The result is `dist/cinnaroids.wasm`, including metadata, requested permissions, an icon and license notices. Packaging validates the component and rejects WASI imports.
 
-Build from the repository root with `./scripts/build-cinnaroids.ps1`; test with `cargo test --manifest-path mods/cinnaroids/Cargo.toml -p cinnaroids-mod --locked`. Rust 1.99.0 and `wasm32-unknown-unknown` are pinned. The result is `assets/cinnaroids.component.wasm`; packaging validates the component and rejects WASI imports. It has no AI model or operating-system mouse injection.
-Change **Settings → General → Menu key** by clicking the keycap and pressing a key. The binding saves across restarts. F7 is the default so Zeno can keep Right Shift. Choose a key unused by the other client’s modules. F10 remains the emergency stop.
+See [module behavior](../../docs/modules.md) and [installation](../../docs/install.md).
