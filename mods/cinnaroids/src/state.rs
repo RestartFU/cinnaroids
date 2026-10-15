@@ -124,7 +124,9 @@ impl Preferences {
                     .map(str::to_owned)
                     .or_else(|| value.as_u64().and_then(legacy_key))
             });
-        if let Some(binding) = binding.filter(|binding| valid_binding(binding)) {
+        if let Some(binding) =
+            binding.filter(|binding| binding.is_empty() || valid_binding(binding))
+        {
             preferences.clicker_key = binding;
         }
         for (field, target) in [
@@ -133,27 +135,29 @@ impl Preferences {
             ("jump_reset_key", &mut preferences.jump_reset_key),
         ] {
             if let Some(binding) = values.get(field).and_then(Value::as_str)
-                && valid_binding(binding)
+                && (binding.is_empty() || valid_binding(binding))
             {
                 *target = binding.into();
             }
         }
         // Preserve the older clicker binding when adding the other module keys.
-        if preferences.aim_key == preferences.clicker_key {
+        if !preferences.aim_key.is_empty() && preferences.aim_key == preferences.clicker_key {
             preferences.aim_key = spare_binding(&[&preferences.clicker_key]);
         }
-        if preferences.reach_key == preferences.clicker_key
-            || preferences.reach_key == preferences.aim_key
+        if !preferences.reach_key.is_empty()
+            && (preferences.reach_key == preferences.clicker_key
+                || preferences.reach_key == preferences.aim_key)
         {
             preferences.reach_key =
                 spare_binding(&[&preferences.clicker_key, &preferences.aim_key]);
         }
-        if [
-            &preferences.clicker_key,
-            &preferences.aim_key,
-            &preferences.reach_key,
-        ]
-        .contains(&&preferences.jump_reset_key)
+        if !preferences.jump_reset_key.is_empty()
+            && [
+                &preferences.clicker_key,
+                &preferences.aim_key,
+                &preferences.reach_key,
+            ]
+            .contains(&&preferences.jump_reset_key)
         {
             preferences.jump_reset_key = spare_binding(&[
                 &preferences.clicker_key,
@@ -274,6 +278,19 @@ impl State {
             }
         }
         if let Some(target) = self.capturing_key {
+            if controls.keys.iter().any(|key| key == "Escape") {
+                if target != KeybindTarget::Menu {
+                    self.binding_mut(target).clear();
+                    self.preferences_dirty = true;
+                    self.reservations_dirty = true;
+                    if target == KeybindTarget::Clicker {
+                        self.clicker.reset();
+                    }
+                }
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
             if let Some(key) = controls.keys.iter().find(|key| valid_binding(key))
                 && !self.binding_conflicts(target, key)
             {
@@ -288,7 +305,7 @@ impl State {
             }
             return;
         }
-        for key in controls.keys {
+        for key in controls.keys.iter().filter(|key| !key.is_empty()) {
             if *key == self.preferences.clicker_key {
                 self.modules.clicker = !self.modules.clicker;
                 self.clicker.reset();
@@ -480,7 +497,7 @@ impl State {
             &self.preferences.reach_key,
             &self.preferences.jump_reset_key,
         ] {
-            if !keys.contains(key) {
+            if !key.is_empty() && !keys.contains(key) {
                 keys.push(key.clone());
             }
         }
@@ -511,7 +528,7 @@ impl State {
             Control::Keybind {
                 id: "clicker_key",
                 label: "Clicker key",
-                key: &self.preferences.clicker_key,
+                key: binding_label(&self.preferences.clicker_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Clicker),
             },
             Control::Toggle {
@@ -536,7 +553,7 @@ impl State {
             Control::Keybind {
                 id: "aim_key",
                 label: "Aim assist key",
-                key: &self.preferences.aim_key,
+                key: binding_label(&self.preferences.aim_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Aim),
             },
             Control::Toggle {
@@ -555,7 +572,7 @@ impl State {
             Control::Keybind {
                 id: "reach_key",
                 label: "Reach key",
-                key: &self.preferences.reach_key,
+                key: binding_label(&self.preferences.reach_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
             },
             Control::Toggle {
@@ -574,7 +591,7 @@ impl State {
             Control::Keybind {
                 id: "jump_reset_key",
                 label: "Jump reset key",
-                key: &self.preferences.jump_reset_key,
+                key: binding_label(&self.preferences.jump_reset_key),
                 capturing: self.capturing_key == Some(KeybindTarget::JumpReset),
             },
             Control::Toggle {
@@ -688,13 +705,19 @@ impl ClickCadence {
     }
 }
 
-/// Keep primary clicks available for panel controls, including keybind recovery.
+/// Show an explicit label for a module without a keyboard shortcut.
+fn binding_label(key: &str) -> &str {
+    if key.is_empty() { "None" } else { key }
+}
+
+/// Keep primary clicks and Escape available for panel controls and keybind clearing.
 fn valid_binding(key: &str) -> bool {
     !key.is_empty()
         && key.len() <= mod_api::MAX_CONTROL_KEY_BYTES
         && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
         && key != STOP_KEY
         && key != "MouseLeft"
+        && key != "Escape"
 }
 
 fn spare_binding(used: &[&str]) -> String {

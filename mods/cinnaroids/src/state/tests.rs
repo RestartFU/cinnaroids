@@ -185,22 +185,102 @@ fn secondary_mouse_bindings_remain_available() {
 }
 
 #[test]
-fn escape_can_be_captured_without_disabling_or_toggling_modules() {
+fn escape_clears_each_module_binding_without_toggling_and_persists() {
+    for (id, target, old_key) in [
+        ("clicker_key", KeybindTarget::Clicker, DEFAULT_CLICKER_KEY),
+        ("aim_key", KeybindTarget::Aim, DEFAULT_AIM_KEY),
+        ("reach_key", KeybindTarget::Reach, DEFAULT_REACH_KEY),
+        (
+            "jump_reset_key",
+            KeybindTarget::JumpReset,
+            DEFAULT_JUMP_RESET_KEY,
+        ),
+    ] {
+        let mut state = state();
+        state.modules.clicker = true;
+        state.modules.aim = true;
+        state.modules.reach = true;
+        state.modules.jump_reset = true;
+        controls(&mut state, &[], &[(id, 1.0)]);
+        let capturing: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+        assert_eq!(capturing["capture_key"], true);
+        state.preferences_dirty = false;
+        state.reservations_dirty = false;
+        state.panel_dirty = false;
+        // Escape takes precedence over other keys delivered in the same frame.
+        controls(&mut state, &[old_key, "Escape"], &[]);
+        assert!(state.binding_mut(target).is_empty());
+        assert!(state.capturing_key.is_none());
+        assert!(
+            state.modules.clicker
+                && state.modules.aim
+                && state.modules.reach
+                && state.modules.jump_reset
+        );
+        assert!(state.panel_dirty && state.preferences_dirty && state.reservations_dirty);
+        assert!(!state.reserved_keys().contains(&old_key.into()));
+        assert!(!state.reserved_keys().iter().any(String::is_empty));
+        let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+        assert_eq!(panel["capture_key"], false);
+        let keycap = panel["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|control| control["id"] == id)
+            .unwrap();
+        assert_eq!(keycap["key"], "None");
+        let saved = serde_json::to_string(&state.preferences).unwrap();
+        assert_eq!(Preferences::from_json(&saved), state.preferences);
+        controls(&mut state, &[old_key, "Escape"], &[]);
+        assert!(
+            state.modules.clicker
+                && state.modules.aim
+                && state.modules.reach
+                && state.modules.jump_reset
+        );
+        controls(&mut state, &[], &[(id, 1.0)]);
+        controls(&mut state, &["KeyG"], &[]);
+        assert_eq!(state.binding_mut(target), "KeyG");
+    }
+}
+
+#[test]
+fn all_module_bindings_can_remain_unbound_after_reload() {
+    let prefs = Preferences::from_json(
+        r#"{"clicker_key":"","aim_key":"","reach_key":"","jump_reset_key":""}"#,
+    );
+    assert!(
+        prefs.clicker_key.is_empty()
+            && prefs.aim_key.is_empty()
+            && prefs.reach_key.is_empty()
+            && prefs.jump_reset_key.is_empty()
+    );
+    assert_eq!(
+        Preferences::from_json(&serde_json::to_string(&prefs).unwrap()),
+        prefs
+    );
+    let mut state = State::new(prefs);
+    assert_eq!(state.reserved_keys(), [PANEL_KEY, STOP_KEY]);
+    controls(&mut state, &[""], &[]);
+    assert!(
+        !state.modules.clicker
+            && !state.modules.aim
+            && !state.modules.reach
+            && !state.modules.jump_reset
+    );
+}
+
+#[test]
+fn escape_cancels_menu_key_capture_and_keeps_the_panel_reachable() {
     let mut state = state();
-    state.modules.aim = true;
-    state.modules.reach = true;
-    let before: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(before["capture_key"], false);
-    controls(&mut state, &[], &[("clicker_key", 1.0)]);
-    let capturing: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(capturing["capture_key"], true);
+    state.preferences.menu_key = "F6".into();
+    state.preferences_dirty = false;
+    state.reservations_dirty = false;
+    controls(&mut state, &[], &[("menu_key", 1.0)]);
     controls(&mut state, &["Escape"], &[]);
-    assert_eq!(state.preferences.clicker_key, "Escape");
-    assert!(state.capturing_key.is_none() && !state.modules.clicker);
-    assert!(state.modules.aim && state.modules.reach);
-    assert!(state.reservations_dirty && state.preferences_dirty);
-    let captured: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(captured["capture_key"], false);
+    assert_eq!(state.preferences.menu_key, "F6");
+    assert!(state.capturing_key.is_none() && state.panel_dirty);
+    assert!(!state.preferences_dirty && !state.reservations_dirty);
 }
 
 #[test]
@@ -438,7 +518,7 @@ fn every_module_has_a_persisted_independent_binding() {
         saved
     );
     for field in ["aim_key", "reach_key", "jump_reset_key"] {
-        for invalid in ["F10", "", "Key:V"] {
+        for invalid in ["F10", "Escape", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
         }
