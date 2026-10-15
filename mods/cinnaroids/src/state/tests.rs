@@ -111,6 +111,80 @@ fn key_capture_changes_the_binding_without_toggling_a_module() {
 }
 
 #[test]
+fn left_clicks_cannot_capture_any_binding_even_when_opening_the_keycap() {
+    for (id, target) in [
+        ("menu_key", KeybindTarget::Menu),
+        ("clicker_key", KeybindTarget::Clicker),
+        ("aim_key", KeybindTarget::Aim),
+        ("reach_key", KeybindTarget::Reach),
+        ("jump_reset_key", KeybindTarget::JumpReset),
+    ] {
+        let mut state = state();
+        state.reservations_dirty = false;
+        // The host can deliver the activating click and keycap event together.
+        controls(&mut state, &["MouseLeft"], &[(id, 1.0)]);
+        // A second click must leave capture waiting for a usable binding.
+        controls(&mut state, &["MouseLeft"], &[(id, 1.0)]);
+        assert_eq!(state.capturing_key, Some(target));
+        assert_eq!(state.preferences, Preferences::default());
+        assert!(!state.preferences_dirty && !state.reservations_dirty);
+        assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
+        assert!(!state.modules.jump_reset);
+
+        controls(&mut state, &["MouseLeft", "KeyG"], &[]);
+        assert!(state.capturing_key.is_none());
+        assert_eq!(state.binding_mut(target).as_str(), "KeyG");
+        assert!(state.preferences_dirty && state.reservations_dirty);
+        assert!(!state.reserved_keys().contains(&"MouseLeft".into()));
+    }
+}
+
+#[test]
+fn saved_left_click_bindings_recover_without_resetting_other_preferences() {
+    for id in [
+        "menu_key",
+        "clicker_key",
+        "aim_key",
+        "reach_key",
+        "jump_reset_key",
+        "toggle_key",
+    ] {
+        let preferences = Preferences::from_json(&format!(
+            r#"{{"{id}":"MouseLeft","cps":17,"dark_mode":false}}"#
+        ));
+        let expected = Preferences {
+            cps: 17,
+            dark_mode: false,
+            ..Preferences::default()
+        };
+        assert_eq!(preferences, expected, "{id}");
+        let mut state = State::new(preferences);
+        assert!(!state.reserved_keys().contains(&"MouseLeft".into()));
+        controls(&mut state, &["MouseLeft"], &[("clicker_key", 1.0)]);
+        controls(&mut state, &["KeyG"], &[]);
+        let saved = serde_json::to_string(&state.preferences).unwrap();
+        assert_eq!(Preferences::from_json(&saved), state.preferences);
+        assert_eq!(state.preferences.clicker_key, "KeyG");
+    }
+}
+
+#[test]
+fn secondary_mouse_bindings_remain_available() {
+    for key in ["MouseRight", "MouseMiddle"] {
+        let mut state = state();
+        controls(&mut state, &["MouseLeft"], &[("clicker_key", 1.0)]);
+        controls(&mut state, &[key], &[]);
+        assert!(state.capturing_key.is_none());
+        assert_eq!(state.preferences.clicker_key, key);
+        assert!(!state.modules.clicker);
+        let saved = serde_json::to_string(&state.preferences).unwrap();
+        assert_eq!(Preferences::from_json(&saved), state.preferences);
+        controls(&mut state, &[key], &[]);
+        assert!(state.modules.clicker);
+    }
+}
+
+#[test]
 fn escape_can_be_captured_without_disabling_or_toggling_modules() {
     let mut state = state();
     state.modules.aim = true;

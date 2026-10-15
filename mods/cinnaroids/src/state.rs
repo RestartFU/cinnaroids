@@ -754,11 +754,13 @@ impl ClickCadence {
     }
 }
 
+/// Keep primary clicks available for panel controls, including keybind recovery.
 fn valid_binding(key: &str) -> bool {
     !key.is_empty()
         && key.len() <= mod_api::MAX_CONTROL_KEY_BYTES
         && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
         && key != STOP_KEY
+        && key != "MouseLeft"
 }
 
 fn spare_binding(used: &[&str]) -> String {
