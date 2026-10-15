@@ -510,7 +510,7 @@ impl State {
             },
             Control::Keybind {
                 id: "clicker_key",
-                label: "Keybind",
+                label: "Clicker key",
                 key: &self.preferences.clicker_key,
                 capturing: self.capturing_key == Some(KeybindTarget::Clicker),
             },
@@ -521,7 +521,7 @@ impl State {
             },
             Control::Slider {
                 id: "aim_strength",
-                label: "Strength",
+                label: "Aim strength",
                 value: f32::from(self.preferences.aim_strength),
                 min: 0.0,
                 max: 100.0,
@@ -535,7 +535,7 @@ impl State {
             },
             Control::Keybind {
                 id: "aim_key",
-                label: "Keybind",
+                label: "Aim assist key",
                 key: &self.preferences.aim_key,
                 capturing: self.capturing_key == Some(KeybindTarget::Aim),
             },
@@ -546,7 +546,7 @@ impl State {
             },
             Control::Slider {
                 id: "reach_blocks",
-                label: "Distance",
+                label: "Reach distance",
                 value: self.preferences.reach_blocks,
                 min: MIN_REACH,
                 max: mod_api::MAX_ENTITY_REACH_BLOCKS,
@@ -554,7 +554,7 @@ impl State {
             },
             Control::Keybind {
                 id: "reach_key",
-                label: "Keybind",
+                label: "Reach key",
                 key: &self.preferences.reach_key,
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
             },
@@ -573,7 +573,7 @@ impl State {
             },
             Control::Keybind {
                 id: "jump_reset_key",
-                label: "Keybind",
+                label: "Jump reset key",
                 key: &self.preferences.jump_reset_key,
                 capturing: self.capturing_key == Some(KeybindTarget::JumpReset),
             },
@@ -584,7 +584,7 @@ impl State {
             },
             Control::Slider {
                 id: "fake_lag_ms",
-                label: "Delay (ms)",
+                label: "FakeLag delay (ms)",
                 value: f32::from(self.preferences.fake_lag_ms),
                 min: 0.0,
                 max: mod_api::MAX_PACKET_DELAY_MS as f32,
@@ -607,7 +607,7 @@ impl State {
             },
             Control::Slider {
                 id: "netherite_range",
-                label: "Range",
+                label: "Finder range",
                 value: f32::from(self.preferences.netherite_range),
                 min: 1.0,
                 max: mod_api::MAX_BLOCK_HIGHLIGHT_RANGE,
@@ -630,72 +630,6 @@ impl State {
             capture_key: self.capturing_key.is_some(),
             style: "compact",
             controls,
-            sections: vec![
-                Section {
-                    id: "clicker_section",
-                    label: "Clicker",
-                    icon: "pointer",
-                    category: "Combat",
-                    toggle: Some("clicker"),
-                    controls: &["cps", "clicker_key"],
-                },
-                Section {
-                    id: "aim_section",
-                    label: "Aim assist",
-                    icon: "crosshair",
-                    category: "Combat",
-                    toggle: Some("aim"),
-                    controls: &["aim_strength", "aim_mode", "aim_key"],
-                },
-                Section {
-                    id: "reach_section",
-                    label: "Reach",
-                    icon: "ruler",
-                    category: "Combat",
-                    toggle: Some("reach"),
-                    controls: &["reach_blocks", "reach_key"],
-                },
-                Section {
-                    id: "jump_reset_section",
-                    label: "Auto Jump Reset",
-                    icon: "none",
-                    category: "Movement",
-                    toggle: Some("jump_reset"),
-                    controls: &["jump_reset_window_ticks", "jump_reset_key"],
-                },
-                Section {
-                    id: "fake_lag_section",
-                    label: "FakeLag",
-                    icon: "none",
-                    category: "Combat",
-                    toggle: Some("fake_lag"),
-                    controls: &["fake_lag_ms", "show_real_position"],
-                },
-                Section {
-                    id: "netherite_section",
-                    label: "Netherite Finder",
-                    icon: "none",
-                    category: "Visual",
-                    toggle: Some("netherite"),
-                    controls: &["netherite_range"],
-                },
-                Section {
-                    id: "fullbright_section",
-                    label: "Fullbright",
-                    icon: "none",
-                    category: "Visual",
-                    toggle: Some("fullbright"),
-                    controls: &[],
-                },
-                Section {
-                    id: "general_section",
-                    label: "General",
-                    icon: "settings",
-                    category: "Settings",
-                    toggle: None,
-                    controls: &["menu_key", "dark_mode", "stop_all"],
-                },
-            ],
         };
         serde_json::to_string(&panel)
     }
@@ -817,17 +751,6 @@ struct Panel<'a> {
     capture_key: bool,
     style: &'a str,
     controls: Vec<Control<'a>>,
-    sections: Vec<Section<'a>>,
-}
-
-#[derive(Serialize)]
-struct Section<'a> {
-    id: &'a str,
-    label: &'a str,
-    category: &'a str,
-    icon: &'a str,
-    toggle: Option<&'a str>,
-    controls: &'a [&'a str],
 }
 
 #[derive(Serialize)]

@@ -323,40 +323,45 @@ fn netherite_finder_is_full_pink_loaded_block_selection_and_stop_clears_it() {
 }
 
 #[test]
-fn grouped_cards_expose_every_control_once_in_combat_or_settings() {
+fn panel_exposes_all_controls_without_category_sections() {
     use std::collections::HashSet;
 
-    let json: Value = serde_json::from_str(&state().panel_json().unwrap()).unwrap();
-    let sections = json["sections"].as_array().unwrap();
-    let mut assigned = HashSet::new();
-    let mut categories = HashSet::new();
-    for section in sections {
-        categories.insert(section["category"].as_str().unwrap());
-        if let Some(toggle) = section["toggle"].as_str() {
-            assert!(assigned.insert(toggle));
-            let control = json["controls"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|control| control["id"] == toggle)
-                .unwrap();
-            assert_eq!(control["kind"], "toggle");
-        }
-        for id in section["controls"].as_array().unwrap() {
-            assert!(assigned.insert(id.as_str().unwrap()));
-        }
-    }
-    assert_eq!(
-        categories,
-        HashSet::from(["Combat", "Settings", "Visual", "Movement"])
-    );
-    let controls: HashSet<_> = json["controls"]
+    let panel: Value = serde_json::from_str(&state().panel_json().unwrap()).unwrap();
+    assert!(panel.get("sections").is_none());
+    let ids: Vec<_> = panel["controls"]
         .as_array()
         .unwrap()
         .iter()
         .map(|control| control["id"].as_str().unwrap())
         .collect();
-    assert_eq!(assigned, controls);
+    assert_eq!(ids.len(), ids.iter().collect::<HashSet<_>>().len());
+    assert_eq!(
+        ids,
+        [
+            "menu_key",
+            "clicker",
+            "cps",
+            "clicker_key",
+            "aim",
+            "aim_strength",
+            "aim_mode",
+            "aim_key",
+            "reach",
+            "reach_blocks",
+            "reach_key",
+            "jump_reset",
+            "jump_reset_window_ticks",
+            "jump_reset_key",
+            "fake_lag",
+            "fake_lag_ms",
+            "show_real_position",
+            "dark_mode",
+            "netherite",
+            "netherite_range",
+            "fullbright",
+            "stop_all",
+        ]
+    );
 }
 
 #[test]
@@ -594,7 +599,7 @@ fn fake_lag_panel_exposes_millisecond_slider_and_toggle() {
     assert_eq!(delay["min"], 0.0);
     assert_eq!(delay["max"], mod_api::MAX_PACKET_DELAY_MS as f32);
     assert_eq!(delay["step"], 1.0);
-    assert_eq!(delay["label"], "Delay (ms)");
+    assert_eq!(delay["label"], "FakeLag delay (ms)");
     assert!(
         controls
             .iter()
@@ -659,7 +664,7 @@ fn fullbright_is_runtime_only_independent_and_stopped_by_f10() {
 }
 
 #[test]
-fn fullbright_has_a_visual_toggle_and_preserves_category_order() {
+fn fullbright_has_a_disabled_panel_toggle() {
     let panel: Value = serde_json::from_str(&state().panel_json().unwrap()).unwrap();
     assert!(
         panel["controls"]
@@ -670,19 +675,6 @@ fn fullbright_has_a_visual_toggle_and_preserves_category_order() {
                 && control["value"] == false
                 && control["label"] == "Fullbright")
     );
-    let sections = panel["sections"].as_array().unwrap();
-    let fullbright = sections
-        .iter()
-        .find(|section| section["toggle"] == "fullbright")
-        .unwrap();
-    assert_eq!(fullbright["category"], "Visual");
-    let mut categories: Vec<&str> = sections
-        .iter()
-        .map(|section| section["category"].as_str().unwrap())
-        .collect();
-    categories.sort_unstable();
-    categories.dedup();
-    assert_eq!(categories, ["Combat", "Movement", "Settings", "Visual"]);
 }
 
 #[test]

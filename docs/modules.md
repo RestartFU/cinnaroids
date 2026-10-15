@@ -2,15 +2,15 @@
 
 Import `cinnaroids.wasm` through Cinnabar’s **Settings → Mods → Import**, approve its requested permissions and select **Enable**. [Installation and updates](install.md).
 
-Press **F7** to open or close the module interface. It manages:
+Press **F7** to open or close the module interface. All modules and settings share one panel without category tabs. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key is configurable; F8 is the default.
 - **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its default toggle key is R.
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its default toggle key is V.
-- **FakeLag:** delay inbound and outbound game packets by 0–1000 milliseconds each, with a toggle in the Combat tab. Default delay is 100 ms; the module starts off. Slider values can also be typed.
-- **Netherite Finder:** in the Visual tab, highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It cannot reveal terrain the server has not sent.
-- **Fullbright:** in the Visual tab, brighten world lighting without changing server data. Starts off; F10 or unloading restores normal lighting.
-- **Auto Jump Reset:** in the Movement tab, jump once on the first eligible ground contact after new server knockback. Default toggle key is B. The hit window is 1–10 simulation ticks (default 4); it starts off.
+- **FakeLag:** delay inbound and outbound game packets by 0–1000 milliseconds each. Default delay is 100 ms; the module starts off. Slider values can also be typed.
+- **Netherite Finder:** highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It cannot reveal terrain the server has not sent.
+- **Fullbright:** brighten world lighting without changing server data. Starts off; F10 or unloading restores normal lighting.
+- **Auto Jump Reset:** jump once on the first eligible ground contact after new server knockback. Default toggle key is B. The hit window is 1–10 simulation ticks (default 4); it starts off.
 - **Appearance:** neutral dark mode by default, with a light option.
 
 Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; **F10** and the configured menu key retain their reserved actions.
@@ -33,7 +33,7 @@ Cinnabar owns the registration, permissions and component lifecycle. Preferences
 
 Requested permissions cover the HUD, player snapshots, camera, controls, interaction, movement, settings, packet delay, block highlights and Fullbright. Importing the file does not grant them automatically; review them in Mods. Features using a denied permission cannot operate.
 
-The panel uses Cinnabar's installed font. Panel sizing follows display DPI independently of Minecraft's GUI scale. Change **Settings → General → Menu key** by clicking the keycap and pressing a key; the binding saves across restarts. F7 is the default, and F10 remains the emergency stop.
+The panel uses Cinnabar's installed font. Panel sizing follows display DPI independently of Minecraft's GUI scale. Change **Menu key** in the panel by clicking the keycap and pressing a key; the binding saves across restarts. F7 is the default, and F10 remains the emergency stop.
 
 ## Build
 
