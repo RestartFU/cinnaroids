@@ -95,7 +95,7 @@ fn summary(json: &mut String, key: &str, value: u32, suffix: &str) {
 /// Direct appends avoid generic map/key escaping on every frame under the host fuel cap.
 fn bindings_json(state: &State) -> String {
     let mut json = String::with_capacity(1600);
-    json.push_str(r##"{"#menu_offset":[0,0],"#menu_alpha":1,"#menu_scale":1,"#menu_blur":0,"#settings_open":"##);
+    json.push_str(r##"{"#menu_offset":[0,0],"#menu_alpha":1,"#menu_scale":1,"#settings_open":"##);
     json.push_str(if state.settings_open { "true" } else { "false" });
     let mut y = 0;
     const KEYS: [(&str, &str, &str); 7] = [

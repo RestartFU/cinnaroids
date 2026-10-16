@@ -54,7 +54,7 @@ At most one module is expanded; selecting it again collapses it. Aim assist is e
 
 ## Elevation & Depth
 
-Opaque surfaces and inset tones establish depth. The menu settles with sharp text and zero blur. Entrance/exit blur supplies temporary focus; there is no decorative glass layer.
+Opaque surfaces and inset tones establish depth. Text stays sharp throughout the transition. Scale, offset and opacity establish focus.
 
 ## Shapes
 
@@ -62,7 +62,7 @@ The dialog uses an 8px radius; fields and keycaps 3px, switches 5px. Compact sep
 
 ## Components
 
-Opening and closing ease offset 6px, scale.975 and blur 5px over 250ms with cubic-bezier(.16,1,.3,1); opacity uses 180ms out-cubic. Disclosures ease clipped height, following rows and chevrons over 250ms on the retained route. Cinnabar supplies 100ms hover/toggle feedback and 140ms discrete wheel easing. Screen animations settles all motion immediately; closing releases input before the exit finishes.
+Opening and closing ease offset 6px and scale.975 over 250ms with cubic-bezier(.16,1,.3,1); opacity uses 180ms out-cubic. Disclosures ease clipped height, following rows and chevrons over 250ms on the retained route. Cinnabar supplies 100ms hover/toggle feedback and 140ms discrete wheel easing. Screen animations settles all motion immediately; closing releases input before the exit finishes.
 
 `generate-panel.py` owns both native documents and their static templates. Packaging embeds the immutable theme routes in the WASM `PANEL_BUNDLE_SECTION`. When panel state is dirty, the callback sends the small control shell and route/binding patch together through `set_content` and `update_content`. Full documents come from `panel_json()` for packaging and previews. `panel.rs` supplies bounded live bindings; `state.rs` owns navigation and control state.
 

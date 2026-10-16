@@ -205,10 +205,10 @@ class Surface:
                                dark=self.toggle(17, [304, 27]))
         settings["bindings"] = [binding("#settings_open", "#visible")]
         dialog = node("panel", [WIDTH, "100% - 24px"], max_size=[WIDTH, 392],
-                      cinnabar_transform={"scale": 1}, cinnabar_filter={"blur": 0})
+                      cinnabar_transform={"scale": 1})
         dialog.update(anchor_from="center", anchor_to="center", bindings=[
             binding("#menu_offset", "#offset"), binding("#menu_alpha", "#alpha"),
-            binding("#menu_scale", "#cinnabar_scale"), binding("#menu_blur", "#cinnabar_blur")],
+            binding("#menu_scale", "#cinnabar_scale")],
             controls=children(
                 background=self.rect(["100%", "100%"], radius=8, color=self.outer),
                 brand=self.icon("brand", [15, 15], [15, 13]),
@@ -225,7 +225,6 @@ class Surface:
             "#menu_offset": dict(duration=0.25, easing=EASE, **{"from": [0, 6], "exit": [0, 6]}),
             "#menu_alpha": dict(duration=0.18, easing="out_cubic", **{"from": 0, "exit": 0}),
             "#menu_scale": dict(duration=0.25, easing=EASE, **{"from": 0.975, "exit": 0.975}),
-            "#menu_blur": dict(duration=0.25, easing=EASE, **{"from": 5, "exit": 5}),
             "#fold_content_height": dict(duration=0.25, easing=EASE),
         }
         for name, _, toggle, _, disclosure, _ in MODULES:

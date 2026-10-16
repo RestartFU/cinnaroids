@@ -84,7 +84,10 @@ fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
         assert!(routes.contains(&"mod.close".to_owned()));
         assert_eq!(panel["motion"], true);
         assert_eq!(surface["transitions"]["#menu_scale"]["exit"], 0.975);
-        assert_eq!(surface["transitions"]["#menu_blur"]["from"], 5);
+        assert_eq!(
+            surface["transitions"]["#menu_offset"]["from"],
+            serde_json::json!([0, 6])
+        );
         assert_eq!(surface["bindings"]["#fold_aim_height"], 80.0);
         assert_eq!(surface["bindings"]["#fold_reach_height"], 0.0);
     }
