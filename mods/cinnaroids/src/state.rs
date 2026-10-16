@@ -230,6 +230,9 @@ pub struct State {
     pub modules: Modules,
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
+    /// Transient disclosure state, independent from enabled flags and persisted settings.
+    pub expanded_module: Option<usize>,
+    pub settings_open: bool,
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
     pub finder_dirty: bool,
@@ -244,6 +247,8 @@ impl State {
             modules: Modules::default(),
             capturing_key: None,
             panel_dirty: true,
+            expanded_module: Some(1),
+            settings_open: false,
             preferences_dirty: false,
             reservations_dirty: true,
             finder_dirty: true,
@@ -351,6 +356,31 @@ impl State {
             return;
         }
         let changed = match event.id.as_str() {
+            "expand_clicker" | "expand_aim" | "expand_reach" | "expand_jump_reset"
+            | "expand_fake_lag" | "expand_netherite" => {
+                let index = [
+                    "expand_clicker",
+                    "expand_aim",
+                    "expand_reach",
+                    "expand_jump_reset",
+                    "expand_fake_lag",
+                    "expand_netherite",
+                ]
+                .iter()
+                .position(|id| *id == event.id)
+                .unwrap();
+                self.expanded_module = (self.expanded_module != Some(index)).then_some(index);
+                self.capturing_key = None;
+                self.settings_open = false;
+                self.panel_dirty = true;
+                return;
+            }
+            "menu_settings" => {
+                self.settings_open = !self.settings_open;
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
             "clicker" => replace(&mut self.modules.clicker, value >= 0.5),
             "cps" => replace(
                 &mut self.preferences.cps,
@@ -504,7 +534,23 @@ impl State {
         keys
     }
 
+    /// Full standalone specification for packaging and native previews.
     pub fn panel_json(&self) -> Result<String, serde_json::Error> {
+        self.panel_content(true)
+    }
+
+    /// Publish current control values against a tiny placeholder before selecting the retained route.
+    pub fn panel_shell_json(&self) -> Result<String, serde_json::Error> {
+        self.panel_content(false)
+    }
+
+    /// Live route and scalar patch for the component's embedded panel catalog.
+    pub fn panel_update_json(&self) -> Result<String, serde_json::Error> {
+        crate::panel::route_update(self)
+    }
+
+    /// Serialize the common schema without resolving or cloning native geometry.
+    fn panel_content(&self, full: bool) -> Result<String, serde_json::Error> {
         let controls = vec![
             Control::Keybind {
                 id: "menu_key",
@@ -639,6 +685,34 @@ impl State {
                 id: "stop_all",
                 label: "Disable all",
             },
+            Control::Button {
+                id: "expand_clicker",
+                label: "Clicker settings",
+            },
+            Control::Button {
+                id: "expand_aim",
+                label: "Aim assist settings",
+            },
+            Control::Button {
+                id: "expand_reach",
+                label: "Reach settings",
+            },
+            Control::Button {
+                id: "expand_jump_reset",
+                label: "Auto Jump Reset settings",
+            },
+            Control::Button {
+                id: "expand_fake_lag",
+                label: "FakeLag settings",
+            },
+            Control::Button {
+                id: "expand_netherite",
+                label: "Netherite Finder settings",
+            },
+            Control::Button {
+                id: "menu_settings",
+                label: "Menu settings",
+            },
         ];
         let panel = Panel {
             title: PRODUCT_NAME,
@@ -646,11 +720,16 @@ impl State {
             dark: self.preferences.dark_mode,
             capture_key: self.capturing_key.is_some(),
             style: "compact",
-            reference_size: [464.0, 240.0],
+            reference_size: [402.0, 240.0],
+            motion: true,
             controls,
         };
         let mut json = serde_json::to_string(&panel)?;
-        crate::panel::append(&mut json, self.preferences.dark_mode);
+        if full {
+            crate::panel::append(&mut json, self)?;
+        } else {
+            crate::panel::append_shell(&mut json);
+        }
         Ok(json)
     }
 }
@@ -777,6 +856,7 @@ struct Panel<'a> {
     capture_key: bool,
     style: &'a str,
     reference_size: [f32; 2],
+    motion: bool,
     controls: Vec<Control<'a>>,
 }
 

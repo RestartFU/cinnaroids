@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
-"""Generate the tab-free card surface used by Cinnabar's native panel renderer."""
+"""Generate Fold's native accordion surfaces and their retained transition bindings."""
 
 import argparse
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-CARD = 132
-GAP = 8
+WIDTH = 370
+ROW = 32
+EASE = [0.16, 1, 0.3, 1]
+MODULES = [
+    ("clicker", "Clicker", 1, 3, 22, 48),
+    ("aim", "Aim assist", 4, 7, 23, 80),
+    ("reach", "Reach", 8, 10, 24, 48),
+    ("jump_reset", "Auto Jump Reset", 11, 13, 25, 48),
+    ("fake_lag", "FakeLag", 14, None, 26, 68),
+    ("netherite", "Netherite Finder", 18, None, 27, 48),
+    ("fullbright", "Fullbright", 20, None, None, 0),
+]
 
 
 def node(kind, size, offset=(0, 0), **properties):
@@ -18,34 +27,40 @@ def node(kind, size, offset=(0, 0), **properties):
 
 
 def children(**nodes):
-    """Give each child a stable name for native hit testing and scrolling."""
+    """Keep stable node names so scalar updates retain layout and pointer state."""
     return [{name: body} for name, body in nodes.items()]
 
 
 def binding(name, target):
-    """Read an existing host-owned control binding into one visual property."""
+    """Connect a validated scalar binding to one native visual property."""
     return dict(binding_name=name, binding_name_override=target)
 
 
+def color(hexadecimal):
+    """Convert the approved palette's sRGB values into native RGBA components."""
+    return [round(int(hexadecimal[i:i + 2], 16) / 255, 4) for i in (0, 2, 4)] + [1]
+
+
 class Surface:
-    """Author square cards using the existing compact panel's native widgets."""
+    """Keep Fold's single-column rhythm in both persisted appearance modes."""
 
     def __init__(self, dark):
-        self.card_color = [0.075, 0.09, 0.115, 0.96] if dark else [0.96, 0.965, 0.975, 0.97]
-        self.outer = [0.10, 0.13, 0.18, 0.95] if dark else [0.92, 0.93, 0.95, 0.98]
-        self.border = [0.22, 0.26, 0.31, 0.9] if dark else [0.75, 0.77, 0.8, 0.95]
-        self.raised = [0.16, 0.185, 0.22, 0.98] if dark else [0.86, 0.875, 0.9, 1]
-        self.text = [0.94, 0.95, 0.97, 1] if dark else [0.11, 0.12, 0.14, 1]
-        self.muted = [0.67, 0.71, 0.76, 1] if dark else [0.39, 0.41, 0.45, 1]
-        self.accent = [1, 0.34, 0.32, 1] if dark else [0.78, 0.24, 0.20, 1]
+        self.outer = color("201b23" if dark else "f3eded")
+        self.inset = color("302630" if dark else "e9dfe3")
+        self.hover = color("3b303b" if dark else "dfd1d8")
+        self.border = color("4d3e4b" if dark else "cbb7c2")
+        self.text = color("f1ece9" if dark else "3d2838")
+        self.muted = color("c0b3bb" if dark else "76576b")
+        self.accent = color("ff9a85" if dark else "a84239")
+        self.track = color("8c7487" if dark else "ad8e9f")
 
     def rect(self, size, offset=(0, 0), radius=0, color=None):
-        """Use the host's rounded rectangle painter, with no texture dependency."""
+        """Draw a bounded antialiased shape without external textures."""
         return node("custom", size, offset, renderer="cinnabar_rounded_rectangle",
-                    radius=radius, color=color if color is not None else self.border)
+                    radius=radius, color=self.border if color is None else color)
 
     def label(self, text, size, offset=(0, 0), *, muted=False, scale=0.85, align="left"):
-        """Draw a literal label or a changing host-formatted control value."""
+        """Use the component's embedded smooth Inter face for labels and values."""
         result = node("label", size, offset, text=text, text_alignment=align,
                       color=self.muted if muted else self.text, shadow=False,
                       clips_children=True, hide_hyphen=True, localize=False,
@@ -54,139 +69,227 @@ class Surface:
             result["bindings"] = [dict(binding_name=text)]
         return result
 
-    def icon(self, name, size, offset):
-        """Draw an icon through Cinnabar's installed vector icon painter."""
+    def icon(self, name, size, offset, *, muted=False):
+        """Use Cinnabar's vector icons, including the rotating disclosure chevron."""
         return node("custom", size, offset, renderer="cinnabar_vector_icon",
-                    icon=name, color=self.accent if name != "close" else self.muted)
+                    icon=name, color=self.muted if muted else self.accent)
 
-    def button(self, action, size, offset=(0, 0), **contents):
-        """Route a pressed native button to an existing declared control."""
-        return node("button", size, offset, controls=children(**contents),
+    def button(self, index, size, offset=(0, 0), **contents):
+        """Route one pointer action to its stable declared native control index."""
+        action = f"mod.control:{index}" if isinstance(index, int) else index
+        feedback = self.rect(size, radius=3, color=self.hover)
+        if isinstance(index, int):
+            feedback["bindings"] = [binding(f"#row_{index}_hover", "#alpha")]
+            feedback["alpha"] = 0
+        else:
+            feedback["alpha"] = 0
+        return node("button", size, offset, controls=children(feedback=feedback, **contents),
                     button_mappings=[dict(from_button_id="button.menu_select",
                                           to_button_id=action, mapping_type="pressed")])
 
     def toggle(self, index, offset):
-        """Bind the switch track and knob to the host's live toggle state."""
-        track = self.rect([20, 10], radius=5, color=self.raised)
-        track["bindings"] = [binding(f"#row_{index}_toggle_color", "#color")]
-        knob = self.rect([6, 6], [2, 2], 3, self.text)
-        knob["bindings"] = [binding(f"#row_{index}_knob_offset", "#offset"),
-                            binding(f"#row_{index}_knob_color", "#color")]
-        return self.button(f"mod.control:{index}", [20, 14], offset, track=track, knob=knob)
+        """Ease the approved track colors while native motion slides its knob."""
+        track = self.rect([20, 10], [0, 2], 5, self.track)
+        active = self.rect([20, 10], radius=5, color=self.accent)
+        active["bindings"] = [binding(f"#row_{index}_toggle_progress", "#alpha")]
+        knob = self.rect([6, 6], [2, 2], 3, self.outer)
+        knob["bindings"] = [binding(f"#row_{index}_knob_offset", "#offset")]
+        track["controls"] = children(active=active, knob=knob)
+        return self.button(index, [20, 14], offset, track=track)
 
-    def slider(self, index, text, y):
-        """Keep continuous dragging and click-to-type values on the native routes."""
-        width = CARD - 20
-        fill = self.rect([width, 2], [0, 3.5], 1, self.accent)
+    def key(self, index, offset, width=34):
+        """Keep shortcut capture separate from disclosure and module enablement."""
+        return self.button(index, [width, 18], offset,
+                           border=self.rect([width, 18], radius=3),
+                           background=self.rect([width - 1, 17], [0.5, 0.5], 2.5, self.outer),
+                           text=self.label(f"#row_{index}_value", [width - 2, 13], [1, 4],
+                                           muted=True, scale=0.7, align="center"))
+
+    def slider(self, index, title, y, unit):
+        """Retain native dragging and typed numeric editing over the full field width."""
+        width = WIDTH - 56
+        fill = self.rect([width, 2], [0, 4], 1, self.accent)
         fill["bindings"] = [binding(f"#row_{index}_fill", "#size_binding_x")]
-        knob = self.rect([5, 5], radius=2.5, color=self.text)
+        knob = self.rect([6, 6], radius=3, color=self.accent)
         knob.update(anchor_from="right_middle", anchor_to="center")
         fill["controls"] = children(knob=knob)
-        return node("panel", [width, 32], [10, y], controls=children(
-            label=self.label(text, [width - 30, 12], muted=True),
-            value=self.button(f"mod.edit:{index}", [30, 13], [width - 30, 0],
-                              text=self.label(f"#row_{index}_value", [30, 12], align="right")),
-            slider=self.button(f"mod.control:{index}", [width, 12], [0, 11],
-                               track=self.rect([width, 2], [0, 3.5], 1, self.raised), fill=fill)))
-
-    def keybind(self, index, y, text="Keybind"):
-        """Show the native capture indicator and the persisted binding or None."""
-        return node("panel", [CARD - 20, 28], [10, y], controls=children(
-            label=self.label(text, [CARD - 58, 16], [0, 7], muted=True),
-            key=self.button(f"mod.control:{index}", [32, 22], [CARD - 52, 0],
-                            background=self.rect([32, 22], radius=5, color=self.raised),
-                            value=self.label(f"#row_{index}_value", [32, 15], [0, 7],
-                                             scale=0.75, align="center"))))
+        return node("panel", [width, 38], [28, y], controls=children(
+            label=self.label(title, [200, 13], muted=True),
+            value=self.button(f"mod.edit:{index}", [58, 14], [width - 80, 0],
+                              text=self.label(f"#row_{index}_value", [58, 13], align="right")),
+            unit=self.label(unit, [21, 13], [width - 21, 0], muted=True, scale=0.7),
+            slider=self.button(index, [width, 14], [0, 17],
+                               track=self.rect([width, 2], [0, 4], 1, self.track), fill=fill)))
 
     def choice(self, index, y):
-        """Open the host's keyboard-accessible dropdown instead of cycling options."""
-        return node("panel", [CARD - 20, 26], [10, y], controls=children(
-            label=self.label("Mode", [38, 14], [0, 7], muted=True),
-            choice=self.button(f"mod.control:{index}", [74, 22], [38, 0],
-                               background=self.rect([74, 22], radius=4, color=self.raised),
-                               value=self.label(f"#row_{index}_value", [60, 14], [4, 7], scale=0.75),
-                               chevron=self.icon("chevron", [5, 3], [64, 10]))))
+        """Use the host dropdown for keyboard and pointer choice selection."""
+        width = WIDTH - 56
+        return node("panel", [width, 31], [28, y], controls=children(
+            label=self.label("Activation", [width, 12], muted=True),
+            choice=self.button(index, [width, 20], [0, 13],
+                               background=self.rect([width, 20], radius=3, color=self.outer),
+                               value=self.label(f"#row_{index}_value", [width - 20, 14], [6, 5], scale=0.8),
+                               chevron=self.icon("chevron", [5, 3], [width - 12, 9], muted=True))))
 
-    def card(self, name, label, column, row, toggle=None, icon=None, *, height=CARD, **contents):
-        """Keep square settings cards and compact toggle cards on one continuous grid."""
-        title_x = 30 if icon else 10
-        body = dict(border=self.rect([CARD, height], radius=8),
-                    background=self.rect([CARD - 1, height - 1], [0.5, 0.5], 7.5, self.card_color),
-                    title=self.label(label, [CARD - title_x - (32 if toggle is not None else 10), 17],
-                                     [title_x, 13], scale=1 if len(label) < 14 else 0.85))
-        if contents:
-            body["rule"] = self.rect([CARD - 20, 0.5], [10, 31])
-        if icon:
-            body["icon"] = self.icon(icon, [13, 13], [10, 11])
-        if toggle is not None:
-            body["toggle"] = self.toggle(toggle, [CARD - 30, 13])
-        body.update(contents)
-        return {name: node("panel", [CARD, height],
-                           [column * (CARD + GAP), row * (CARD + GAP)], controls=children(**body))}
+    def details(self, module):
+        """Keep all settings in a clipped region whose height eases to or from zero."""
+        content = {
+            "clicker": dict(cps=self.slider(2, "Clicks per second", 8, "CPS")),
+            "aim": dict(strength=self.slider(5, "Strength", 8, "%"), activation=self.choice(6, 44)),
+            "reach": dict(distance=self.slider(9, "Distance", 8, "blocks")),
+            "jump_reset": dict(window=self.slider(12, "Hit window", 8, "ticks")),
+            "fake_lag": dict(delay=self.slider(15, "Delay", 8, "ms"),
+                             real_label=self.label("Show real position", [220, 14], [28, 48], scale=0.8),
+                             real_toggle=self.toggle(16, [WIDTH - 48, 48])),
+            "netherite": dict(range=self.slider(19, "Search range", 8, "blocks")),
+        }[module]
+        region = node("panel", [WIDTH, 0], [0, ROW], clips_children=True,
+                      controls=children(background=self.rect(["100%", "100%"], color=self.inset), **content))
+        region["bindings"] = [binding(f"#fold_{module}_height", "#size_binding_y_absolute")]
+        return region
+
+    def module(self, name, title, toggle, key, disclosure, _height):
+        """Show a summary and independent controls on every compact module row."""
+        title_x = 28 if disclosure is not None else 14
+        contents = dict(title=self.label(title, [240, 15], [title_x, 5], scale=0.9),
+                        summary=self.label(f"#summary_{name}", [250, 12], [title_x, 19], muted=True, scale=0.7))
+        if disclosure is not None:
+            chevron = self.icon("chevron", [5, 3], [12, 15], muted=True)
+            chevron["cinnabar_transform"] = {"rotation": -90}
+            chevron["bindings"] = [binding(f"#fold_{name}_angle", "#cinnabar_rotation")]
+            contents["chevron"] = chevron
+            row = self.button(disclosure, [WIDTH - (96 if key else 56), ROW], **contents)
+        else:
+            row = node("panel", [WIDTH - 56, ROW], controls=children(**contents))
+        controls = dict(row=row, toggle=self.toggle(toggle, [WIDTH - 34, 10]),
+                        rule=self.rect([WIDTH - 28, 0.5], [14, 0]))
+        if key is not None:
+            controls["key"] = self.key(key, [WIDTH - 82, 7], 36)
+        if disclosure is not None:
+            controls["details"] = self.details(name)
+        result = node("panel", [WIDTH, ROW], controls=children(**controls))
+        result["bindings"] = [binding(f"#fold_{name}_offset", "#offset")]
+        return result
 
     def document(self):
-        """Keep the header fixed while all eight cards scroll as one native surface."""
-        cards = [
-            self.card("clicker", "Clicker", 0, 0, 1, "pointer",
-                      cps=self.slider(2, "CPS", 40), key=self.keybind(3, 101)),
-            self.card("aim", "Aim assist", 1, 0, 4, "crosshair",
-                      strength=self.slider(5, "Strength", 40), mode=self.choice(6, 72), key=self.keybind(7, 101)),
-            self.card("reach", "Reach", 2, 0, 8, "ruler",
-                      distance=self.slider(9, "Distance", 40), key=self.keybind(10, 101)),
-            self.card("fake_lag", "FakeLag", 0, 1, 14,
-                      delay=self.slider(15, "Delay (ms)", 40),
-                      real_label=self.label("Show real position", [90, 15], [10, 98], scale=0.75),
-                      real_toggle=self.toggle(16, [CARD - 30, 98])),
-            self.card("jump_reset", "Auto Jump Reset", 1, 1, 11,
-                      window=self.slider(12, "Hit window (ticks)", 40), key=self.keybind(13, 101)),
-            self.card("netherite", "Netherite Finder", 2, 1, 18,
-                      range=self.slider(19, "Range", 40)),
-            self.card("fullbright", "Fullbright", 0, 2, 20, height=40),
-            self.card("general", "General", 1, 2, icon="settings",
-                      menu=self.keybind(0, 40, "Menu key"),
-                      dark_label=self.label("Dark mode", [82, 15], [10, 77]),
-                      dark_toggle=self.toggle(17, [CARD - 30, 77]),
-                      stop=self.button("mod.control:21", [CARD - 20, 21], [10, 101],
-                                       background=self.rect([CARD - 20, 21], radius=4, color=self.raised),
-                                       label=self.label("Disable all", [CARD - 20, 15], [0, 6], align="center"))),
-        ]
-        track = node("scroll_track", [4, "100%"], controls=children(
-            background=self.rect(["100%", "100%"], radius=2, color=self.raised),
+        """Keep header and emergency controls fixed around the one scrolling accordion."""
+        modules = node("panel", [WIDTH, 304], controls=children(**{
+            args[0]: self.module(*args) for args in MODULES}))
+        modules["bindings"] = [binding("#fold_content_height", "#size_binding_y_absolute")]
+        track = node("scroll_track", [3, "100%"], controls=children(
+            background=self.rect(["100%", "100%"], radius=1.5, color=self.outer),
             thumb=node("scrollbar_box", ["100%", "100%"], draggable="vertical", controls=children(
-                background=self.rect(["100%", "100%"], radius=2, color=self.muted)))))
-        view = node("scroll_view", [420, "100% - 56px"], [10, 46],
-                    scroll_content="cards", scroll_view_port="viewport", scrollbar_track="track",
+                background=self.rect(["100%", "100%"], radius=1.5, color=self.track)))))
+        view = node("scroll_view", [WIDTH, "100% - 88px"], [0, 44],
+                    scroll_content="module_rows", scroll_view_port="viewport", scrollbar_track="track",
                     scrollbar_box="thumb", scroll_box_and_track_panel="scrollbar", scroll_speed=24,
                     controls=children(
-                        viewport=node("panel", [412, "100%"], clips_children=True, controls=children(
-                            cards=node("panel", [412, 3 * CARD + 2 * GAP], controls=cards))),
-                        scrollbar=node("panel", [4, "100%"], [416, 0], controls=children(track=track))))
-        dialog = node("panel", [440, "100% - 40px"], [0, 20], max_size=[440, 468])
-        dialog.update(anchor_from="top_middle", anchor_to="top_middle", controls=children(
-            border=self.rect(["100%", "100%"], radius=12),
-            background=self.rect(["100% - 1px", "100% - 1px"], [0.5, 0.5], 11.5, self.outer),
-            brand=self.icon("brand", [18, 18], [12, 9]),
-            title=self.label("Cinnaroids", [160, 20], [39, 12], scale=1),
-            close=self.button("mod.close", [20, 24], [413, 6], icon=self.icon("close", [9, 9], [5, 7])),
-            rule=self.rect([438, 0.5], [1, 35.5]),
-            modules=view))
+                        viewport=node("panel", [WIDTH, "100%"], clips_children=True,
+                                      controls=children(module_rows=modules)),
+                        scrollbar=node("panel", [3, "100%"], [WIDTH - 5, 0], controls=children(track=track))))
+        footer = node("panel", [WIDTH, 44], controls=children(
+            rule=self.rect([WIDTH, 0.5]),
+            count=self.label("#enabled_count", [140, 15], [14, 8], muted=True, scale=0.7),
+            stop=self.button(21, [77, 18], [211, 4],
+                             text=self.label("Disable all  F10", [77, 14], [0, 4], muted=True, scale=0.7)),
+            menu_label=self.label("Menu", [24, 14], [295, 8], muted=True, scale=0.7),
+            menu=self.key(0, [323, 4], 32),
+            hint=self.label("#binding_hint", [WIDTH - 28, 14], [14, 28], muted=True, scale=0.65)))
+        footer.update(anchor_from="bottom_left", anchor_to="top_left", offset=[0, -44])
+        settings = self.button(28, [WIDTH - 20, 52], [10, 44],
+                               background=self.rect([WIDTH - 20, 52], radius=5, color=self.inset),
+                               title=self.label("Menu settings", [150, 15], [12, 6], scale=0.85),
+                               menu_label=self.label("Menu key", [75, 14], [12, 30], muted=True, scale=0.75),
+                               menu=self.key(0, [84, 24]),
+                               dark_label=self.label("Dark mode", [75, 14], [192, 30], muted=True, scale=0.75),
+                               dark=self.toggle(17, [304, 27]))
+        settings["bindings"] = [binding("#settings_open", "#visible")]
+        dialog = node("panel", [WIDTH, "100% - 24px"], max_size=[WIDTH, 392],
+                      cinnabar_transform={"scale": 1}, cinnabar_filter={"blur": 0})
+        dialog.update(anchor_from="center", anchor_to="center", bindings=[
+            binding("#menu_offset", "#offset"), binding("#menu_alpha", "#alpha"),
+            binding("#menu_scale", "#cinnabar_scale"), binding("#menu_blur", "#cinnabar_blur")],
+            controls=children(
+                background=self.rect(["100%", "100%"], radius=8, color=self.outer),
+                brand=self.icon("brand", [15, 15], [15, 13]),
+                title=self.label("Cinnaroids", [180, 17], [37, 9], scale=1.2),
+                subtitle=self.label("Modules, ready when you are.", [240, 12], [37, 25], muted=True, scale=0.65),
+                settings_button=self.button(28, [20, 22], [WIDTH - 57, 11], icon=self.icon("settings", [11, 11], [4, 5], muted=True)),
+                close=self.button("mod.close", [20, 22], [WIDTH - 31, 11], icon=self.icon("close", [8, 8], [6, 6], muted=True)),
+                modules=view, footer=footer, settings=settings))
         return dict(namespace="cinnaroids", panel=node("panel", ["100%", "100%"], controls=children(dialog=dialog)))
+
+    def transitions(self):
+        """Declare reversible panel motion and smooth accordion geometry on one retained route."""
+        result = {
+            "#menu_offset": dict(duration=0.25, easing=EASE, **{"from": [0, 6], "exit": [0, 6]}),
+            "#menu_alpha": dict(duration=0.18, easing="out_cubic", **{"from": 0, "exit": 0}),
+            "#menu_scale": dict(duration=0.25, easing=EASE, **{"from": 0.975, "exit": 0.975}),
+            "#menu_blur": dict(duration=0.25, easing=EASE, **{"from": 5, "exit": 5}),
+            "#fold_content_height": dict(duration=0.25, easing=EASE),
+        }
+        for name, _, toggle, _, disclosure, _ in MODULES:
+            result[f"#fold_{name}_offset"] = dict(duration=0.25, easing=EASE)
+            if disclosure is not None:
+                for prop in ["height", "angle"]:
+                    result[f"#fold_{name}_{prop}"] = dict(duration=0.25, easing=EASE)
+        return result
+
+
+def compact_document(document):
+    """Share static node defaults so regular guest callbacks copy a small authored document."""
+    bases = {}
+
+    def compact(body):
+        """Extract repeated flat presentation properties without changing names or behavior."""
+        kind = body["type"]
+        base = dict(anchor_from="top_left", anchor_to="top_left", offset=[0, 0])
+        name = "base_" + kind
+        if kind == "label":
+            base.update(font_type="mod_panel", shadow=False, hide_hyphen=True,
+                        localize=False, text_alignment="left", font_scale_factor=0.85)
+        if kind == "custom" and body.get("renderer") == "cinnabar_rounded_rectangle":
+            colors = [key for key, value in bases.items() if key.startswith("base_rect_") and value["color"] == body["color"]]
+            name = colors[0] if colors else "base_rect_" + str(sum(key.startswith("base_rect_") for key in bases))
+            base.update(renderer="cinnabar_rounded_rectangle", color=body["color"], radius=0)
+        bases.setdefault(name, dict(type=kind, **base))
+        del body["type"]
+        for key, value in base.items():
+            if body.get(key) == value:
+                del body[key]
+        for entry in body.get("controls", []):
+            child_name, child_body = next(iter(entry.items()))
+            child_base = compact(child_body)
+            entry.clear()
+            entry[child_name + "@" + child_base] = child_body
+        return name
+
+    # Retain the root's ordinary definition; all descendants use static local inheritance.
+    root = document["panel"]
+    for entry in root.get("controls", []):
+        name, body = next(iter(entry.items()))
+        base = compact(body)
+        entry.clear()
+        entry[name + "@" + base] = body
+    document.update(bases)
+    return document
 
 
 def main():
-    """Write deterministic assets, or check that committed assets match the generator."""
+    """Regenerate both deterministic native surfaces or verify their checked-in freshness."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     for dark in [True, False]:
+        surface = Surface(dark)
         path = ROOT / "mods/cinnaroids/ui" / f"panel-{'dark' if dark else 'light'}.json"
-        document = json.dumps(Surface(dark).document(), separators=(",", ":"))
-        text = json.dumps(dict(screen="cinnaroids.panel", document=document), separators=(",", ":"))
+        document = json.dumps(compact_document(surface.document()), separators=(",", ":"))
+        text = json.dumps(dict(screen="cinnaroids.panel", document=document,
+                               transitions=surface.transitions()), separators=(",", ":"))
         if args.check:
             if path.read_text() != text:
                 raise SystemExit(f"{path.relative_to(ROOT)} needs regeneration")
         else:
-            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
 
 

@@ -11,3 +11,5 @@ wit-component = "=0.247.0"
 wasmparser = "=0.247.0"
 wasm-encoder = "=0.247.0"
 mod-api.workspace = true
+cinnaroids-mod = { path = ".." }
+serde_json = "1"

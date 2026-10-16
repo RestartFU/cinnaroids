@@ -47,10 +47,8 @@ fn legacy_preferences_are_tolerated_and_bounds_are_restored() {
     assert_eq!(prefs.aim_strength, 100);
     assert_eq!(prefs.reach_blocks, mod_api::MAX_ENTITY_REACH_BLOCKS);
     assert!(!prefs.dark_mode);
-    for key in ["F10"] {
-        let prefs = Preferences::from_json(&format!(r#"{{"clicker_key":"{key}"}}"#));
-        assert_eq!(prefs.clicker_key, DEFAULT_CLICKER_KEY);
-    }
+    let prefs = Preferences::from_json(r#"{"clicker_key":"F10"}"#);
+    assert_eq!(prefs.clicker_key, DEFAULT_CLICKER_KEY);
     assert_eq!(Preferences::from_json("broken"), Preferences::default());
 }
 
@@ -440,6 +438,13 @@ fn panel_exposes_all_controls_without_category_sections() {
             "netherite_range",
             "fullbright",
             "stop_all",
+            "expand_clicker",
+            "expand_aim",
+            "expand_reach",
+            "expand_jump_reset",
+            "expand_fake_lag",
+            "expand_netherite",
+            "menu_settings",
         ]
     );
 }
@@ -843,4 +848,36 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
         Preferences::from_json(&serde_json::to_string(&prefs).unwrap()),
         prefs
     );
+}
+
+#[test]
+fn fold_disclosure_does_not_enable_modules_or_persist_navigation() {
+    let mut state = state();
+    let preferences = state.preferences.clone();
+    state.panel_dirty = false;
+    state.reservations_dirty = false;
+    controls(&mut state, &[], &[("expand_reach", 1.0)]);
+    assert_eq!(state.expanded_module, Some(2));
+    assert!(!state.modules.reach);
+    assert_eq!(state.preferences, preferences);
+    assert!(state.panel_dirty);
+    assert!(!state.preferences_dirty && !state.reservations_dirty);
+    controls(&mut state, &[], &[("expand_reach", 1.0)]);
+    assert_eq!(state.expanded_module, None);
+    controls(&mut state, &[], &[("menu_settings", 1.0)]);
+    assert!(state.settings_open);
+    controls(&mut state, &[], &[("expand_aim", 1.0)]);
+    assert!(!state.settings_open);
+    assert_eq!(state.expanded_module, Some(1));
+}
+
+#[test]
+fn changing_disclosures_cancels_capture_without_clearing_a_binding() {
+    let mut state = state();
+    controls(&mut state, &[], &[("clicker_key", 1.0)]);
+    assert!(state.capturing_key.is_some());
+    controls(&mut state, &[], &[("expand_aim", 1.0)]);
+    assert!(state.capturing_key.is_none());
+    assert_eq!(state.preferences.clicker_key, DEFAULT_CLICKER_KEY);
+    assert!(!state.preferences_dirty);
 }

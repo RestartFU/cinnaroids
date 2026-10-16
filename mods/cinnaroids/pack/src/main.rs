@@ -47,6 +47,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("Embedded panel font exceeds the host's size limit".into());
     }
     append_section(&mut component, mod_api::PANEL_FONT_SECTION, font);
+    let bundle = panel_bundle()?;
+    append_section(&mut component, mod_api::PANEL_BUNDLE_SECTION, &bundle);
     let notices = std::fs::read(&args[2])?;
     std::str::from_utf8(&notices)?;
     if notices.len() > mod_api::MAX_NOTICES_BYTES {
@@ -92,4 +94,21 @@ fn append_section(component: &mut Vec<u8>, name: &str, data: &[u8]) {
         data: Cow::Borrowed(data),
     }
     .append_to_component(component);
+}
+
+/// Embed both immutable routes so frame callbacks send only controls and scalar values.
+fn panel_bundle() -> Result<Vec<u8>, serde_json::Error> {
+    use cinnaroids_mod::state::{Preferences, State};
+    let dark: serde_json::Value =
+        serde_json::from_str(&State::new(Preferences::default()).panel_json()?)?;
+    let light_preferences = Preferences {
+        dark_mode: false,
+        ..Preferences::default()
+    };
+    let light: serde_json::Value =
+        serde_json::from_str(&State::new(light_preferences).panel_json()?)?;
+    serde_json::to_vec(&serde_json::json!({
+        "panel": dark,
+        "surfaces": { "fold_dark": dark["surface"], "fold_light": light["surface"] }
+    }))
 }

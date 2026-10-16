@@ -27,7 +27,9 @@ dependencies = [
 name = "cinnaroids-pack"
 version = "2.6.12"
 dependencies = [
+ "cinnaroids-mod",
  "mod-api",
+ "serde_json",
  "wasm-encoder",
  "wasmparser",
  "wit-component",
@@ -118,7 +120,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mod-api"
 version = "0.1.20"
-source = "git+https://github.com/bedrock-mc/cinnabar?rev=4ec3296c5598056743fb72bffd2d20243f1d1c8a#4ec3296c5598056743fb72bffd2d20243f1d1c8a"
+source = "git+https://github.com/bedrock-mc/cinnabar?rev=8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2#8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2"
 dependencies = [
  "wit-bindgen",
 ]

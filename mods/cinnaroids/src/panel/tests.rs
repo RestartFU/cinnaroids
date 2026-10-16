@@ -22,42 +22,56 @@ fn child<'a>(parent: &'a Value, name: &str) -> &'a Value {
         .as_array()
         .unwrap()
         .iter()
-        .find_map(|entry| entry.get(name))
+        .find_map(|entry| {
+            entry
+                .as_object()
+                .unwrap()
+                .iter()
+                .find_map(|(key, value)| (key.split('@').next() == Some(name)).then_some(value))
+        })
         .unwrap()
 }
 
 #[test]
-fn both_themes_keep_settings_square_and_fullbright_compact_on_one_scrollable_grid() {
+fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
     for dark in [true, false] {
-        let mut json = "{\"controls\":[]}".to_owned();
-        super::append(&mut json, dark);
-        let panel: Value = serde_json::from_str(&json).unwrap();
-        let document: Value =
-            serde_json::from_str(panel["surface"]["document"].as_str().unwrap()).unwrap();
+        let preferences = crate::state::Preferences {
+            dark_mode: dark,
+            ..Default::default()
+        };
+        let state = crate::state::State::new(preferences);
+        let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+        let surface = &panel["surface"];
+        let document: Value = serde_json::from_str(surface["document"].as_str().unwrap()).unwrap();
         let root = &document["panel"];
         let dialog = child(root, "dialog");
         let view = child(dialog, "modules");
-        assert_eq!(view["type"], "scroll_view");
+        assert_eq!(view["scroll_content"], "module_rows");
         let viewport = child(view, "viewport");
         assert_eq!(viewport["clips_children"], true);
-        let cards = child(viewport, "cards");
-        let entries = cards["controls"].as_array().unwrap();
-        assert_eq!(entries.len(), 8);
-        for entry in entries {
-            let (name, card) = entry.as_object().unwrap().iter().next().unwrap();
-            let height = if name == "fullbright" { 40 } else { 132 };
-            assert_eq!(card["size"], serde_json::json!([132, height]));
+        let modules = child(viewport, "module_rows");
+        assert_eq!(modules["controls"].as_array().unwrap().len(), 7);
+        let fullbright = child(modules, "fullbright");
+        assert_eq!(fullbright["size"], serde_json::json!([370, 32]));
+        assert!(
+            fullbright["controls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|entry| entry.get("details").is_none())
+        );
+        for (name, _) in super::MODULES.iter().take(6) {
+            assert_eq!(
+                child(child(modules, name), "details")["clips_children"],
+                true
+            );
         }
         let mut routes = Vec::new();
         actions(root, &mut routes);
-        for index in 0..22 {
-            assert_eq!(
-                routes
-                    .iter()
-                    .filter(|route| **route == format!("mod.control:{index}"))
-                    .count(),
-                1,
-                "control {index} must appear exactly once"
+        for index in 0..29 {
+            assert!(
+                routes.contains(&format!("mod.control:{index}")),
+                "missing native control {index}"
             );
         }
         for index in [2, 5, 9, 12, 15, 19] {
@@ -68,5 +82,47 @@ fn both_themes_keep_settings_square_and_fullbright_compact_on_one_scrollable_gri
                 || matches!(route.as_str(), "mod.next" | "mod.prev"))
         );
         assert!(routes.contains(&"mod.close".to_owned()));
+        assert_eq!(panel["motion"], true);
+        assert_eq!(surface["transitions"]["#menu_scale"]["exit"], 0.975);
+        assert_eq!(surface["transitions"]["#menu_blur"]["from"], 5);
+        assert_eq!(surface["bindings"]["#fold_aim_height"], 80.0);
+        assert_eq!(surface["bindings"]["#fold_reach_height"], 0.0);
     }
+}
+
+#[test]
+fn disclosure_changes_only_bindings_and_keeps_summaries_current() {
+    use crate::state::{Controls, Event, Preferences, State};
+    let mut state = State::new(Preferences::default());
+    let initial: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    state.controls(Controls {
+        focused: true,
+        panel_open: true,
+        keys: &[],
+        events: &[
+            Event {
+                id: "expand_reach".into(),
+                value: 1.0,
+            },
+            Event {
+                id: "reach_blocks".into(),
+                value: 4.2,
+            },
+        ],
+    });
+    let updated: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    assert_eq!(
+        initial["surface"]["document"],
+        updated["surface"]["document"]
+    );
+    assert_eq!(updated["surface"]["bindings"]["#fold_aim_height"], 0.0);
+    assert_eq!(updated["surface"]["bindings"]["#fold_reach_height"], 48.0);
+    assert_eq!(
+        updated["surface"]["bindings"]["#summary_reach"],
+        "4.2 blocks"
+    );
+    assert_eq!(
+        updated["surface"]["bindings"]["#enabled_count"],
+        "0 of 7 enabled"
+    );
 }

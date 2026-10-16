@@ -195,8 +195,10 @@ fn publish(modules: &mut State) {
         modules.reservations_dirty = false;
     }
     if modules.panel_dirty
-        && let Ok(json) = modules.panel_json()
+        && let Ok(json) = modules.panel_shell_json()
+        && let Ok(update) = modules.panel_update_json()
         && panel::set_content(&json).is_ok()
+        && panel::update_content(&update).is_ok()
     {
         modules.panel_dirty = false;
     }
