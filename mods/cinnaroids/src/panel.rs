@@ -1,4 +1,4 @@
-//! One native scroll view containing every module's square card.
+//! One native scroll view containing every module's card.
 
 /// Copy already serialized geometry so panel updates fit the host's callback fuel.
 /// The host supplies live widget values independently through its row bindings.

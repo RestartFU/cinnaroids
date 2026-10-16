@@ -8,7 +8,7 @@ Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartF
 
 **F7** opens the panel; **F10** stops all modules. Default combat bindings are **F8** Clicker, **R** Aim assist, and **V** Reach. **B** toggles Auto Jump Reset. Modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
-The panel keeps square module cards in a single three-column grid, with scrolling when needed. There are no category tabs or pages. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
+The panel keeps square module cards and a compact Fullbright toggle in a single three-column grid, with scrolling when needed. There are no category tabs or pages. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
 
 Build with Rust 1.99.0, the `wasm32-unknown-unknown` target, and Python 3.11 or newer:
 

@@ -27,7 +27,7 @@ fn child<'a>(parent: &'a Value, name: &str) -> &'a Value {
 }
 
 #[test]
-fn both_themes_keep_every_control_on_one_scrollable_square_card_grid() {
+fn both_themes_keep_settings_square_and_fullbright_compact_on_one_scrollable_grid() {
     for dark in [true, false] {
         let mut json = "{\"controls\":[]}".to_owned();
         super::append(&mut json, dark);
@@ -44,8 +44,9 @@ fn both_themes_keep_every_control_on_one_scrollable_square_card_grid() {
         let entries = cards["controls"].as_array().unwrap();
         assert_eq!(entries.len(), 8);
         for entry in entries {
-            let card = entry.as_object().unwrap().values().next().unwrap();
-            assert_eq!(card["size"], serde_json::json!([132, 132]));
+            let (name, card) = entry.as_object().unwrap().iter().next().unwrap();
+            let height = if name == "fullbright" { 40 } else { 132 };
+            assert_eq!(card["size"], serde_json::json!([132, height]));
         }
         let mut routes = Vec::new();
         actions(root, &mut routes);

@@ -107,20 +107,21 @@ class Surface:
                                value=self.label(f"#row_{index}_value", [60, 14], [4, 7], scale=0.75),
                                chevron=self.icon("chevron", [5, 3], [64, 10]))))
 
-    def card(self, name, label, column, row, toggle=None, icon=None, **contents):
-        """Keep every module in its own square within one continuous card grid."""
+    def card(self, name, label, column, row, toggle=None, icon=None, *, height=CARD, **contents):
+        """Keep square settings cards and compact toggle cards on one continuous grid."""
         title_x = 30 if icon else 10
-        body = dict(border=self.rect([CARD, CARD], radius=8),
-                    background=self.rect([CARD - 1, CARD - 1], [0.5, 0.5], 7.5, self.card_color),
+        body = dict(border=self.rect([CARD, height], radius=8),
+                    background=self.rect([CARD - 1, height - 1], [0.5, 0.5], 7.5, self.card_color),
                     title=self.label(label, [CARD - title_x - (32 if toggle is not None else 10), 17],
-                                     [title_x, 13], scale=1 if len(label) < 14 else 0.85),
-                    rule=self.rect([CARD - 20, 0.5], [10, 31]))
+                                     [title_x, 13], scale=1 if len(label) < 14 else 0.85))
+        if contents:
+            body["rule"] = self.rect([CARD - 20, 0.5], [10, 31])
         if icon:
             body["icon"] = self.icon(icon, [13, 13], [10, 11])
         if toggle is not None:
             body["toggle"] = self.toggle(toggle, [CARD - 30, 13])
         body.update(contents)
-        return {name: node("panel", [CARD, CARD],
+        return {name: node("panel", [CARD, height],
                            [column * (CARD + GAP), row * (CARD + GAP)], controls=children(**body))}
 
     def document(self):
@@ -140,7 +141,7 @@ class Surface:
                       window=self.slider(12, "Hit window (ticks)", 40), key=self.keybind(13, 101)),
             self.card("netherite", "Netherite Finder", 2, 1, 18,
                       range=self.slider(19, "Range", 40)),
-            self.card("fullbright", "Fullbright", 0, 2, 20),
+            self.card("fullbright", "Fullbright", 0, 2, 20, height=40),
             self.card("general", "General", 1, 2, icon="settings",
                       menu=self.keybind(0, 40, "Menu key"),
                       dark_label=self.label("Dark mode", [82, 15], [10, 77]),
