@@ -152,6 +152,9 @@ class ReleaseTests(unittest.TestCase):
     def test_notices_include_every_locked_dependency_license(self):
         for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt"]:
             (self.root / name).write_text(name)
+        font_license = self.root / "assets/fonts/Inter-OFL-1.1.txt"
+        font_license.parent.mkdir(parents=True)
+        font_license.write_bytes((ROOT / "assets/fonts/Inter-OFL-1.1.txt").read_bytes())
         (self.root / "Cargo.lock").write_text(
             'version = 4\n[[package]]\nname = "example"\nversion = "1.0.0"\nsource = "registry"\n')
         with self.assertRaisesRegex(ValueError, "missing dependency licenses"):
@@ -162,6 +165,7 @@ class ReleaseTests(unittest.TestCase):
         notices = packaging.notices(self.root).decode()
         self.assertIn("Example copyright and license", notices)
         self.assertIn("LICENSE.txt", notices)
+        self.assertIn(font_license.read_text(), notices)
 
 
 if __name__ == "__main__":

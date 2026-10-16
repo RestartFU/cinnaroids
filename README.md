@@ -18,7 +18,7 @@ cargo test --locked -p cinnaroids-mod
 python3 -m unittest discover -s scripts/tests -v
 ```
 
-The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `4ec3296c5598056743fb72bffd2d20243f1d1c8a`.
+The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `4ec3296c5598056743fb72bffd2d20243f1d1c8a`.
 
 Edit the card layout in `scripts/generate-panel.py`, then run it to regenerate both theme surfaces. Builds check that the generated files are current.
 

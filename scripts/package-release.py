@@ -7,8 +7,10 @@ import tomllib
 
 
 def notices(root: Path) -> bytes:
-    """Collect unchanged licenses for every locked dependency into embedded notices."""
-    texts = [(root / name).read_text() for name in ["LICENSE.txt", "THIRD_PARTY_NOTICES.txt"]]
+    """Collect project, font and locked dependency licenses into embedded notices."""
+    texts = [(root / name).read_text() for name in [
+        "LICENSE.txt", "THIRD_PARTY_NOTICES.txt", "assets/fonts/Inter-OFL-1.1.txt",
+    ]]
     for package in tomllib.loads((root / "Cargo.lock").read_text())["package"]:
         if "source" not in package:
             continue

@@ -25,6 +25,8 @@ README screenshot
 -----------------
 assets/screenshot.png is an offline CPU preview of the native Cinnaroids
 card surface, rendered through Cinnabar's JSON-UI and production painters.
-It uses the original panel controls, a plain background, and Cinnangles Sans.
-It contains no Minecraft artwork or connected-server footage. Cinnabar's
-font and renderer notices remain in THIRD_PARTY_NOTICES.txt.
+It uses the original panel controls, a plain background, and the embedded
+Inter Medium font.
+It contains no Minecraft artwork or connected-server footage. Font and renderer
+notices remain in THIRD_PARTY_NOTICES.txt; the full Inter OFL is also embedded
+in the component notices.

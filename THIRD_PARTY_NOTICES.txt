@@ -10,7 +10,8 @@ The packaged WASM embeds this notice, the project license, and the unchanged
 license files for every external package in the current Cargo.lock. Retained
 licenses and the inventory below also cover dependencies and fonts from earlier
 launcher releases; their inclusion does not mean they are linked into the module.
-No private font is included in the WASM; the panel uses Cinnabar's installed font.
+The WASM embeds unmodified Inter Medium 4.1 for the personal panel, under the
+SIL Open Font License 1.1. The full OFL is embedded in the component notices.
 
 Historical launcher attribution and inventory
 ---------------------------------------------

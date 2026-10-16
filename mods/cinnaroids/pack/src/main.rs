@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     append_section(
         &mut component,
         "licenses",
-        b"MIT AND PolyForm-Noncommercial-1.0.0",
+        b"MIT AND PolyForm-Noncommercial-1.0.0 AND OFL-1.1",
     );
     append_section(
         &mut component,
@@ -42,6 +42,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         mod_api::ICON_SECTION,
         include_bytes!("../../../../assets/cinnaroids-icon.png"),
     );
+    let font = include_bytes!("../../../../assets/fonts/Inter-Medium.ttf");
+    if font.len() > mod_api::MAX_PANEL_FONT_BYTES {
+        return Err("Embedded panel font exceeds the host's size limit".into());
+    }
+    append_section(&mut component, mod_api::PANEL_FONT_SECTION, font);
     let notices = std::fs::read(&args[2])?;
     std::str::from_utf8(&notices)?;
     if notices.len() > mod_api::MAX_NOTICES_BYTES {
