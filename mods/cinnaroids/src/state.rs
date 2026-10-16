@@ -8,11 +8,6 @@ use crate::jump_reset::{DEFAULT_WINDOW_TICKS, MAX_WINDOW_TICKS, MIN_WINDOW_TICKS
 
 pub const PRODUCT_NAME: &str = "Cinnaroids";
 pub const PANEL_KEY: &str = "F7";
-pub const STOP_KEY: &str = "F10";
-const DEFAULT_CLICKER_KEY: &str = "F8";
-const DEFAULT_AIM_KEY: &str = "KeyR";
-const DEFAULT_REACH_KEY: &str = "KeyV";
-const DEFAULT_JUMP_RESET_KEY: &str = "KeyB";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
 const MAX_CPS: u8 = 30;
@@ -49,10 +44,10 @@ impl Default for Preferences {
         Self {
             cps: 20,
             menu_key: PANEL_KEY.into(),
-            clicker_key: DEFAULT_CLICKER_KEY.into(),
-            aim_key: DEFAULT_AIM_KEY.into(),
-            reach_key: DEFAULT_REACH_KEY.into(),
-            jump_reset_key: DEFAULT_JUMP_RESET_KEY.into(),
+            clicker_key: String::new(),
+            aim_key: String::new(),
+            reach_key: String::new(),
+            jump_reset_key: String::new(),
             jump_reset_window_ticks: DEFAULT_WINDOW_TICKS,
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
@@ -140,16 +135,15 @@ impl Preferences {
                 *target = binding.into();
             }
         }
-        // Preserve the older clicker binding when adding the other module keys.
+        // Keep the first saved assignment; conflicting module bindings become unbound.
         if !preferences.aim_key.is_empty() && preferences.aim_key == preferences.clicker_key {
-            preferences.aim_key = spare_binding(&[&preferences.clicker_key]);
+            preferences.aim_key.clear();
         }
         if !preferences.reach_key.is_empty()
             && (preferences.reach_key == preferences.clicker_key
                 || preferences.reach_key == preferences.aim_key)
         {
-            preferences.reach_key =
-                spare_binding(&[&preferences.clicker_key, &preferences.aim_key]);
+            preferences.reach_key.clear();
         }
         if !preferences.jump_reset_key.is_empty()
             && [
@@ -159,11 +153,7 @@ impl Preferences {
             ]
             .contains(&&preferences.jump_reset_key)
         {
-            preferences.jump_reset_key = spare_binding(&[
-                &preferences.clicker_key,
-                &preferences.aim_key,
-                &preferences.reach_key,
-            ]);
+            preferences.jump_reset_key.clear();
         }
         if [
             &preferences.clicker_key,
@@ -257,7 +247,7 @@ impl State {
         }
     }
 
-    /// The stop edge has priority over panel events, key capture and toggles.
+    /// Apply focused panel events and explicitly assigned shortcuts without leaking capture edges.
     pub fn controls(&mut self, controls: Controls<'_>) {
         let cancelled_capture =
             self.capturing_key.is_some() && (!controls.focused || !controls.panel_open);
@@ -266,12 +256,6 @@ impl State {
             self.panel_dirty = true;
         }
         if !controls.focused {
-            return;
-        }
-        if controls.keys.iter().any(|key| key == STOP_KEY)
-            || (controls.panel_open && controls.events.iter().any(|event| event.id == "stop_all"))
-        {
-            self.stop_all();
             return;
         }
         if cancelled_capture {
@@ -438,10 +422,6 @@ impl State {
                 value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
             ),
             "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
-            "stop_all" => {
-                self.stop_all();
-                return;
-            }
             _ => false,
         };
         if changed {
@@ -468,15 +448,6 @@ impl State {
                 self.preferences_dirty = true;
             }
         }
-    }
-
-    pub fn stop_all(&mut self) {
-        self.modules = Modules::default();
-        self.capturing_key = None;
-        self.clicker.reset();
-        self.panel_dirty = true;
-        self.finder_dirty = true;
-        self.fullbright_dirty = true;
     }
 
     pub fn aim_config(&self) -> Config {
@@ -520,7 +491,7 @@ impl State {
     }
 
     pub fn reserved_keys(&self) -> Vec<String> {
-        let mut keys = vec![self.preferences.menu_key.clone(), STOP_KEY.into()];
+        let mut keys = vec![self.preferences.menu_key.clone()];
         for key in [
             &self.preferences.clicker_key,
             &self.preferences.aim_key,
@@ -682,10 +653,6 @@ impl State {
                 value: self.modules.fullbright,
             },
             Control::Button {
-                id: "stop_all",
-                label: "Disable all",
-            },
-            Control::Button {
                 id: "expand_clicker",
                 label: "Clicker settings",
             },
@@ -797,23 +764,8 @@ fn valid_binding(key: &str) -> bool {
     !key.is_empty()
         && key.len() <= mod_api::MAX_CONTROL_KEY_BYTES
         && key.bytes().all(|byte| byte.is_ascii_alphanumeric())
-        && key != STOP_KEY
         && key != "MouseLeft"
         && key != "Escape"
-}
-
-fn spare_binding(used: &[&str]) -> String {
-    [
-        DEFAULT_AIM_KEY,
-        DEFAULT_REACH_KEY,
-        DEFAULT_JUMP_RESET_KEY,
-        "F7",
-        "F9",
-    ]
-    .into_iter()
-    .find(|key| !used.contains(key))
-    .expect("there are more spare bindings than modules")
-    .into()
 }
 
 fn legacy_key(key: u64) -> Option<String> {

@@ -36,7 +36,7 @@ components:
 
 ## Overview
 
-One native, scrollable module list in the approved aubergine and coral palette. Module names disclose settings independently of switches and key bindings. Fullbright stays one compact row. Header and emergency controls remain visible while the list scrolls.
+One native, scrollable module list in the approved aubergine and coral palette. Module names disclose settings independently of switches and key bindings. Fullbright stays one compact row. Header and footer remain visible while the list scrolls.
 
 ## Colors
 
@@ -66,11 +66,11 @@ Opening and closing ease offset 6px over 250ms with cubic-bezier(.16,1,.3,1); op
 
 `generate-panel.py` owns both native documents and their static templates. Packaging embeds the immutable theme routes in the WASM `PANEL_BUNDLE_SECTION`. When panel state is dirty, the callback sends the small control shell and route/binding patch together through `set_content` and `update_content`. Full documents come from `panel_json()` for packaging and previews. `panel.rs` supplies bounded live bindings; `state.rs` owns navigation and control state.
 
-Summaries and enabled count reflect current state. Numeric editors, dropdown, shortcuts, Escape clearing and F10 stay native. Existing modules without shortcut preferences do not gain decorative keycaps.
+Summaries and enabled count reflect current state. Numeric editors, dropdown, shortcuts, Escape clearing stay native. Existing modules without shortcut preferences do not gain decorative keycaps.
 
 ## Do's and Don'ts
 
 - Do keep disclosure separate from enablement and preserve the original palette.
-- Do clip collapsed controls and keep emergency actions visible.
+- Do clip collapsed controls and keep the menu shortcut visible.
 - Don't add empty card space around Fullbright.
 - Don't store navigation or enabled flags in preferences.

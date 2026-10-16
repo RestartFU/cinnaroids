@@ -10,12 +10,12 @@ WIDTH = 440
 ROW = 36
 EASE = [0.16, 1, 0.3, 1]
 MODULES = [
-    ("clicker", "Clicker", 1, 3, 22, 56),
-    ("aim", "Aim assist", 4, 7, 23, 88),
-    ("reach", "Reach", 8, 10, 24, 56),
-    ("jump_reset", "Auto Jump Reset", 11, 13, 25, 56),
-    ("fake_lag", "FakeLag", 14, None, 26, 80),
-    ("netherite", "Netherite Finder", 18, None, 27, 56),
+    ("clicker", "Clicker", 1, 3, 21, 56),
+    ("aim", "Aim assist", 4, 7, 22, 88),
+    ("reach", "Reach", 8, 10, 23, 56),
+    ("jump_reset", "Auto Jump Reset", 11, 13, 24, 56),
+    ("fake_lag", "FakeLag", 14, None, 25, 80),
+    ("netherite", "Netherite Finder", 18, None, 26, 56),
     ("fullbright", "Fullbright", 20, None, None, 0),
 ]
 
@@ -172,7 +172,7 @@ class Surface:
         return result
 
     def document(self):
-        """Keep header and emergency controls fixed around the one scrolling accordion."""
+        """Keep header and footer fixed around the one scrolling accordion."""
         modules = node("panel", [WIDTH, 340], controls=children(**{
             args[0]: self.module(*args) for args in MODULES}))
         modules["bindings"] = [binding("#fold_content_height", "#size_binding_y_absolute")]
@@ -190,13 +190,11 @@ class Surface:
         footer = node("panel", [WIDTH, 48], controls=children(
             rule=self.rect([WIDTH, 0.5]),
             count=self.label("#enabled_count", [140, 17], [14, 11], muted=True, scale=0.85),
-            stop=self.button(21, [96, 24], [WIDTH - 196, 6],
-                             text=self.label("Disable all  F10", [96, 17], [0, 5], muted=True, scale=0.85)),
             menu_label=self.label("Menu", [29, 17], [WIDTH - 90, 11], muted=True, scale=0.85),
             menu=self.key(0, [WIDTH - 55, 7], 40),
             hint=self.label("#binding_hint", [WIDTH - 28, 16], [14, 31], muted=True, scale=0.8)))
         footer.update(anchor_from="bottom_left", anchor_to="top_left", offset=[0, -48])
-        settings = self.button(28, [WIDTH - 20, 64], [10, 48],
+        settings = self.button(27, [WIDTH - 20, 64], [10, 48],
                                background=self.rect([WIDTH - 20, 64], radius=5, color=self.inset),
                                title=self.label("Menu settings", [180, 18], [12, 6], scale=1.0),
                                menu_label=self.label("Menu key", [80, 16], [12, 37], muted=True, scale=0.9),
@@ -212,7 +210,7 @@ class Surface:
                 brand=self.icon("brand", [17, 17], [15, 14]),
                 title=self.label("Cinnaroids", [200, 20], [39, 8], scale=1.4),
                 subtitle=self.label("Modules, ready when you are.", [270, 15], [39, 29], muted=True, scale=0.8),
-                settings_button=self.button(28, [20, 22], [WIDTH - 57, 11], icon=self.icon("settings", [11, 11], [4, 5], muted=True)),
+                settings_button=self.button(27, [20, 22], [WIDTH - 57, 11], icon=self.icon("settings", [11, 11], [4, 5], muted=True)),
                 close=self.button("mod.close", [20, 22], [WIDTH - 31, 11], icon=self.icon("close", [8, 8], [6, 6], muted=True)),
                 modules=view, footer=footer, settings=settings))
         return dict(namespace="cinnaroids", panel=node("panel", ["100%", "100%"], controls=children(dialog=dialog)))

@@ -133,7 +133,7 @@
     ],
     "dos": [
       "Do keep disclosure separate from enablement and preserve the original palette.",
-      "Do clip collapsed controls and keep emergency actions visible."
+      "Do clip collapsed controls and keep the menu shortcut visible."
     ],
     "donts": [
       "Don't add empty card space around Fullbright.",

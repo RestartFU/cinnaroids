@@ -68,7 +68,7 @@ fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
         }
         let mut routes = Vec::new();
         actions(root, &mut routes);
-        for index in 0..29 {
+        for index in 0..28 {
             assert!(
                 routes.contains(&format!("mod.control:{index}")),
                 "missing native control {index}"

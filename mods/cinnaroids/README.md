@@ -1,6 +1,6 @@
 # Cinnaroids component
 
-Rust WASM modules for Cinnabar's granted local API. Import the finished component through **Settings → Mods → Import**, approve its permissions and enable it. **F7** opens its panel and **F10** stops all modules. Preferences persist; enabled switches start off when the component initializes.
+Rust WASM modules for Cinnabar's granted local API. Import the finished component through **Settings → Mods → Import**, approve its permissions and enable it. **F7** opens its panel. Module shortcuts start unbound. Preferences persist; enabled switches start off when the component initializes.
 
 From the repository root:
 

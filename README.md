@@ -6,7 +6,7 @@ Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump 
 
 Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest), then open **Settings → Mods → Import** in an updated Cinnabar. Select the file, review its requested permissions, and enable it. Cinnabar manages loading and settings; no launcher is needed. [Installation and updates](docs/install.md).
 
-**F7** opens the panel; **F10** stops all modules. Default combat bindings are **F8** Clicker, **R** Aim assist, and **V** Reach. **B** toggles Auto Jump Reset. Modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
+**F7** opens the panel. Module shortcuts start unbound, and modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
 The Fold menu keeps every module in one scrollable list. Click a module name to expand its settings; switches remain independent, and Fullbright is a compact toggle-only row. Live summaries stay visible when settings collapse. Menu settings are behind the header’s settings button. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
 

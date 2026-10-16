@@ -50,7 +50,11 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("clicker", 1.0),
             ("jump_reset", 1.0),
             ("jump_reset_window_ticks", 10.0),
-            ("stop_all", 1.0),
+            ("fullbright", 0.0),
+            ("netherite", 0.0),
+            ("jump_reset", 0.0),
+            ("aim", 0.0),
+            ("clicker", 0.0),
         ] {
             let mut controls = empty_controls();
             controls.focused = true;
@@ -68,7 +72,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 .controls
                 .iter()
                 .any(|control| control.id() == "jump_reset"));
-            if id == "netherite" || id == "netherite_range" {
+            if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
                 let spec = host.block_highlights().unwrap();
                 assert_eq!(
                     spec.identifiers,
@@ -83,9 +87,6 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             if id == "fullbright" {
                 assert_eq!(host.fullbright(), value >= 0.5);
             }
-            if id == "stop_all" {
-                assert!(!host.fullbright());
-            }
         }
         assert!(host.block_highlights().is_none());
         assert!(!host.fullbright());
@@ -93,7 +94,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
 }
 
 #[test]
-fn jump_reset_uses_the_real_component_movement_imports_and_stops_at_f10() {
+fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel() {
     use mod_host::{GameplayMovementSnapshot, GameplaySnapshot, GameplayVector3};
     let component =
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
@@ -170,7 +171,11 @@ fn jump_reset_uses_the_real_component_movement_imports_and_stops_at_f10() {
     let mut controls = empty_controls();
     controls.focused = true;
     controls.gameplay = true;
-    controls.keys_pressed.push("F10".into());
+    controls.panel_open = true;
+    controls.events.push(ControlEvent {
+        id: "jump_reset".into(),
+        value: 0.0,
+    });
     host.frame_with_movement(
         false,
         Some(frame()),
@@ -252,4 +257,5 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     host.frame_with_controls(false, None, controls).unwrap();
     assert!(host.is_active());
     assert_eq!(host.panel().unwrap().toggle_key, "F7");
+    assert_eq!(host.reserved_keys(), ["F7"]);
 }
