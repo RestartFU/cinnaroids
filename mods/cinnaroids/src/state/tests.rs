@@ -359,7 +359,7 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
             .any(|control| control["id"] == "jump_reset")
     );
     assert!(json["dark"].as_bool().unwrap());
-    assert!(state.panel_json().unwrap().len() < 16 * 1024);
+    assert!(state.panel_json().unwrap().len() < 128 * 1024);
     state.panel_dirty = false;
     controls(&mut state, &[], &[]);
     assert!(!state.panel_dirty);

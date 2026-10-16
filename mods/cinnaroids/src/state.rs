@@ -646,9 +646,12 @@ impl State {
             dark: self.preferences.dark_mode,
             capture_key: self.capturing_key.is_some(),
             style: "compact",
+            reference_size: [464.0, 240.0],
             controls,
         };
-        serde_json::to_string(&panel)
+        let mut json = serde_json::to_string(&panel)?;
+        crate::panel::append(&mut json, self.preferences.dark_mode);
+        Ok(json)
     }
 }
 
@@ -773,6 +776,7 @@ struct Panel<'a> {
     dark: bool,
     capture_key: bool,
     style: &'a str,
+    reference_size: [f32; 2],
     controls: Vec<Control<'a>>,
 }
 

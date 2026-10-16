@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 import tempfile
 
 from importlib.util import module_from_spec, spec_from_file_location
@@ -14,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def build() -> None:
     """Compile the guest, embed import metadata and licenses, then checksum the component."""
+    subprocess.run([sys.executable, str(ROOT / "scripts/generate-panel.py"), "--check"],
+                   cwd=ROOT, check=True)
     spec = spec_from_file_location("packaging", ROOT / "scripts/package-release.py")
     packaging = module_from_spec(spec)
     spec.loader.exec_module(packaging)
