@@ -20,7 +20,7 @@ python3 -m unittest discover -s scripts/tests -v
 
 The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained dark/light UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2`.
 
-The panel uses Cinnabar’s reversible open/close transitions, accordion motion, hover/toggle feedback and smooth wheel scrolling. The client’s **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
+The panel uses Cinnabar’s reversible open/close transitions, accordion motion, hover/toggle feedback and smooth wheel scrolling. Text keeps a steady scale during opening and closing, with the embedded antialiased Inter face. The client’s **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
 
 Edit the Fold layout in `scripts/generate-panel.py`, then run it to regenerate both theme surfaces. Builds check that the generated files are current.
 

@@ -720,7 +720,7 @@ impl State {
             dark: self.preferences.dark_mode,
             capture_key: self.capturing_key.is_some(),
             style: "compact",
-            reference_size: [402.0, 240.0],
+            reference_size: [472.0, 240.0],
             motion: true,
             controls,
         };

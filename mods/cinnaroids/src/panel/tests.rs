@@ -52,7 +52,7 @@ fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
         let modules = child(viewport, "module_rows");
         assert_eq!(modules["controls"].as_array().unwrap().len(), 7);
         let fullbright = child(modules, "fullbright");
-        assert_eq!(fullbright["size"], serde_json::json!([370, 32]));
+        assert_eq!(fullbright["size"], serde_json::json!([440, 36]));
         assert!(
             fullbright["controls"]
                 .as_array()
@@ -83,12 +83,12 @@ fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
         );
         assert!(routes.contains(&"mod.close".to_owned()));
         assert_eq!(panel["motion"], true);
-        assert_eq!(surface["transitions"]["#menu_scale"]["exit"], 0.975);
+        assert!(surface["transitions"].get("#menu_scale").is_none());
         assert_eq!(
             surface["transitions"]["#menu_offset"]["from"],
             serde_json::json!([0, 6])
         );
-        assert_eq!(surface["bindings"]["#fold_aim_height"], 80.0);
+        assert_eq!(surface["bindings"]["#fold_aim_height"], 88.0);
         assert_eq!(surface["bindings"]["#fold_reach_height"], 0.0);
     }
 }
@@ -119,7 +119,7 @@ fn disclosure_changes_only_bindings_and_keeps_summaries_current() {
         updated["surface"]["document"]
     );
     assert_eq!(updated["surface"]["bindings"]["#fold_aim_height"], 0.0);
-    assert_eq!(updated["surface"]["bindings"]["#fold_reach_height"], 48.0);
+    assert_eq!(updated["surface"]["bindings"]["#fold_reach_height"], 56.0);
     assert_eq!(
         updated["surface"]["bindings"]["#summary_reach"],
         "4.2 blocks"

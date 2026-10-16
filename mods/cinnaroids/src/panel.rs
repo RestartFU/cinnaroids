@@ -3,12 +3,12 @@
 use crate::state::{AimMode, State};
 
 const MODULES: [(&str, i32); 7] = [
-    ("clicker", 48),
-    ("aim", 80),
-    ("reach", 48),
-    ("jump_reset", 48),
-    ("fake_lag", 68),
-    ("netherite", 48),
+    ("clicker", 56),
+    ("aim", 88),
+    ("reach", 56),
+    ("jump_reset", 56),
+    ("fake_lag", 80),
+    ("netherite", 56),
     ("fullbright", 0),
 ];
 
@@ -95,7 +95,7 @@ fn summary(json: &mut String, key: &str, value: u32, suffix: &str) {
 /// Direct appends avoid generic map/key escaping on every frame under the host fuel cap.
 fn bindings_json(state: &State) -> String {
     let mut json = String::with_capacity(1600);
-    json.push_str(r##"{"#menu_offset":[0,0],"#menu_alpha":1,"#menu_scale":1,"#settings_open":"##);
+    json.push_str(r##"{"#menu_offset":[0,0],"#menu_alpha":1,"#settings_open":"##);
     json.push_str(if state.settings_open { "true" } else { "false" });
     let mut y = 0;
     const KEYS: [(&str, &str, &str); 7] = [
@@ -139,7 +139,7 @@ fn bindings_json(state: &State) -> String {
             number(&mut json, height_key, if expanded { *height } else { 0 });
             number(&mut json, angle_key, if expanded { 0 } else { -90 });
         }
-        y += 32 + if expanded { *height } else { 0 };
+        y += 36 + if expanded { *height } else { 0 };
     }
     number(&mut json, "#fold_content_height", y);
     let p = &state.preferences;

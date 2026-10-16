@@ -25,12 +25,12 @@ rounded:
   field: "3px"
   switch: "5px"
 spacing:
-  row: "32px"
-  chrome: "44px"
+  row: "36px"
+  chrome: "48px"
   content-gutter: "28px"
 components:
   module-row: {height: "{spacing.row}"}
-  panel: {width: "370px", backgroundColor: "{colors.dark-surface}", rounded: "{rounded.panel}"}
+  panel: {width: "440px", backgroundColor: "{colors.dark-surface}", rounded: "{rounded.panel}"}
 ---
 # Fold menu
 
@@ -44,17 +44,17 @@ Coral identifies enabled switches, slider fill and the brand mark. Aubergine lay
 
 ## Typography
 
-The component embeds Inter Medium under the native `mod_panel` face, without shadows. Native font scale factors are 1.2 for the title, .9 for module names, .85 for standard labels, .8 for dropdowns, .75 for settings labels, .7 for summaries/keys and .65 for supporting copy. These are renderer factors, not CSS pixel sizes. Preserve the Inter OFL notice.
+The component embeds Inter Medium under the native `mod_panel` face, without shadows. Native font scale factors are 1.4 for the title, 1.1 for module names, 1.0 for standard labels, .95 for dropdowns, .9 for settings labels, .85 for summaries/keys and .8 for supporting copy. At full menu scale these correspond to nominal physical em sizes of 25.2, 19.8, 18, 17.1, 16.2, 15.3 and 14.4 pixels. These are renderer factors, not CSS pixel sizes. Preserve the Inter OFL notice.
 
 ## Layout
 
-Dimensions in this document are native logical GUI pixels. The dialog is 370 wide and at most 392 high; short windows reduce its height and scroll the list. Rows are 32 high; header/footer 44 each. Setting regions fit their controls:48 high for a single slider,80 for Aim assist and 68 for FakeLag. Native reference fitting handles smaller viewports.
+Dimensions in this document are native logical GUI pixels. The dialog is 440 wide and at most 436 high; short windows reduce its height and scroll the list. Rows are 36 high; header/footer 48 each. Setting regions fit their controls: 56 high for a single slider, 88 for Aim assist and 80 for FakeLag. Native reference fitting handles smaller viewports.
 
 At most one module is expanded; selecting it again collapses it. Aim assist is expanded when module state initializes. Preferences, including appearance, persist; disclosure, settings-overlay visibility and enabled flags are transient.
 
 ## Elevation & Depth
 
-Opaque surfaces and inset tones establish depth. Text stays sharp throughout the transition. Scale, offset and opacity establish focus.
+Opaque surfaces and inset tones establish depth. Text stays sharp throughout the transition. Offset and opacity establish focus while glyphs keep a steady scale.
 
 ## Shapes
 
@@ -62,11 +62,11 @@ The dialog uses an 8px radius; fields and keycaps 3px, switches 5px. Compact sep
 
 ## Components
 
-Opening and closing ease offset 6px and scale.975 over 250ms with cubic-bezier(.16,1,.3,1); opacity uses 180ms out-cubic. Disclosures ease clipped height, following rows and chevrons over 250ms on the retained route. Cinnabar supplies 100ms hover/toggle feedback and 140ms discrete wheel easing. Screen animations settles all motion immediately; closing releases input before the exit finishes.
+Opening and closing ease offset 6px over 250ms with cubic-bezier(.16,1,.3,1); opacity uses 180ms out-cubic. Disclosures ease clipped height, following rows and chevrons over 250ms on the retained route. Cinnabar supplies 100ms hover/toggle feedback and 140ms discrete wheel easing. Screen animations settles all motion immediately; closing releases input before the exit finishes.
 
 `generate-panel.py` owns both native documents and their static templates. Packaging embeds the immutable theme routes in the WASM `PANEL_BUNDLE_SECTION`. When panel state is dirty, the callback sends the small control shell and route/binding patch together through `set_content` and `update_content`. Full documents come from `panel_json()` for packaging and previews. `panel.rs` supplies bounded live bindings; `state.rs` owns navigation and control state.
 
-Summaries and enabled count reflect current state. Numeric editors, dropdown, shortcuts, Escape clearing and F 10 stay native. Existing modules without shortcut preferences do not gain decorative keycaps.
+Summaries and enabled count reflect current state. Numeric editors, dropdown, shortcuts, Escape clearing and F10 stay native. Existing modules without shortcut preferences do not gain decorative keycaps.
 
 ## Do's and Don'ts
 
