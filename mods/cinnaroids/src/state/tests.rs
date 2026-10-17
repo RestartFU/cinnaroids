@@ -40,7 +40,7 @@ fn state_with_bindings() -> State {
 #[test]
 fn preferences_restore_without_enabling_any_module() {
     let preferences = Preferences::from_json(
-        r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
+        r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0],[0,0],[900,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
     );
     let state = State::new(preferences);
     assert_eq!(state.preferences.cps, 18);
@@ -50,12 +50,14 @@ fn preferences_restore_without_enabling_any_module() {
     assert_eq!(state.preferences.columns[0], [10.0, -20.0]);
     assert_eq!(
         state.preferences.columns[1],
-        [230.0, 0.0],
-        "clamped to the reference box"
+        [1898.0, 0.0],
+        "clamped to the pointer pad"
     );
+    assert_eq!(state.preferences.columns[2], [0.0, 0.0]);
     assert_eq!(
-        state.preferences.columns[2],
-        crate::panel::DEFAULT_COLUMNS[2]
+        state.preferences.columns[3],
+        [230.0, 0.0],
+        "Menu stays in the reference box"
     );
     assert_eq!(state.preferences.collapsed, [true, false, false, false]);
     assert_eq!(state.preferences.clicker_key, "KeyV");
@@ -1071,19 +1073,32 @@ fn dragging_a_header_moves_its_column_by_the_grab_point_and_persists_on_release(
 }
 
 #[test]
-fn dragging_clamps_headers_inside_the_reference_box() {
+fn module_columns_drag_anywhere_on_screen_but_menu_stays_reachable() {
     let mut state = state();
     pad(&mut state, "combat", true, true, Some([-370.0, -160.0]));
-    pad(&mut state, "combat", false, true, Some([-2000.0, 2000.0]));
+    pad(&mut state, "combat", false, true, Some([-900.0, 520.0]));
+    assert_eq!(
+        state.preferences.columns[0],
+        [-910.0, 514.0],
+        "beyond the reference box"
+    );
+    pad(&mut state, "combat", false, true, Some([2040.0, -2040.0]));
+    assert_eq!(
+        state.preferences.columns[0],
+        [1898.0, -2046.0],
+        "kept on the pad"
+    );
+    pad(&mut state, "combat", false, false, None);
+    controls(&mut state, &[], &[("menu_settings", 1.0)]);
+    pad(&mut state, "menu", true, true, Some([240.0, -160.0]));
+    pad(&mut state, "menu", false, true, Some([1500.0, 900.0]));
     let [width, height] = crate::panel::REFERENCE;
     assert_eq!(
-        state.preferences.columns[0],
-        [-width / 2.0, height / 2.0 - 22.0]
-    );
-    pad(&mut state, "combat", false, true, Some([2000.0, -2000.0]));
-    assert_eq!(
-        state.preferences.columns[0],
-        [width / 2.0 - crate::panel::COLUMN_WIDTH, -height / 2.0]
+        state.preferences.columns[3],
+        [
+            width / 2.0 - crate::panel::COLUMN_WIDTH,
+            height / 2.0 - 22.0
+        ]
     );
 }
 

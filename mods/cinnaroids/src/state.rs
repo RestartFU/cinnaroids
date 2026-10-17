@@ -89,13 +89,14 @@ impl Preferences {
                 (value as f32).clamp(MIN_REACH, mod_api::MAX_ENTITY_REACH_BLOCKS);
         }
         if let Some(Value::Array(columns)) = values.get("columns") {
-            for (target, value) in preferences.columns.iter_mut().zip(columns) {
+            for (column, (target, value)) in preferences.columns.iter_mut().zip(columns).enumerate()
+            {
                 let position = value.as_array().and_then(|pair| match pair.as_slice() {
                     [x, y] => Some([x.as_f64()? as f32, y.as_f64()? as f32]),
                     _ => None,
                 });
                 if let Some(position) = position.filter(|p| p.iter().all(|v| v.is_finite())) {
-                    *target = clamp_column(position);
+                    *target = clamp_column(column, position);
                 }
             }
         }
@@ -231,9 +232,15 @@ const DRAG_THRESHOLD: f32 = 3.0;
 /// Published pad value while no drag is active; a real pointer never maps here.
 const PAD_IDLE: f32 = -crate::panel::PAD_HALF;
 
-/// Keep a column header within the reference box, so it stays visible on any viewport.
-pub fn clamp_column([x, y]: [f32; 2]) -> [f32; 2] {
-    let [width, height] = crate::panel::REFERENCE;
+/// Bound a column origin. Module columns may go anywhere the shared pointer pad reaches;
+/// a drag keeps the grabbed header under the on-screen pointer. The Menu column, which holds
+/// Reset layout, stays inside the reference box the host always fits on screen.
+pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
+    let [width, height] = if column == 3 {
+        crate::panel::REFERENCE
+    } else {
+        [2.0 * crate::panel::PAD_HALF; 2]
+    };
     [
         x.clamp(-width / 2.0, width / 2.0 - crate::panel::COLUMN_WIDTH),
         y.clamp(-height / 2.0, height / 2.0 - 22.0),
@@ -436,7 +443,7 @@ impl State {
                 drag.moved |= travel >= DRAG_THRESHOLD;
                 if drag.moved {
                     let origin = [pointer[0] - drag.grab[0], pointer[1] - drag.grab[1]];
-                    self.preferences.columns[drag.column] = clamp_column(origin);
+                    self.preferences.columns[drag.column] = clamp_column(drag.column, origin);
                 }
                 self.drag = Some(drag);
                 self.panel_dirty = true;

@@ -34,7 +34,7 @@ spacing:
   text-left: "10px"
   row: "20px"
   header: "22px"
-  footer: "4px"
+  footer: "5px"
   column: "150px"
   column-gap: "53px"
 components:
@@ -86,7 +86,7 @@ A cool near-black and grey neutral set with a single warm accent.
 - **Bone** (text): names, values in fields, and keycap legends.
 - **Ash** (muted): setting labels, trailing row values, units, column counts, chevrons, and the idle hint.
 - **Knob** (knob): slider and switch knobs.
-- **White alphas**: hover feedback (5%), field fills (6%), header divider (9%), track and edge (13%), drag lift border (24%). The header grip shows 3.5% on hover and 6% while pressed.
+- **White alphas**: hover feedback (5%), field fills (6%), header divider (9%), track and edge (13%), drag lift border (24%). The header shows a rounded 4% tint on hover and 7% while pressed.
 
 ### Named Rules
 **The State-Only Coral Rule.** Coral means on, filled, or listening. If an element does not report state or carry the brand, it uses no coral.
@@ -112,9 +112,9 @@ Sizes are Cinnabar `font_scale_factor` values, written as `em` in the frontmatte
 
 ## Layout
 
-The desk is centred on a 760x420 reference box. At the top left sits the hint plate (262x34: the enabled count and one line of hint text). The mark (112x22) sits flush top right. Columns are 150 wide. By default they share one top line, 44 units below the box top, with origins at x = -380, -177, 27, and 230 from centre, leaving 53–54 unit gaps. Dragging keeps a column's header inside the box.
+The desk is centred on a 760x420 reference box. At the top left sits the hint plate (262x34: the enabled count and one line of hint text). The mark (112x22) sits flush top right. Columns are 150 wide. By default they share one top line, 44 units below the box top, with origins at x = -380, -177, 27, and 230 from centre, leaving 53–54 unit gaps. Module columns drag anywhere on screen; the grabbed header stays under the pointer. The Menu column, which holds Reset layout, stays inside the box.
 
-A column is a 22 header, its stacked rows, and a 4-unit footer under the last row. Rows are 20 high. Text starts 10 from the left edge and indents to 13 when a row is enabled. Expandable rows give their right 22 units to the disclosure arrow. Settings regions use a 9 inset and stack from y 6: slider 30, dropdown 32, toggle 20, and Bind 22, plus 2 at the bottom. That gives region heights of 60 (single slider with Bind), 92 (Aim assist), 58 (FakeLag), and 38 (Netherite Finder). Fullbright has no region.
+A column is a 22 header, its stacked rows, and a 5-unit footer under the last row. Rows are 20 high. Text starts 10 from the left edge and indents to 13 when a row is enabled. Expandable rows give their right 22 units to the disclosure arrow. Settings regions use a 9 inset and stack from y 6: slider 30, dropdown 32, toggle 20, and Bind 22, plus 2 at the bottom. That gives region heights of 60 (single slider with Bind), 92 (Aim assist), 58 (FakeLag), and 38 (Netherite Finder). Fullbright has no region.
 
 Rows can expand independently, and several can be open at once. Clicking a header without moving it collapses or expands that column. Moving 3 units turns the press into a drag. Column positions and collapsed flags persist. Reset layout restores both. Enabled flags, expansion, and Menu visibility are runtime only.
 
@@ -124,7 +124,7 @@ Flat, with no shadows anywhere. Depth comes from the softened world behind the p
 
 ## Shapes
 
-Plates (columns, hint, mark) use a 5 radius. Fields, keycaps, and the dropdown use 3. Slider tracks are 2-unit lines with a 1 radius. Switches (18x10) and knobs (6x6) are fully rounded. Rows, tints, the lift bar, and the settings well are square-cornered inside the plate. The 4-unit footer keeps them clear of the bottom corners. Inside a header, a 0.5-unit hairline divider runs from inset to inset.
+Plates (columns, hint, mark) use a 5 radius. Fields, keycaps, and the dropdown use 3. Slider tracks are 2-unit lines with a 1 radius. Switches (18x10) and knobs (6x6) are fully rounded. Rows, tints, the lift bar, and the settings well are square-cornered inside the plate. The 5-unit footer, equal to the plate radius, keeps them clear of the bottom corners. Header hover and press tints are rounded header shapes; the header clip squares only the seam with the body. Inside a header, a 0.5-unit hairline divider runs from inset to inset.
 
 ## Components
 

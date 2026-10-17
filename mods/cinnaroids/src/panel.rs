@@ -7,7 +7,7 @@ pub const REFERENCE: [f32; 2] = [760.0, 420.0];
 pub const COLUMN_WIDTH: f32 = 150.0;
 const HEADER: i32 = 22;
 const ROW: i32 = 20;
-const FOOTER: i32 = 4;
+const FOOTER: i32 = 5;
 /// Half the pointer pad's extent; pad sliders report pointer positions from the box centre.
 pub const PAD_HALF: f32 = 2048.0;
 pub const COLUMNS: [&str; 4] = ["combat", "network", "render", "menu"];
@@ -468,6 +468,11 @@ fn bindings_json(state: &State) -> String {
         pair(&mut json, x, y);
         name_parts(&mut json, &["col_", id, "_pad"]);
         pair(&mut json, -x - PAD_HALF, -y - PAD_HALF);
+        name_parts(&mut json, &["col_", id, "_tint_at"]);
+        pair(&mut json, x + PAD_HALF, y + PAD_HALF);
+        // Taller than the header while open, so the clip squares the seam, not the corners.
+        name_parts(&mut json, &["col_", id, "_tint_h"]);
+        integer(&mut json, if open { HEADER + 5 } else { HEADER });
         name_parts(&mut json, &["col_", id, "_in"]);
         json.push_str("[0,0]");
         name_parts(&mut json, &["col_", id, "_alpha"]);

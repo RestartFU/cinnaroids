@@ -14,7 +14,8 @@ REFERENCE = (760, 420)
 COLUMN = 150
 HEADER = 22
 ROW = 20
-FOOTER = 4
+# The footer matches the corner radius so square row tints never reach the rounded corners.
+FOOTER = 5
 PAD = 4096
 INSET = 9
 HINT_WIDTH = 262
@@ -292,10 +293,15 @@ def column(identifier, title, pad):
                 heights.append(height)
     body = bind(node("panel", [COLUMN, 0], [0, HEADER], clips_children=True,
                      controls=children(**rows)), (f"#col_{identifier}_h", "#size_binding_y_absolute"))
+    # Hover and press tints are rounded header shapes placed inside the screen-fixed pad, so
+    # they follow the column and keep its corners; the header clip squares only the seam.
+    def header_tint(alpha):
+        tint = rect([COLUMN, HEADER], radius=5, color=rgba("ffffff", alpha))
+        bind(tint, (f"#col_{identifier}_tint_h", "#size_binding_y_absolute"))
+        return bind(node("panel", [COLUMN, HEADER], controls=children(tint=tint)),
+                    (f"#col_{identifier}_tint_at", "#offset"))
     grip = button(f"mod.vector:{pad}:{pad + 1}", [PAD, PAD], hover=False,
-                  idle=node("panel", [0, 0]),
-                  over=rect([PAD, PAD], color=rgba("ffffff", 0.035)),
-                  held=rect([PAD, PAD], color=rgba("ffffff", 0.06)))
+                  idle=node("panel", [0, 0]), over=header_tint(0.04), held=header_tint(0.07))
     grip.update(default_control="idle", hover_control="over", pressed_control="held")
     bind(grip, (f"#col_{identifier}_pad", "#offset"))
     chevron = icon("chevron", [5, 3], [COLUMN - 14, 10])

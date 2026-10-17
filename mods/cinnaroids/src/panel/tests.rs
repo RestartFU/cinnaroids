@@ -170,7 +170,7 @@ fn disclosure_and_toggles_change_only_bindings() {
     assert_eq!(bindings["#aim_h"], 0);
     assert_eq!(bindings["#jump_reset_y"], serde_json::json!([0, 120]));
     assert_eq!(bindings["#col_combat_h"], 140);
-    assert_eq!(bindings["#col_combat_bg"], 166);
+    assert_eq!(bindings["#col_combat_bg"], 167);
     assert_eq!(bindings["#reach_value"], "4.2 blocks");
     assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
     assert_eq!(bindings["#col_network_count"], "1/1");
@@ -228,6 +228,15 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
         bindings["#col_render_pad"],
         serde_json::json!([-2060.5, -2008])
     );
+    assert_eq!(
+        bindings["#col_render_tint_at"],
+        serde_json::json!([2060.5, 2008])
+    );
+    assert_eq!(
+        bindings["#col_render_tint_h"], 22,
+        "collapsed headers keep rounded corners"
+    );
+    assert_eq!(bindings["#col_combat_tint_h"], 27);
 }
 
 /// Numbers compare by value: the shell writes `1`, serde writes `1.0`.

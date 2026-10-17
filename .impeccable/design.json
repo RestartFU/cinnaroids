@@ -164,7 +164,7 @@
       }
     ],
     "nativeGeometry": {
-      "referenceBox": "760x420, host-fitted on small viewports",
+      "referenceBox": "760x420, host-fitted on small viewports; bounds the Menu column only",
       "defaultColumnOrigins": "x -380, -177, 27, 230; y -166 from box centre",
       "dragThreshold": "3",
       "settingsStack": "top 6, slider 30, dropdown 32, toggle 20, bind 22, bottom 2",
