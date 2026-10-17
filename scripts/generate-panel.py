@@ -18,21 +18,20 @@ ROW = 20
 FOOTER = 5
 PAD = 4096
 INSET = 9
-HINT_WIDTH = 262
 
 EXPO = [0.16, 1, 0.3, 1]
 SETTLE = [0.2, 0.9, 0.25, 1]
 LIFT = [0.34, 1.36, 0.64, 1]
 
 # Control indices are declared in `State::panel_content`; tests assert both stay aligned.
-MENU_KEY, MENU_SETTINGS, RESET_LAYOUT = 0, 26, 27
-# Every header shares one screen-fixed drag pad backed by the two hidden sliders 28 and 29.
-DRAG_PAD = 28
+MENU_KEY, RESET_LAYOUT = 0, 26
+# Every header shares one screen-fixed drag pad backed by the two hidden sliders 27 and 28.
+DRAG_PAD = 27
 COLUMNS = [
     ("combat", "Combat", DRAG_PAD),
     ("network", "Network", DRAG_PAD),
     ("render", "Render", DRAG_PAD),
-    ("menu", "Menu", DRAG_PAD),
+    ("menu", "Settings", DRAG_PAD),
 ]
 # id, label, column, toggle, expand, key, settings
 MODULES = [
@@ -60,7 +59,6 @@ TEXT = rgba("e6e8eb")
 MUTED = rgba("a3a9b2")
 ACCENT = rgba("ff8a65")
 COLUMN_FILL = rgba("0f1115", 0.9)
-HEADER_FILL = rgba("1a1d23", 0.97)
 DETAIL_FILL = rgba("000000", 0.24)
 TINT = rgba("ff8a65", 0.17)
 HOVER = rgba("ffffff", 0.05)
@@ -276,7 +274,6 @@ def menu_rows():
                    feedback=bind(rect([width, 18], radius=3, color=HOVER, alpha=0),
                                  (f"#row_{RESET_LAYOUT}_hover", "#alpha")),
                    name=label("Reset layout", [width, 10], [0, 5], scale=0.82, align="center"))
-    # Menu-key capture guidance lives in the hint plate, like module bindings.
     return dict(menu_key=key, reset=reset), 52
 
 
@@ -327,45 +324,15 @@ def column(identifier, title, pad):
                          controls=children(**header)),
                     (f"#col_{identifier}_in", "#offset"), (f"#col_{identifier}_alpha", "#alpha"))
     result = node("panel", [COLUMN, HEADER], controls=children(entrance=entrance))
-    pairs = [(f"#col_{identifier}_pos", "#offset")]
-    if identifier == "menu":
-        pairs.append(("#menu_visible", "#visible"))
-    return bind(result, *pairs), heights
+    return bind(result, (f"#col_{identifier}_pos", "#offset")), heights
 
 
 def document():
     """Floating columns over a dimmed, blurred world, centred on the reference box."""
-    left, top = -REFERENCE[0] / 2, -REFERENCE[1] / 2
-    # A plate keeps the hint legible over bright skies; it is sized to the longest line.
-    guidance = label("#hint", [246, 10], [9, 19], color=MUTED, scale=0.75)
-    guidance["bindings"].append(dict(binding_name="#hint_color", binding_name_override="#color"))
-    hint = bind(node("panel", [HINT_WIDTH, 34], propagate_alpha=True, controls=children(
-        background=rect([HINT_WIDTH, 34], radius=5, color=COLUMN_FILL),
-        count=label("#enabled_count", [200, 11], [9, 6], scale=0.86), hint=guidance)),
-        ("#chrome_in", "#offset"), ("#chrome_alpha", "#alpha"))
-    mark_width = 112
-    open_chip = bind(rect([mark_width, HEADER], radius=5, color=HEADER_FILL, alpha=0),
-                     ("#menu_open", "#alpha"))
-    mark = button(MENU_SETTINGS, [mark_width, HEADER], hover=False,
-                  background=rect([mark_width, HEADER], radius=5, color=COLUMN_FILL),
-                  chip=open_chip,
-                  feedback=bind(rect([mark_width, HEADER], radius=5, color=HOVER, alpha=0),
-                                (f"#row_{MENU_SETTINGS}_hover", "#alpha")),
-                  brand=icon("brand", [11, 11], [8, 5.5], ACCENT),
-                  name=label("Cinnaroids", [60, 11], [24, 6], scale=0.86),
-                  key=label("#menu_key", [26, 10], [mark_width - 34, 7], color=MUTED,
-                            scale=0.75, align="right"))
-    mark = bind(node("panel", [mark_width, HEADER], propagate_alpha=True,
-                     controls=children(mark=mark)),
-                ("#chrome_in", "#offset"), ("#chrome_alpha", "#alpha"))
-    # Entrance bindings own each node's offset, so static placement lives on a parent.
-    hint = node("panel", [HINT_WIDTH, 34], [left, top], controls=children(entrance=hint))
-    corner = node("panel", [mark_width, HEADER], [-left - mark_width, top],
-                  controls=children(entrance=mark))
     columns, heights = {}, {}
     for identifier, title, pad in COLUMNS:
         columns[identifier], heights[identifier] = column(identifier, title, pad)
-    desk = node("panel", [0, 0], controls=children(hint=hint, corner=corner, **columns))
+    desk = node("panel", [0, 0], controls=children(**columns))
     desk.update(anchor_from="center", anchor_to="top_left")
     root = node("panel", ["100%", "100%"], controls=children(desk=desk))
     return dict(namespace="cinnaroids", panel=root), heights
@@ -379,10 +346,6 @@ def transitions():
         "#world_blur": dict(duration=0.38, easing="in_out_cubic", **{"from": 0, "exit": 0}),
         "#world_brightness": dict(duration=0.38, easing="in_out_cubic", **{"from": 1, "exit": 1}),
         "#world_saturation": dict(duration=0.38, easing="in_out_cubic", **{"from": 1, "exit": 1}),
-        "#chrome_in": dict(duration=0.3, easing=EXPO, **{"from": [0, -4], "exit": [0, -3]}),
-        "#chrome_alpha": dict(duration=0.18, easing="out_cubic", **{"from": 0, "exit": 0}),
-        "#hint_color": dict(duration=0.16, easing="out_cubic"),
-        "#menu_open": dict(duration=0.18, easing="out_cubic"),
     }
     for order, (identifier, _, _) in enumerate(COLUMNS):
         result[f"#col_{identifier}_in"] = dict(duration=0.3 + 0.045 * order, easing=EXPO,

@@ -6,7 +6,6 @@ colors:
   accent-tint: "rgba(255, 138, 101, 0.17)"
   capture-fill: "#2a1d19"
   column-fill: "rgba(15, 17, 21, 0.9)"
-  mark-open-fill: "rgba(26, 29, 35, 0.97)"
   detail-fill: "rgba(0, 0, 0, 0.24)"
   text: "#e6e8eb"
   muted: "#a3a9b2"
@@ -51,8 +50,6 @@ components:
   switch-on: {backgroundColor: "{colors.accent}"}
   slider: {height: "2px", backgroundColor: "{colors.edge}", rounded: "{rounded.track}"}
   slider-fill: {height: "2px", backgroundColor: "{colors.accent}", rounded: "{rounded.track}"}
-  hint-plate: {width: "262px", height: "34px", backgroundColor: "{colors.column-fill}", rounded: "{rounded.plate}"}
-  mark: {width: "112px", height: "{spacing.header}", backgroundColor: "{colors.column-fill}", rounded: "{rounded.plate}", typography: "{typography.strong}"}
 ---
 # Design System: Cinnaroids ClickGUI
 
@@ -60,12 +57,12 @@ components:
 
 **Creative North Star: "The Lit Column"**
 
-The classic client-mod ClickGUI played straight. Category columns (Combat, Network, Render, and a Menu column on demand) float over a world that softens behind them: blur 4, brightness 0.7, saturation 0.85. Each column is one near-black translucent plate; enabled modules light up with a coral tint and a 2-unit coral bar on the left edge. Settings open in a darker region directly beneath their row. There is no modal card and no light theme.
+The classic client-mod ClickGUI played straight. Category columns (Combat, Network, Render, and Settings) float over a world that softens behind them: blur 4, brightness 0.7, saturation 0.85. Each column is one near-black translucent plate; enabled modules light up with a coral tint and a 2-unit coral bar on the left edge. Settings open in a darker region directly beneath their row. There is no modal card and no light theme.
 
 This is a native Cinnabar overlay, not a web page. Every dimension below is in logical GUI units (rendered evidence is 2 physical px per unit). The host scales the 760x420 reference box down on small viewports, so the box stays visible.
 
 **Key Characteristics:**
-- One accent, coral, used only for state: enabled, filled, capturing, and the brand mark.
+- One accent, coral, used only for state: enabled, filled, and capturing.
 - Flat translucent plates, no shadows. Depth comes from alpha layers.
 - Dense 20-unit rows; values and key binds readable without opening anything.
 - Motion on bound scalars only: an expo settle in, a quick reversible exit, and drags that follow the pointer exactly.
@@ -75,21 +72,20 @@ This is a native Cinnabar overlay, not a web page. Every dimension below is in l
 A cool near-black and grey neutral set with a single warm accent.
 
 ### Primary
-- **Coral** (accent): enabled-row lift bar, switch-on track, slider fill, brand icon, bound key legend on enabled rows, the capture border and prompt, and hint text while capturing. Nothing decorative.
+- **Coral** (accent): enabled-row lift bar, switch-on track, slider fill, bound key legend on enabled rows, the capture border and prompt. Nothing decorative.
 - **Coral Glow** (accent-tint): the enabled-row wash. It fades in with toggle progress, so it shows as a warm brown over the column.
 - **Ember** (capture-fill): the opaque fill under a keycap while it waits for a key, with a 1-unit coral border.
 
 ### Neutral
-- **Night Plate** (column-fill): column bodies, the hint plate, and the mark.
-- **Raised Night** (mark-open-fill): only the mark's open state while the Menu column is shown.
+- **Night Plate** (column-fill): column bodies.
 - **Well** (detail-fill): black at 24% behind expanded settings, one step darker than the column.
 - **Bone** (text): names, values in fields, and keycap legends.
-- **Ash** (muted): setting labels, trailing row values, units, column counts, chevrons, and the idle hint.
+- **Ash** (muted): setting labels, trailing row values, units, column counts, and chevrons.
 - **Knob** (knob): slider and switch knobs.
 - **White alphas**: hover feedback (5%), field fills (6%), header divider (9%), track and edge (13%), drag lift border (24%). The header shows a rounded 4% tint on hover and 7% while pressed.
 
 ### Named Rules
-**The State-Only Coral Rule.** Coral means on, filled, or listening. If an element does not report state or carry the brand, it uses no coral.
+**The State-Only Coral Rule.** Coral means on, filled, or listening. If an element does not report state, it uses no coral.
 
 ## Typography
 
@@ -101,10 +97,10 @@ A cool near-black and grey neutral set with a single warm accent.
 Sizes are Cinnabar `font_scale_factor` values, written as `em` in the frontmatter. They are renderer factors, not CSS sizes.
 - **Column title** (1.06): column headers.
 - **Module** (0.92): module names in rows.
-- **Strong** (0.86): enabled count, the "Cinnaroids" name on the mark, and the "Menu key" label. "Reset layout" uses 0.82.
+- **Strong** (0.86): the "Menu key" label. "Reset layout" uses 0.82.
 - **Label** (0.78): setting titles, trailing values, slider values, dropdown values, and column counts.
-- **Caption** (0.75): hint line, the mark's key legend, and keycap legends in settings.
-- **Small** (0.72): units and the "Press a key" prompt. Menu-key capture guidance appears in the hint plate.
+- **Caption** (0.75): keycap legends in settings.
+- **Small** (0.72): units and the "Press a key" prompt.
 - **Legend** (0.66): the small keycap inside a module row.
 
 ### Named Rules
@@ -112,11 +108,11 @@ Sizes are Cinnabar `font_scale_factor` values, written as `em` in the frontmatte
 
 ## Layout
 
-The desk is centred on a 760x420 reference box. At the top left sits the hint plate (262x34: the enabled count and one line of hint text). The mark (112x22) sits flush top right. Columns are 150 wide. By default they share one top line, 44 units below the box top, with origins at x = -380, -177, 27, and 230 from centre, leaving 53–54 unit gaps. Module columns drag anywhere on screen; the grabbed header stays under the pointer. The Menu column, which holds Reset layout, stays inside the box.
+The desk is centred on a 760x420 reference box. Columns are 150 wide. By default they share one top line, 44 units below the box top, with origins at x = -380, -177, 27, and 230 from centre, leaving 53–54 unit gaps. Module columns drag anywhere on screen; the grabbed header stays under the pointer. The Settings column, which holds Reset layout, stays inside the box.
 
 A column is a 22 header, its stacked rows, and a 5-unit footer under the last row. Rows are 20 high. Text starts 10 from the left edge and indents to 13 when a row is enabled. Expandable rows give their right 22 units to the disclosure arrow. Settings regions use a 9 inset and stack from y 6: slider 30, dropdown 32, toggle 20, and Bind 22, plus 2 at the bottom. That gives region heights of 60 (single slider with Bind), 92 (Aim assist), 58 (FakeLag), and 38 (Netherite Finder). Fullbright has no region.
 
-Rows can expand independently, and several can be open at once. Clicking a header without moving it collapses or expands that column. Moving 3 units turns the press into a drag. Column positions and collapsed flags persist. Reset layout restores both. Enabled flags, expansion, and Menu visibility are runtime only.
+Rows can expand independently, and several can be open at once. Clicking a header without moving it collapses or expands that column. Moving 3 units turns the press into a drag. Column positions and collapsed flags persist. Reset layout restores both. Enabled flags and expansion are runtime only.
 
 ## Elevation & Depth
 
@@ -124,7 +120,7 @@ Flat, with no shadows anywhere. Depth comes from the softened world behind the p
 
 ## Shapes
 
-Plates (columns, hint, mark) use a 5 radius. Fields, keycaps, and the dropdown use 3. Slider tracks are 2-unit lines with a 1 radius. Switches (18x10) and knobs (6x6) are fully rounded. Rows, tints, the lift bar, and the settings well are square-cornered inside the plate. The 5-unit footer, equal to the plate radius, keeps them clear of the bottom corners. Header hover and press tints are rounded header shapes; the header clip squares only the seam with the body. Inside a header, a 0.5-unit hairline divider runs from inset to inset.
+Column plates use a 5 radius. Fields, keycaps, and the dropdown use 3. Slider tracks are 2-unit lines with a 1 radius. Switches (18x10) and knobs (6x6) are fully rounded. Rows, tints, the lift bar, and the settings well are square-cornered inside the plate. The 5-unit footer, equal to the plate radius, keeps them clear of the bottom corners. Header hover and press tints are rounded header shapes; the header clip squares only the seam with the body. Inside a header, a 0.5-unit hairline divider runs from inset to inset.
 
 ## Components
 
@@ -138,16 +134,16 @@ Left-click toggles the row. On toggle, Coral Glow fades in, the 2x20 coral bar s
 - **Slider:** an Ash title on the left and a value plus unit on the right; the value is a native typed editor. The track spans the full inset width. The coral fill carries a 6x6 knob.
 - **Dropdown:** a 16-high field with the value at x 6 and a chevron at the right. Selection uses the host dropdown.
 - **Switch:** an 18x10 track whose coral layer fades with toggle progress. The knob slides natively.
-- **Bind:** a 58x16 keycap with an edge border. During capture, an Ember cap with a coral border and a "Press a key" prompt fades in over it, and the hint plate turns coral. Esc clears a module key and keeps the menu key.
+- **Bind:** a 58x16 keycap with an edge border. During capture, an Ember cap with a coral border and a "Press a key" prompt fades in over it. Esc clears a module key and keeps the menu key.
 
-### Hint plate and mark
-The hint plate shows "N of 7 enabled" in Strong and the hint in Caption. The mark shows the coral brand icon, "Cinnaroids", and the menu key legend. Pressing the mark shows or hides the Menu column (Menu key and Reset layout), and while it is open the mark shows Raised Night.
+### Settings column
+The Settings column is visible alongside Combat, Network, and Render. It shares their header, drag grip, collapse behavior, and entrance motion, and contains Menu key and Reset layout.
 
 ### Motion
 Transitions run on bound scalars, with no delays or loops.
-- **Open:** the world eases in over 380ms in-out-cubic. The hint plate and mark drop 4 units over 300ms expo (0.16, 1, 0.3, 1) and fade over 180ms out-cubic. Columns rise 10 units over 300, 345, 390, and 435ms expo, staggered by 45ms, and fade over 140ms plus 20ms per column.
+- **Open:** the world eases in over 380ms in-out-cubic. Columns rise 10 units over 300, 345, 390, and 435ms expo, staggered by 45ms, and fade over 140ms plus 20ms per column.
 - **Close:** the same curves reverse from shorter distances (3 and 5). The world's symmetric curve keeps it dimmed until the columns have faded out.
-- **State:** height, row offset, and plate height take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. The divider, keycap, hint color, and Menu chip fade over 140–180ms out-cubic.
+- **State:** height, row offset, and plate height take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. The divider and keycap fade over 140–180ms out-cubic.
 - **Drag:** no easing, so the column tracks the pointer exactly.
 
 ### Delivery
@@ -159,7 +155,7 @@ Transitions run on bound scalars, with no delays or loops.
 - **Do** keep every value in `generate-panel.py` and drive changes through bound scalars; let the host fit the 760x420 box.
 - **Do** keep toggling, disclosure, and key binding as three separate actions on separate hit areas.
 - **Do** show each module's value and bound key in its row without requiring it to open.
-- **Do** use coral only for state and the brand (the State-Only Coral Rule).
+- **Do** use coral only for state (the State-Only Coral Rule).
 - **Do** build the control shell from static fragments in `panel.rs`.
 
 ### Don't:
@@ -167,5 +163,5 @@ Transitions run on bound scalars, with no delays or loops.
 - **Don't** fold the columns back into a single modal dialog card or reintroduce a light theme.
 - **Don't** round rows, tints, or the settings well; only plates, fields, switches, and knobs carry radii.
 - **Don't** use characters outside Inter Medium's embedded set or draw icons as text.
-- **Don't** persist enabled flags, row expansion, or Menu visibility.
+- **Don't** persist enabled flags or row expansion.
 - **Don't** ease column drags.

@@ -165,7 +165,6 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         r#",{"kind":"button","id":"expand_jump_reset","label":"Auto Jump Reset settings"}"#,
         r#",{"kind":"button","id":"expand_fake_lag","label":"FakeLag settings"}"#,
         r#",{"kind":"button","id":"expand_netherite","label":"Netherite Finder settings"}"#,
-        r#",{"kind":"button","id":"menu_settings","label":"Menu settings"}"#,
         r#",{"kind":"button","id":"reset_layout","label":"Reset layout"}"#,
     ));
     slider(
@@ -315,14 +314,6 @@ fn text(json: &mut String, value: &str) {
     json.push('"');
 }
 
-fn color(json: &mut String, active: bool) {
-    json.push_str(if active {
-        "[1,0.5412,0.3961,1]"
-    } else {
-        "[0.6392,0.6627,0.698,1]"
-    });
-}
-
 /// The muted trailing value of a module row.
 fn value(json: &mut String, state: &State, module: usize) {
     let p = &state.preferences;
@@ -360,61 +351,17 @@ fn value(json: &mut String, state: &State, module: usize) {
     json.push('"');
 }
 
-fn module_name(target: KeybindTarget) -> &'static str {
-    match target {
-        KeybindTarget::Menu => "the menu",
-        KeybindTarget::Clicker => "Clicker",
-        KeybindTarget::Aim => "Aim assist",
-        KeybindTarget::Reach => "Reach",
-        KeybindTarget::JumpReset => "Auto Jump Reset",
-    }
-}
-
 /// Write a small JSON object from trusted names, fixed copy, booleans and bounded numbers.
 /// Direct appends avoid generic map/key escaping on every frame under the host fuel cap.
 fn bindings_json(state: &State) -> String {
     let mut json = String::with_capacity(4096);
-    json.push_str(r##"{"#world_blur":4,"#world_brightness":0.7,"#world_saturation":0.85,"#chrome_in":[0,0],"#chrome_alpha":1"##);
+    json.push_str(r##"{"#world_blur":4,"#world_brightness":0.7,"#world_saturation":0.85"##);
     let enabled = state.enabled_flags();
-    let count = enabled.iter().filter(|on| **on).count();
-    name(&mut json, "#enabled_count");
-    json.push('"');
-    integer(&mut json, count as i32);
-    json.push_str(" of 7 enabled\"");
-    name(&mut json, "#hint");
-    match state.capturing_key {
-        Some(KeybindTarget::Menu) => text(
-            &mut json,
-            "Press a key for the menu. Esc keeps the current key.",
-        ),
-        Some(target) => {
-            json.push_str("\"Press a key for ");
-            json.push_str(module_name(target));
-            json.push_str(". Esc clears it.\"");
-        }
-        None => text(
-            &mut json,
-            "Click a module to toggle it \u{b7} Arrow opens settings \u{b7} Drag a header to move",
-        ),
-    }
-    name(&mut json, "#hint_color");
-    color(&mut json, state.capturing_key.is_some());
-    name(&mut json, "#menu_key");
-    text(&mut json, key_legend(&state.preferences.menu_key));
-    let menu = if state.menu_open { 1 } else { 0 };
-    name(&mut json, "#menu_open");
-    integer(&mut json, menu);
     name(&mut json, "#menu_capture");
     integer(
         &mut json,
         (state.capturing_key == Some(KeybindTarget::Menu)).into(),
     );
-    name(&mut json, "#menu_visible");
-    json.push_str(if state.menu_visible() {
-        "true"
-    } else {
-        "false"
-    });
 
     // Module rows, stacked per column with eased offsets beneath expanded settings.
     let mut heights = [0, 0, 0, MENU_BODY];
@@ -476,7 +423,7 @@ fn bindings_json(state: &State) -> String {
         name_parts(&mut json, &["col_", id, "_in"]);
         json.push_str("[0,0]");
         name_parts(&mut json, &["col_", id, "_alpha"]);
-        integer(&mut json, if column == 3 { menu } else { 1 });
+        integer(&mut json, 1);
         name_parts(&mut json, &["col_", id, "_h"]);
         integer(&mut json, body);
         name_parts(&mut json, &["col_", id, "_bg"]);

@@ -8,7 +8,7 @@ Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartF
 
 **F7** opens the panel. Module shortcuts start unbound, and modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
-The panel is a classic ClickGUI: Combat, Network and Render columns float over the softened world. Click a module to toggle it, and use its arrow to open settings beneath it; several can stay open at once. Drag a column by its header to move it, or click the header to collapse it; positions and collapsed columns are saved. The **Cinnaroids** mark opens the Menu column with the menu key and **Reset layout**. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
+The panel is a classic ClickGUI: Combat, Network, Render and Settings columns float over the softened world. Click a module to toggle it, and use its arrow to open settings beneath it; several can stay open at once. Drag a column by its header to move it, or click the header to collapse it; positions and collapsed columns are saved. The **Settings** column contains the menu key and **Reset layout**. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
 
 Build with Rust 1.99.0, the `wasm32-unknown-unknown` target, and Python 3.11 or newer:
 

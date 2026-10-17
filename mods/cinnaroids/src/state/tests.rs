@@ -518,7 +518,6 @@ fn panel_exposes_all_controls_without_category_sections() {
             "expand_jump_reset",
             "expand_fake_lag",
             "expand_netherite",
-            "menu_settings",
             "reset_layout",
             "drag_x",
             "drag_y",
@@ -945,29 +944,7 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     );
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(state.expanded, [false, true, false, false, false, false]);
-    controls(&mut state, &[], &[("menu_settings", 1.0)]);
-    assert!(state.menu_open && state.menu_visible());
-    controls(&mut state, &[], &[("menu_settings", 1.0)]);
-    assert!(
-        !state.menu_open && state.menu_visible(),
-        "hit-testable while fading"
-    );
-    state.panel_dirty = false;
-    tick(&mut state, 0.25);
-    assert!(!state.menu_visible() && state.panel_dirty);
     assert!(!state.preferences_dirty);
-}
-
-/// Advance one frame with no input.
-fn tick(state: &mut State, seconds: f32) {
-    state.controls(Controls {
-        focused: true,
-        panel_open: true,
-        keys: &[],
-        held: &[],
-        seconds,
-        events: &[],
-    });
 }
 
 /// One frame of shared pointer-pad input, with MouseLeft edges.
@@ -1073,7 +1050,7 @@ fn dragging_a_header_moves_its_column_by_the_grab_point_and_persists_on_release(
 }
 
 #[test]
-fn module_columns_drag_anywhere_on_screen_but_menu_stays_reachable() {
+fn module_columns_drag_anywhere_on_screen_but_settings_stays_reachable() {
     let mut state = state();
     pad(&mut state, "combat", true, true, Some([-370.0, -160.0]));
     pad(&mut state, "combat", false, true, Some([-900.0, 520.0]));
@@ -1089,7 +1066,6 @@ fn module_columns_drag_anywhere_on_screen_but_menu_stays_reachable() {
         "kept on the pad"
     );
     pad(&mut state, "combat", false, false, None);
-    controls(&mut state, &[], &[("menu_settings", 1.0)]);
     pad(&mut state, "menu", true, true, Some([240.0, -160.0]));
     pad(&mut state, "menu", false, true, Some([1500.0, 900.0]));
     let [width, height] = crate::panel::REFERENCE;
@@ -1158,8 +1134,8 @@ fn the_press_point_selects_the_topmost_visible_header() {
     pad(&mut state, "", true, true, Some([-300.0, -160.0]));
     assert_eq!(
         state.drag.map(|drag| drag.column),
-        Some(2),
-        "a hidden Menu column is skipped"
+        Some(3),
+        "Settings draws above the module columns"
     );
     pad(&mut state, "", false, false, None);
     pad(&mut state, "", true, true, Some([300.0, 100.0]));

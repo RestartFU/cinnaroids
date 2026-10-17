@@ -38,8 +38,6 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("expand_fake_lag", 1.0),
             ("expand_netherite", 1.0),
             ("expand_netherite", 1.0),
-            ("menu_settings", 1.0),
-            ("menu_settings", 1.0),
             ("fullbright", 1.0),
             ("fullbright", 0.0),
             ("fullbright", 1.0),

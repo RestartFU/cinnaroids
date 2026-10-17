@@ -49,7 +49,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     let controls = panel["controls"].as_array().unwrap();
     let mut routes = Vec::new();
     actions(&document["panel"], &mut routes);
-    for (index, control) in controls.iter().enumerate().take(28) {
+    for (index, control) in controls.iter().enumerate().take(27) {
         assert!(
             routes.contains(&format!("mod.control:{index}")),
             "missing native control {index} ({})",
@@ -60,15 +60,15 @@ fn every_control_is_reachable_from_the_floating_columns() {
         assert_eq!(controls[index]["kind"], "slider");
         assert!(routes.contains(&format!("mod.edit:{index}")));
     }
-    assert_eq!(controls[28]["id"], "drag_x");
-    assert_eq!(controls[29]["id"], "drag_y");
-    assert_eq!(controls.len(), 30);
+    assert_eq!(controls[27]["id"], "drag_x");
+    assert_eq!(controls[28]["id"], "drag_y");
+    assert_eq!(controls.len(), 29);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
         .count();
     assert_eq!(pads, 4);
-    assert!(routes.contains(&"mod.vector:28:29".to_owned()));
+    assert!(routes.contains(&"mod.vector:27:28".to_owned()));
     for id in super::COLUMNS {
         let header = child(child(column(&document, id), "entrance"), "grip");
         assert_eq!(
@@ -110,7 +110,7 @@ fn generated_settings_heights_match_the_row_layout() {
 #[test]
 fn open_and_close_motion_is_reversible_and_dims_the_world() {
     let state = crate::state::State::new(Default::default());
-    let (panel, _) = panel(&state);
+    let (panel, document) = panel(&state);
     let surface = &panel["surface"];
     let transitions = &surface["transitions"];
     assert_eq!(transitions["#world_blur"]["from"], 0);
@@ -127,8 +127,16 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
     let bindings = surface["bindings"].as_object().unwrap();
     assert!(bindings.len() <= 128, "{} bindings", bindings.len());
     assert_eq!(bindings["#world_blur"], 4);
-    assert_eq!(bindings["#col_menu_alpha"], 0);
-    assert_eq!(bindings["#menu_visible"], false);
+    assert_eq!(bindings["#col_menu_alpha"], 1);
+    assert_eq!(bindings["#col_menu_h"], 52);
+    let desk = child(&document["panel"], "desk");
+    assert_eq!(desk["controls"].as_array().unwrap().len(), 4);
+    let settings = column(&document, "menu");
+    assert_eq!(settings["bindings"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        child(child(settings, "entrance"), "title")["text"],
+        "Settings"
+    );
     assert_eq!(bindings["#menu_capture"], 0);
     assert_eq!(transitions["#menu_capture"]["duration"], 0.14);
 }
@@ -174,7 +182,6 @@ fn disclosure_and_toggles_change_only_bindings() {
     assert_eq!(bindings["#reach_value"], "4.2 blocks");
     assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
     assert_eq!(bindings["#col_network_count"], "1/1");
-    assert_eq!(bindings["#enabled_count"], "1 of 7 enabled");
 }
 
 #[test]
@@ -202,10 +209,6 @@ fn rows_keep_values_and_show_bound_keys_as_keycaps() {
     assert_eq!(bindings["#clicker_key_color"][0], 1);
     assert_eq!(bindings["#aim_capture"], 1);
     assert_eq!(bindings["#clicker_capture"], 0);
-    assert_eq!(
-        bindings["#hint"],
-        "Press a key for Aim assist. Esc clears it."
-    );
     assert_eq!(super::key_legend(""), "None");
     assert_eq!(super::key_legend("F7"), "F7");
     assert_eq!(super::key_legend("Key"), "Key");
@@ -216,6 +219,7 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
     use crate::state::{Preferences, State};
     let mut preferences = Preferences::default();
     preferences.collapsed[2] = true;
+    preferences.collapsed[3] = true;
     preferences.columns[2] = [12.5, -40.0];
     let state = State::new(preferences);
     let (panel, _) = panel(&state);
@@ -237,6 +241,10 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
         "collapsed headers keep rounded corners"
     );
     assert_eq!(bindings["#col_combat_tint_h"], 27);
+    assert_eq!(bindings["#col_menu_h"], 0);
+    assert_eq!(bindings["#col_menu_bg"], 22);
+    assert_eq!(bindings["#col_menu_alpha"], 1);
+    assert_eq!(bindings["#col_menu_angle"], -90);
 }
 
 /// Numbers compare by value: the shell writes `1`, serde writes `1.0`.

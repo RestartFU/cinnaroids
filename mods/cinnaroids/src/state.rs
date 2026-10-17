@@ -225,15 +225,13 @@ pub struct Drag {
     moved: bool,
 }
 
-/// Seconds the menu column stays hit-testable while its exit fade plays.
-const MENU_FADE_SECONDS: f32 = 0.2;
 /// Pointer travel, in logical units, that turns a header press into a drag.
 const DRAG_THRESHOLD: f32 = 3.0;
 /// Published pad value while no drag is active; a real pointer never maps here.
 const PAD_IDLE: f32 = -crate::panel::PAD_HALF;
 
 /// Bound a column origin. Module columns may go anywhere the shared pointer pad reaches;
-/// a drag keeps the grabbed header under the on-screen pointer. The Menu column, which holds
+/// a drag keeps the grabbed header under the on-screen pointer. The Settings column, which holds
 /// Reset layout, stays inside the reference box the host always fits on screen.
 pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
     let [width, height] = if column == 3 {
@@ -275,8 +273,6 @@ pub struct State {
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
     pub expanded: [bool; 6],
-    pub menu_open: bool,
-    menu_fade: f32,
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -295,8 +291,6 @@ impl State {
             capturing_key: None,
             panel_dirty: true,
             expanded: [false; 6],
-            menu_open: false,
-            menu_fade: 0.0,
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -318,13 +312,6 @@ impl State {
         }
         if self.drag.is_some() && (!controls.focused || !controls.panel_open) {
             self.end_drag(false);
-        }
-        if self.menu_fade > 0.0 {
-            self.menu_fade -= controls.seconds.max(0.0);
-            if self.menu_fade <= 0.0 {
-                self.menu_fade = 0.0;
-                self.panel_dirty = true;
-            }
         }
         if !controls.focused {
             return;
@@ -471,8 +458,7 @@ impl State {
     fn header_at(&self, [x, y]: [f32; 2]) -> Option<usize> {
         (0..4).rev().find(|column| {
             let [left, top] = self.preferences.columns[*column];
-            (*column < 3 || self.menu_visible())
-                && (left..=left + crate::panel::COLUMN_WIDTH).contains(&x)
+            (left..=left + crate::panel::COLUMN_WIDTH).contains(&x)
                 && (top..=top + 22.0).contains(&y)
         })
     }
@@ -517,11 +503,6 @@ impl State {
         }
     }
 
-    /// The menu column stays hit-testable only while open or fading out.
-    pub fn menu_visible(&self) -> bool {
-        self.menu_open || self.menu_fade > 0.0
-    }
-
     fn event(&mut self, event: &Event) {
         let value = event.value;
         if !value.is_finite() {
@@ -542,17 +523,6 @@ impl State {
                 .position(|id| *id == event.id)
                 .unwrap();
                 self.expanded[index] = !self.expanded[index];
-                self.capturing_key = None;
-                self.panel_dirty = true;
-                return;
-            }
-            "menu_settings" => {
-                self.menu_open = !self.menu_open;
-                self.menu_fade = if self.menu_open {
-                    0.0
-                } else {
-                    MENU_FADE_SECONDS
-                };
                 self.capturing_key = None;
                 self.panel_dirty = true;
                 return;
@@ -888,10 +858,6 @@ impl State {
             Control::Button {
                 id: "expand_netherite",
                 label: "Netherite Finder settings",
-            },
-            Control::Button {
-                id: "menu_settings",
-                label: "Menu settings",
             },
             Control::Button {
                 id: "reset_layout",
