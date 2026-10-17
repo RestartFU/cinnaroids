@@ -23,10 +23,12 @@ Cinnaroids is independent of the Cinnabar client and its maintainers.
 
 README screenshot
 -----------------
-assets/screenshot.png is an offline CPU preview of the native Cinnaroids
-card surface, rendered through Cinnabar's JSON-UI and production painters.
-It uses the original panel controls, a plain background, and the embedded
-Inter Medium font.
-It contains no Minecraft artwork or connected-server footage. Font and renderer
+assets/screenshot.png is a headless Cinnabar developer-client capture of the
+native Cinnaroids ClickGUI over a local flat test world, cropped to the panel
+and the client's procedural sky. The game crosshair was painted over with
+neighbouring sky, and the crop excludes the hotbar, terrain and other game
+textures. It uses the original panel controls and the embedded Inter Medium
+font, and contains no Minecraft artwork, account details or server footage.
+Font and renderer
 notices remain in THIRD_PARTY_NOTICES.txt; the full Inter OFL is also embedded
 in the component notices.

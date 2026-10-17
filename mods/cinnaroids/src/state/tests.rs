@@ -10,6 +10,8 @@ fn controls(state: &mut State, keys: &[&str], events: &[(&str, f32)]) {
         focused: true,
         panel_open: true,
         keys: &keys.iter().map(|key| (*key).into()).collect::<Vec<_>>(),
+        held: &[],
+        seconds: 0.0,
         events: &events
             .iter()
             .map(|(id, value)| Event {
@@ -38,19 +40,30 @@ fn state_with_bindings() -> State {
 #[test]
 fn preferences_restore_without_enabling_any_module() {
     let preferences = Preferences::from_json(
-        r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
+        r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
     );
     let state = State::new(preferences);
     assert_eq!(state.preferences.cps, 18);
     assert_eq!(state.preferences.aim_strength, 70);
     assert_eq!(state.preferences.aim_mode, AimMode::Continuous);
     assert_eq!(state.preferences.reach_blocks, 5.2);
-    assert!(!state.preferences.dark_mode);
+    assert_eq!(state.preferences.columns[0], [10.0, -20.0]);
+    assert_eq!(
+        state.preferences.columns[1],
+        [230.0, 0.0],
+        "clamped to the reference box"
+    );
+    assert_eq!(
+        state.preferences.columns[2],
+        crate::panel::DEFAULT_COLUMNS[2]
+    );
+    assert_eq!(state.preferences.collapsed, [true, false, false, false]);
     assert_eq!(state.preferences.clicker_key, "KeyV");
     assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
     assert_eq!(json["netherite_range"], 64);
     assert!(json.get("aim").is_none());
+    assert!(json.get("dark_mode").is_none());
 }
 
 #[test]
@@ -62,7 +75,6 @@ fn legacy_preferences_are_tolerated_and_bounds_are_restored() {
     assert_eq!(prefs.clicker_key, "KeyA");
     assert_eq!(prefs.aim_strength, 100);
     assert_eq!(prefs.reach_blocks, mod_api::MAX_ENTITY_REACH_BLOCKS);
-    assert!(!prefs.dark_mode);
     let prefs = Preferences::from_json(r#"{"clicker_key":"F10"}"#);
     assert_eq!(prefs.clicker_key, "F10");
     assert_eq!(Preferences::from_json("broken"), Preferences::default());
@@ -203,7 +215,6 @@ fn saved_left_click_bindings_recover_without_resetting_other_preferences() {
         ));
         let expected = Preferences {
             cps: 17,
-            dark_mode: false,
             ..Preferences::default()
         };
         assert_eq!(preferences, expected, "{id}");
@@ -339,6 +350,8 @@ fn absent_focus_ignores_panel_and_toggle_edges() {
         focused: false,
         panel_open: false,
         keys: &[BOUND_CLICKER_KEY.into()],
+        held: &[],
+        seconds: 0.0,
         events: &[Event {
             id: "aim".into(),
             value: 1.0,
@@ -359,6 +372,8 @@ fn closing_panel_or_losing_focus_cancels_capture_before_gameplay_keys() {
             focused,
             panel_open,
             keys: &["KeyW".into()],
+            held: &[],
+            seconds: 0.0,
             events: &[],
         });
         assert!(state.capturing_key.is_none());
@@ -370,6 +385,8 @@ fn closing_panel_or_losing_focus_cancels_capture_before_gameplay_keys() {
             focused: true,
             panel_open: false,
             keys: &["KeyW".into()],
+            held: &[],
+            seconds: 0.0,
             events: &[],
         });
         assert_eq!(state.preferences.clicker_key, BOUND_CLICKER_KEY);
@@ -384,6 +401,8 @@ fn closed_panel_cannot_start_key_capture_and_preserves_normal_toggle() {
         focused: true,
         panel_open: false,
         keys: &[BOUND_CLICKER_KEY.into()],
+        held: &[],
+        seconds: 0.0,
         events: &[Event {
             id: "clicker_key".into(),
             value: 1.0,
@@ -395,7 +414,7 @@ fn closed_panel_cannot_start_key_capture_and_preserves_normal_toggle() {
 }
 
 #[test]
-fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
+fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change() {
     let mut state = state();
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     assert_eq!(json["title"], PRODUCT_NAME);
@@ -413,9 +432,13 @@ fn panel_has_every_control_in_both_themes_and_only_rebuilds_after_change() {
     controls(&mut state, &[], &[]);
     assert!(!state.panel_dirty);
     controls(&mut state, &[], &[("dark_mode", 0.0)]);
-    assert!(state.panel_dirty && state.preferences_dirty);
+    assert!(
+        !state.panel_dirty && !state.preferences_dirty,
+        "themes are gone"
+    );
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert!(!json["dark"].as_bool().unwrap());
+    assert!(json["dark"].as_bool().unwrap());
+    assert_eq!(json["reference_size"], serde_json::json!([760.0, 420.0]));
 }
 
 #[test]
@@ -484,7 +507,6 @@ fn panel_exposes_all_controls_without_category_sections() {
             "fake_lag",
             "fake_lag_ms",
             "show_real_position",
-            "dark_mode",
             "netherite",
             "netherite_range",
             "fullbright",
@@ -495,6 +517,9 @@ fn panel_exposes_all_controls_without_category_sections() {
             "expand_fake_lag",
             "expand_netherite",
             "menu_settings",
+            "reset_layout",
+            "drag_x",
+            "drag_y",
         ]
     );
 }
@@ -658,6 +683,8 @@ fn capture_loss_consumes_module_edges_without_toggling() {
                     BOUND_AIM_KEY.into(),
                     BOUND_REACH_KEY.into(),
                 ],
+                held: &[],
+                seconds: 0.0,
                 events: &[],
             });
             assert!(state.capturing_key.is_none());
@@ -672,6 +699,8 @@ fn capture_loss_consumes_module_edges_without_toggling() {
         focused: true,
         panel_open: false,
         keys: &["F10".into()],
+        held: &[],
+        seconds: 0.0,
         events: &[],
     });
     assert!(state.modules.aim);
@@ -697,6 +726,8 @@ fn fake_lag_delay_is_bounded_persisted_and_disabled_by_its_toggle() {
         focused: false,
         panel_open: false,
         keys: &[],
+        held: &[],
+        seconds: 0.0,
         events: &[],
     });
     assert_eq!(state.packet_delay_ms(), 250);
@@ -892,24 +923,240 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 }
 
 #[test]
-fn fold_disclosure_does_not_enable_modules_or_persist_navigation() {
+fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
+    assert_eq!(state.expanded, [false; 6]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
-    assert_eq!(state.expanded_module, Some(2));
+    assert_eq!(state.expanded, [false, false, true, false, false, false]);
     assert!(!state.modules.reach);
     assert_eq!(state.preferences, preferences);
     assert!(state.panel_dirty);
     assert!(!state.preferences_dirty && !state.reservations_dirty);
-    controls(&mut state, &[], &[("expand_reach", 1.0)]);
-    assert_eq!(state.expanded_module, None);
-    controls(&mut state, &[], &[("menu_settings", 1.0)]);
-    assert!(state.settings_open);
     controls(&mut state, &[], &[("expand_aim", 1.0)]);
-    assert!(!state.settings_open);
-    assert_eq!(state.expanded_module, Some(1));
+    assert_eq!(
+        state.expanded,
+        [false, true, true, false, false, false],
+        "independent rows"
+    );
+    controls(&mut state, &[], &[("expand_reach", 1.0)]);
+    assert_eq!(state.expanded, [false, true, false, false, false, false]);
+    controls(&mut state, &[], &[("menu_settings", 1.0)]);
+    assert!(state.menu_open && state.menu_visible());
+    controls(&mut state, &[], &[("menu_settings", 1.0)]);
+    assert!(
+        !state.menu_open && state.menu_visible(),
+        "hit-testable while fading"
+    );
+    state.panel_dirty = false;
+    tick(&mut state, 0.25);
+    assert!(!state.menu_visible() && state.panel_dirty);
+    assert!(!state.preferences_dirty);
+}
+
+/// Advance one frame with no input.
+fn tick(state: &mut State, seconds: f32) {
+    state.controls(Controls {
+        focused: true,
+        panel_open: true,
+        keys: &[],
+        held: &[],
+        seconds,
+        events: &[],
+    });
+}
+
+/// One frame of shared pointer-pad input, with MouseLeft edges.
+fn pad(state: &mut State, _header: &str, pressed: bool, held: bool, point: Option<[f32; 2]>) {
+    let keys: Vec<String> = if pressed {
+        vec!["MouseLeft".into()]
+    } else {
+        Vec::new()
+    };
+    let held: Vec<String> = if held {
+        vec!["MouseLeft".into()]
+    } else {
+        Vec::new()
+    };
+    let events: Vec<Event> = point
+        .map(|[x, y]| {
+            vec![
+                Event {
+                    id: "drag_x".into(),
+                    value: x,
+                },
+                Event {
+                    id: "drag_y".into(),
+                    value: y,
+                },
+            ]
+        })
+        .unwrap_or_default();
+    state.controls(Controls {
+        focused: true,
+        panel_open: true,
+        keys: &keys,
+        held: &held,
+        seconds: 1.0 / 120.0,
+        events: &events,
+    });
+}
+
+fn pad_values(state: &State) -> Vec<f32> {
+    let panel: Value = serde_json::from_str(&state.panel_shell_json().unwrap()).unwrap();
+    panel["controls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|control| control["id"].as_str().unwrap().starts_with("drag_"))
+        .map(|control| control["value"].as_f64().unwrap() as f32)
+        .collect()
+}
+
+#[test]
+fn dragging_a_header_moves_its_column_by_the_grab_point_and_persists_on_release() {
+    let mut state = state();
+    let [x, y] = state.preferences.columns[1];
+    assert_eq!(
+        pad_values(&state),
+        [-2048.0, -2048.0],
+        "idle pads always report a press"
+    );
+    pad(&mut state, "network", true, true, Some([x + 40.0, y + 8.0]));
+    assert!(state.drag.is_some());
+    assert_eq!(pad_values(&state), [x + 40.0, y + 8.0]);
+    assert_eq!(
+        state.preferences.columns[1],
+        [x, y],
+        "a press alone does not move"
+    );
+    pad(
+        &mut state,
+        "network",
+        false,
+        true,
+        Some([x + 41.0, y + 9.0]),
+    );
+    assert_eq!(
+        state.preferences.columns[1],
+        [x, y],
+        "below the drag threshold"
+    );
+    pad(
+        &mut state,
+        "network",
+        false,
+        true,
+        Some([x + 70.0, y + 58.0]),
+    );
+    assert_eq!(state.preferences.columns[1], [x + 30.0, y + 50.0]);
+    assert!(!state.preferences_dirty, "saved once, on release");
+    pad(&mut state, "network", false, true, None);
+    assert_eq!(
+        state.preferences.columns[1],
+        [x + 30.0, y + 50.0],
+        "holding still keeps it"
+    );
+    pad(&mut state, "network", false, false, None);
+    assert!(state.drag.is_none() && state.preferences_dirty);
+    assert!(!state.preferences.collapsed[1], "a drag never collapses");
+    assert_eq!(pad_values(&state), [-2048.0, -2048.0]);
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    assert_eq!(
+        Preferences::from_json(&saved).columns[1],
+        [x + 30.0, y + 50.0]
+    );
+}
+
+#[test]
+fn dragging_clamps_headers_inside_the_reference_box() {
+    let mut state = state();
+    pad(&mut state, "combat", true, true, Some([-370.0, -160.0]));
+    pad(&mut state, "combat", false, true, Some([-2000.0, 2000.0]));
+    let [width, height] = crate::panel::REFERENCE;
+    assert_eq!(
+        state.preferences.columns[0],
+        [-width / 2.0, height / 2.0 - 22.0]
+    );
+    pad(&mut state, "combat", false, true, Some([2000.0, -2000.0]));
+    assert_eq!(
+        state.preferences.columns[0],
+        [width / 2.0 - crate::panel::COLUMN_WIDTH, -height / 2.0]
+    );
+}
+
+#[test]
+fn clicking_a_header_collapses_its_column_and_reset_restores_the_layout() {
+    let mut state = state();
+    pad(&mut state, "render", true, true, Some([40.0, -160.0]));
+    pad(&mut state, "render", false, false, Some([41.0, -160.0]));
+    assert!(state.drag.is_none());
+    assert_eq!(state.preferences.collapsed, [false, false, true, false]);
+    assert!(state.preferences_dirty);
+    pad(&mut state, "render", true, true, Some([40.0, -160.0]));
+    pad(&mut state, "render", false, true, Some([140.0, -100.0]));
+    pad(&mut state, "render", false, false, None);
+    assert!(
+        state.preferences.collapsed[2],
+        "dragging keeps the collapsed state"
+    );
+    assert_ne!(
+        state.preferences.columns[2],
+        crate::panel::DEFAULT_COLUMNS[2]
+    );
+    controls(&mut state, &[], &[("reset_layout", 1.0)]);
+    assert_eq!(state.preferences.columns, crate::panel::DEFAULT_COLUMNS);
+    assert_eq!(state.preferences.collapsed, [false; 4]);
+}
+
+#[test]
+fn closing_the_panel_cancels_a_drag_without_collapsing() {
+    let mut state = state();
+    pad(&mut state, "combat", true, true, Some([-300.0, -160.0]));
+    state.controls(Controls {
+        focused: true,
+        panel_open: false,
+        keys: &[],
+        held: &["MouseLeft".into()],
+        seconds: 0.0,
+        events: &[],
+    });
+    assert!(state.drag.is_none());
+    assert_eq!(state.preferences.collapsed, [false; 4]);
+    assert_eq!(pad_values(&state)[0], -2048.0);
+}
+
+#[test]
+fn the_press_point_selects_the_topmost_visible_header() {
+    let mut state = state();
+    state.preferences.columns[2] = [-370.0, -170.0];
+    pad(&mut state, "", true, true, Some([-300.0, -160.0]));
+    assert_eq!(
+        state.drag.map(|drag| drag.column),
+        Some(2),
+        "Render draws above Combat"
+    );
+    pad(&mut state, "", false, false, None);
+    state.preferences.columns[3] = [-370.0, -170.0];
+    pad(&mut state, "", true, true, Some([-300.0, -160.0]));
+    assert_eq!(
+        state.drag.map(|drag| drag.column),
+        Some(2),
+        "a hidden Menu column is skipped"
+    );
+    pad(&mut state, "", false, false, None);
+    pad(&mut state, "", true, true, Some([300.0, 100.0]));
+    assert!(state.drag.is_none(), "no header under the pointer");
+}
+
+#[test]
+fn pad_samples_without_a_fresh_press_never_start_a_drag() {
+    let mut state = state();
+    pad(&mut state, "combat", false, true, Some([-300.0, -170.0]));
+    assert!(state.drag.is_none());
+    assert_eq!(state.preferences.columns, crate::panel::DEFAULT_COLUMNS);
 }
 
 #[test]

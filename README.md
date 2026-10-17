@@ -8,7 +8,7 @@ Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartF
 
 **F7** opens the panel. Module shortcuts start unbound, and modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
-The Fold menu keeps every module in one scrollable list. Click a module name to expand its settings; switches remain independent, and Fullbright is a compact toggle-only row. Live summaries stay visible when settings collapse. Menu settings are behind the header’s settings button. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
+The panel is a classic ClickGUI: Combat, Network and Render columns float over the softened world. Click a module to toggle it, and use its arrow to open settings beneath it; several can stay open at once. Drag a column by its header to move it, or click the header to collapse it; positions and collapsed columns are saved. The **Cinnaroids** mark opens the Menu column with the menu key and **Reset layout**. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
 
 Build with Rust 1.99.0, the `wasm32-unknown-unknown` target, and Python 3.11 or newer:
 
@@ -18,11 +18,11 @@ cargo test --locked -p cinnaroids-mod
 python3 -m unittest discover -s scripts/tests -v
 ```
 
-The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained dark/light UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2`.
+The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2`.
 
-The panel uses Cinnabar’s reversible open/close transitions, accordion motion, hover/toggle feedback and smooth wheel scrolling. Text keeps a steady scale during opening and closing, with the embedded antialiased Inter face. The client’s **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
+Opening blurs and dims the world while the columns settle in; closing reverses it. Toggles, disclosures, chevrons and key capture ease with Cinnabar's surface transitions, and drags follow the pointer directly. The client's **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
 
-Edit the Fold layout in `scripts/generate-panel.py`, then run it to regenerate both theme surfaces. Builds check that the generated files are current.
+Edit the layout in `scripts/generate-panel.py`, then run it to regenerate `mods/cinnaroids/ui/panel.json`. Builds check that the generated file is current.
 
 To publish, open **Actions → Release → Run workflow** and select **patch**, **minor**, or **major**. The workflow bumps the shared workspace version and lockfile, commits and tags `vX.Y.Z`, tests and builds the module, then publishes the WASM and checksum. A matching pushed version tag also releases. Failed jobs can be re-run; a manual run recovers an unpublished tag at the default branch's HEAD without bumping twice.
 

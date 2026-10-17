@@ -56,6 +56,8 @@ impl Guest for Cinnaroids {
                 focused: controls.focused,
                 panel_open: controls.panel_open,
                 keys: &controls.keys_pressed,
+                held: &controls.keys_held,
+                seconds: controls.seconds,
                 events: &events,
             });
             publish(&mut modules);

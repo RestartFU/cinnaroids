@@ -7,7 +7,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
     for settings in [
         "{}",
         r#"{"clicker_key":"F7","aim_key":"F6","menu_key":"F7"}"#,
-        r#"{"cps":20,"toggle_key":"VK:119","aim_strength":100,"aim_mode":"continuous","dark_mode":true}"#,
+        r#"{"cps":20,"toggle_key":"VK:119","aim_strength":100,"aim_mode":"continuous","dark_mode":true,"columns":[[0,0],[-9000,9000]],"collapsed":[true,true]}"#,
         r#"{"cps":30,"clicker_key":"NumpadSubtract","aim_key":"ArrowRight","reach_key":"NumpadDecimal","aim_strength":100,"aim_mode":"continuous","reach_blocks":6,"dark_mode":false,"fake_lag_ms":1000,"show_real_position":true,"netherite_range":128}"#,
     ] {
         let directory = tempfile::tempdir().unwrap();
@@ -45,7 +45,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("fullbright", 1.0),
             ("netherite", 1.0),
             ("netherite_range", 128.0),
-            ("dark_mode", 1.0),
+            ("reset_layout", 1.0),
             ("aim", 1.0),
             ("clicker", 1.0),
             ("jump_reset", 1.0),
@@ -91,6 +91,63 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
         assert!(host.block_highlights().is_none());
         assert!(!host.fullbright());
     }
+}
+
+#[test]
+fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
+    let component =
+        std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("drag.wasm");
+    let mut host = ModHost::load_snapshot_with_grants(
+        &path,
+        &component,
+        ModGrants {
+            controls: true,
+            settings: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let pad = |host: &ModHost, id: &str| {
+        host.panel()
+            .unwrap()
+            .controls
+            .iter()
+            .find(|control| control.id() == id)
+            .map(|control| format!("{control:?}"))
+            .unwrap()
+    };
+    let mut controls = empty_controls();
+    controls.focused = true;
+    host.frame_with_controls(false, None, controls).unwrap();
+    assert!(pad(&host, "drag_x").contains("-2048"));
+    // Press, travel and release over 120 frames, as a real pointer would.
+    for frame in 0..=120 {
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.panel_open = true;
+        if frame == 0 {
+            controls.keys_pressed.push("MouseLeft".into());
+        }
+        if frame < 120 {
+            controls.keys_held.push("MouseLeft".into());
+            for (axis, value) in [("x", -370.0 + frame as f32), ("y", -160.0 + frame as f32 / 2.0)] {
+                controls.events.push(ControlEvent {
+                    id: format!("drag_{axis}"),
+                    value,
+                });
+            }
+        }
+        host.frame_with_controls(false, None, controls)
+            .unwrap_or_else(|error| panic!("drag frame {frame}: {error:#}"));
+        assert!(host.is_active());
+    }
+    assert!(pad(&host, "drag_x").contains("-2048"));
+    let preferences: serde_json::Value =
+        serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+    assert_eq!(preferences["columns"][0], serde_json::json!([-261.0, -106.5]));
+    assert_eq!(preferences["collapsed"][0], false);
 }
 
 #[test]

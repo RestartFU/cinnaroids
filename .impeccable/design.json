@@ -1,143 +1,270 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-16T01:55:07.663229+00:00",
-  "title": "Cinnaroids Fold",
+  "generatedAt": "2026-10-17T13:27:32.539283+00:00",
+  "title": "Design System: Cinnaroids ClickGUI",
   "extensions": {
+    "units": "Logical GUI units (rendered evidence is 2 physical px per unit); typography em values are Cinnabar font_scale_factor values",
+    "platform": "Cinnabar retained JSON-UI native overlay; one embedded font (Inter Medium, ASCII plus · × — • ‹ › −), cinnabar_rounded_rectangle with one radius per shape, no shadows, transitions on bound scalars without delay or loops",
     "colorMeta": {
-      "dark-surface": {
-        "role": "neutral",
-        "displayName": "Dark surface"
-      },
-      "dark-inset": {
-        "role": "neutral",
-        "displayName": "Dark inset"
-      },
-      "dark-hover": {
-        "role": "neutral",
-        "displayName": "Dark hover"
-      },
-      "dark-divider": {
-        "role": "neutral",
-        "displayName": "Dark divider"
-      },
-      "dark-text": {
-        "role": "neutral",
-        "displayName": "Dark text"
-      },
-      "dark-muted": {
-        "role": "neutral",
-        "displayName": "Dark muted"
-      },
-      "dark-accent": {
+      "accent": {
         "role": "primary",
-        "displayName": "Dark accent"
+        "displayName": "Coral",
+        "tonalRamp": [
+          "#3b170b",
+          "#5e2614",
+          "#86391f",
+          "#b04f2e",
+          "#d96841",
+          "#ff8a65",
+          "#ffb39b",
+          "#ffdccf"
+        ]
       },
-      "dark-track": {
-        "role": "neutral",
-        "displayName": "Dark track"
-      },
-      "light-surface": {
-        "role": "neutral",
-        "displayName": "Light surface"
-      },
-      "light-inset": {
-        "role": "neutral",
-        "displayName": "Light inset"
-      },
-      "light-hover": {
-        "role": "neutral",
-        "displayName": "Light hover"
-      },
-      "light-divider": {
-        "role": "neutral",
-        "displayName": "Light divider"
-      },
-      "light-text": {
-        "role": "neutral",
-        "displayName": "Light text"
-      },
-      "light-muted": {
-        "role": "neutral",
-        "displayName": "Light muted"
-      },
-      "light-accent": {
+      "accent-tint": {
         "role": "primary",
-        "displayName": "Light accent"
+        "displayName": "Coral Glow"
       },
-      "light-track": {
+      "capture-fill": {
+        "role": "primary",
+        "displayName": "Ember"
+      },
+      "column-fill": {
         "role": "neutral",
-        "displayName": "Light track"
+        "displayName": "Night Plate",
+        "tonalRamp": [
+          "#0f1115",
+          "#1a1d23",
+          "#2a2e36",
+          "#3d424c",
+          "#5a606b",
+          "#7c828d",
+          "#a3a9b2",
+          "#e6e8eb"
+        ]
+      },
+      "mark-open-fill": {
+        "role": "neutral",
+        "displayName": "Raised Night"
+      },
+      "detail-fill": {
+        "role": "neutral",
+        "displayName": "Well"
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Bone"
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Ash"
+      },
+      "knob": {
+        "role": "neutral",
+        "displayName": "Knob"
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "Hover alpha"
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field alpha"
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider alpha"
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge and track alpha"
+      },
+      "drag-edge": {
+        "role": "neutral",
+        "displayName": "Drag lift border"
       }
     },
     "typographyMeta": {
-      "body": {
-        "displayName": "Native Inter Medium",
-        "purpose": "Smooth embedded menu type"
+      "column-title": {
+        "displayName": "Column title",
+        "purpose": "Column headers"
+      },
+      "module": {
+        "displayName": "Module",
+        "purpose": "Module names in rows"
+      },
+      "strong": {
+        "displayName": "Strong",
+        "purpose": "Enabled count, mark name, Menu key label"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Setting titles, trailing values, dropdown values, column counts"
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Hint line, mark key legend, settings keycap legends"
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Units and the capture prompt"
+      },
+      "legend": {
+        "displayName": "Legend",
+        "purpose": "Small keycap inside a module row"
       }
     },
-    "nativeFontScales": {
-      "title": 1.4,
-      "module": 1.1,
-      "label": 1.0,
-      "dropdown": 0.95,
-      "settingsLabel": 0.9,
-      "summaryKey": 0.85,
-      "supporting": 0.8
-    },
-    "units": "Native logical GUI pixels; font scales are renderer factors",
-    "motion": [
+    "shadows": [],
+    "backdrop": [
       {
-        "name": "panel",
-        "value": "250ms cubic-bezier(.16,1,.3,1)",
-        "purpose": "Offset, disclosure geometry and chevrons"
+        "name": "world-blur",
+        "value": "4",
+        "purpose": "World blur while open"
       },
       {
-        "name": "alpha",
-        "value": "180ms out-cubic",
-        "purpose": "Panel opacity"
+        "name": "world-brightness",
+        "value": "0.7",
+        "purpose": "World dim while open"
       },
       {
-        "name": "feedback",
-        "value": "100ms out-cubic",
-        "purpose": "Native hover and toggle"
-      },
-      {
-        "name": "wheel",
-        "value": "140ms out-cubic",
-        "purpose": "Discrete wheel settling"
+        "name": "world-saturation",
+        "value": "0.85",
+        "purpose": "World desaturation while open"
       }
     ],
-    "nativeComponents": {
-      "panel": "440 wide, maximum 436 high",
-      "row": "36 high",
-      "singleSlider": "56 high",
-      "aimSettings": "88 high",
-      "fakeLagSettings": "80 high"
+    "motion": [
+      {
+        "name": "expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Entrance offsets (300ms chrome; 300/345/390/435ms columns), heights, row offsets, plate height (260ms)"
+      },
+      {
+        "name": "settle",
+        "value": "cubic-bezier(0.2, 0.9, 0.25, 1)",
+        "purpose": "Chevrons (220ms), name indent (200ms), row value slide (220ms)"
+      },
+      {
+        "name": "lift",
+        "value": "cubic-bezier(0.34, 1.36, 0.64, 1)",
+        "purpose": "Coral lift bar scale with overshoot (240ms)"
+      },
+      {
+        "name": "world",
+        "value": "380ms in-out-cubic",
+        "purpose": "Backdrop blur, brightness and saturation; symmetric so the world stays dimmed until columns fade on close"
+      },
+      {
+        "name": "fade",
+        "value": "140-220ms out-cubic",
+        "purpose": "Chrome alpha 180ms, column alpha 140ms + 20ms per column, settings content 220ms, divider/hint/keycap/menu chip 140-180ms"
+      },
+      {
+        "name": "drag",
+        "value": "none",
+        "purpose": "Columns follow the pointer exactly"
+      }
+    ],
+    "nativeGeometry": {
+      "referenceBox": "760x420, host-fitted on small viewports",
+      "defaultColumnOrigins": "x -380, -177, 27, 230; y -166 from box centre",
+      "dragThreshold": "3",
+      "settingsStack": "top 6, slider 30, dropdown 32, toggle 20, bind 22, bottom 2",
+      "regionHeights": "clicker/reach/jump_reset 60, aim 92, fake_lag 58, netherite 38, fullbright none",
+      "menuBody": "52",
+      "guestFuelBudget": "100k per frame; control shell is static fragments in panel.rs"
     },
     "source": {
       "surface": "scripts/generate-panel.py",
+      "document": "mods/cinnaroids/ui/panel.json",
       "bindings": "mods/cinnaroids/src/panel.rs",
       "state": "mods/cinnaroids/src/state.rs",
-      "publication": "mods/cinnaroids/src/guest.rs",
-      "catalog": "mods/cinnaroids/pack/src/main.rs"
+      "fontNotice": "assets/fonts/Inter-OFL-1.1.txt"
     }
   },
-  "components": [],
+  "components": [
+    {
+      "name": "Category Column",
+      "kind": "card",
+      "refersTo": "column",
+      "description": "Translucent plate with a draggable 22-unit header and 20-unit module rows; enabled rows carry the coral tint and lift bar.",
+      "html": "<div class=\"ds-col\"><div class=\"ds-col-head\"><span>Combat</span><span class=\"ds-muted\">2/4 <svg width=\"10\" height=\"6\" viewBox=\"0 0 10 6\"><path d=\"M1 1l4 4 4-4\" stroke=\"#a3a9b2\" fill=\"none\" stroke-width=\"1.5\"/></svg></span></div><div class=\"ds-row ds-on\"><span>Clicker</span><span class=\"ds-muted\">20 CPS ›</span></div><div class=\"ds-row\"><span>Reach</span><span class=\"ds-muted\">3.0 blocks ›</span></div></div>",
+      "css": ".ds-col{width:300px;background:rgba(15,17,21,.9);border-radius:10px;padding-bottom:8px;font:500 15px Inter,sans-serif;color:#e6e8eb;border:1px solid rgba(255,255,255,0);transition:border-color .12s}.ds-col:active{border-color:rgba(255,255,255,.24)}.ds-col-head{height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 18px 0 20px;font-size:19px;border-bottom:1px solid rgba(255,255,255,.09);margin:0 18px 0 0}.ds-row{position:relative;height:40px;display:flex;justify-content:space-between;align-items:center;padding:0 16px 0 20px;cursor:pointer;transition:padding .2s cubic-bezier(.2,.9,.25,1)}.ds-row:hover{background:rgba(255,255,255,.05)}.ds-on{background:rgba(255,138,101,.17);padding-left:26px}.ds-on::before{content:'';position:absolute;left:0;top:0;width:4px;height:100%;background:#ff8a65}.ds-muted{color:#a3a9b2;font-size:14px}"
+    },
+    {
+      "name": "Slider",
+      "kind": "input",
+      "refersTo": "slider",
+      "description": "Muted title, typed value with unit, 2-unit track with coral fill and knob.",
+      "html": "<div class=\"ds-slider\"><div class=\"ds-slider-top\"><span>Strength</span><span>35<small>%</small></span></div><input type=\"range\" value=\"35\"></div>",
+      "css": ".ds-slider{width:264px;padding:12px 18px;background:rgba(0,0,0,.24);font:500 14px Inter,sans-serif;color:#a3a9b2}.ds-slider-top{display:flex;justify-content:space-between}.ds-slider-top span:last-child{color:#e6e8eb}.ds-slider input{width:100%;accent-color:#ff8a65;height:4px}"
+    },
+    {
+      "name": "Dropdown Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "16-unit field fill with value and chevron; opens the host dropdown.",
+      "html": "<button class=\"ds-field\">While clicking <span><svg width=\"10\" height=\"6\" viewBox=\"0 0 10 6\"><path d=\"M1 1l4 4 4-4\" stroke=\"#a3a9b2\" fill=\"none\" stroke-width=\"1.5\"/></svg></span></button>",
+      "css": ".ds-field{width:264px;height:32px;display:flex;justify-content:space-between;align-items:center;padding:0 12px;background:rgba(255,255,255,.06);border:0;border-radius:6px;color:#e6e8eb;font:500 14px Inter,sans-serif;transition:background .1s}.ds-field:hover{background:rgba(255,255,255,.11)}.ds-field span{color:#a3a9b2}"
+    },
+    {
+      "name": "Switch",
+      "kind": "button",
+      "refersTo": "switch",
+      "description": "18x10 pill track; coral fades in with toggle progress while the knob slides.",
+      "html": "<button class=\"ds-switch\" aria-pressed=\"false\"><i></i></button>",
+      "css": ".ds-switch{width:36px;height:20px;border:0;border-radius:10px;background:rgba(255,255,255,.13);position:relative;transition:background .1s}.ds-switch i{position:absolute;left:4px;top:4px;width:12px;height:12px;border-radius:6px;background:#f4f5f7;transition:left .1s}.ds-switch[aria-pressed=true]{background:#ff8a65}.ds-switch[aria-pressed=true] i{left:20px}"
+    },
+    {
+      "name": "Keycap",
+      "kind": "button",
+      "refersTo": "keycap",
+      "description": "Bound key legend on a bordered field; capture crossfades to an Ember cap with coral border and prompt.",
+      "html": "<button class=\"ds-key\">G</button> <button class=\"ds-key ds-capture\">Press a key</button>",
+      "css": ".ds-key{width:116px;height:32px;border-radius:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.13);color:#e6e8eb;font:500 13px Inter,sans-serif;transition:background .14s,border-color .14s}.ds-key:hover{background:rgba(255,255,255,.11)}.ds-capture{background:#2a1d19;border:2px solid #ff8a65;color:#ff8a65}"
+    },
+    {
+      "name": "Mark",
+      "kind": "nav",
+      "refersTo": "mark",
+      "description": "Brand plate top-right; toggles the Menu column and shows the menu key.",
+      "html": "<button class=\"ds-mark\"><b>C</b> Cinnaroids <span>F7</span></button>",
+      "css": ".ds-mark{width:224px;height:44px;display:flex;align-items:center;gap:10px;padding:0 16px;border:0;border-radius:10px;background:rgba(15,17,21,.9);color:#e6e8eb;font:500 15px Inter,sans-serif;transition:background .18s}.ds-mark:hover,.ds-mark[aria-pressed=true]{background:rgba(26,29,35,.97)}.ds-mark b{color:#ff8a65}.ds-mark span{margin-left:auto;color:#a3a9b2;font-size:13px}"
+    }
+  ],
   "narrative": {
-    "northStar": "Fold",
-    "overview": "One native, scrollable module list in the approved aubergine and coral palette.",
+    "northStar": "The Lit Column",
+    "overview": "The classic client-mod ClickGUI played straight. Category columns (Combat, Network, Render, and a Menu column on demand) float over a world that softens behind them: blur 4, brightness 0.7, saturation 0.85. Each column is one near-black translucent plate; enabled modules light up with a coral tint and a 2-unit coral bar on the left edge. Settings open in a darker region directly beneath their row. There is no modal card and no light theme.\n\nThis is a native Cinnabar overlay, not a web page. Every dimension below is in logical GUI units (rendered evidence is 2 physical px per unit). The host scales the 760x420 reference box down on small viewports, so the box stays visible.",
     "keyCharacteristics": [
-      "Independent disclosure and toggles",
-      "Compact Fullbright row",
-      "Native reversible motion"
+      "One accent, coral, used only for state: enabled, filled, capturing, and the brand mark.",
+      "Flat translucent plates, no shadows. Depth comes from alpha layers.",
+      "Dense 20-unit rows; values and key binds readable without opening anything.",
+      "Motion on bound scalars only: an expo settle in, a quick reversible exit, and drags that follow the pointer exactly."
+    ],
+    "rules": [
+      {
+        "name": "The State-Only Coral Rule",
+        "body": "Coral means on, filled, or listening. If an element does not report state or carry the brand, it uses no coral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Font Range Rule",
+        "body": "Copy must stay within the embedded glyph set: ASCII plus `· × — • ‹ › −`. Separators use the middle dot (`·`). Icons are Cinnabar vector icons (chevron, brand), never text glyphs.",
+        "section": "typography"
+      }
     ],
     "dos": [
-      "Do keep disclosure separate from enablement and preserve the original palette.",
-      "Do clip collapsed controls and keep the menu shortcut visible."
+      "**Do** keep every value in `generate-panel.py` and drive changes through bound scalars; let the host fit the 760x420 box.",
+      "**Do** keep toggling, disclosure, and key binding as three separate actions on separate hit areas.",
+      "**Do** show each module's value and bound key in its row without requiring it to open.",
+      "**Do** use coral only for state and the brand (the State-Only Coral Rule).",
+      "**Do** build the control shell from static fragments in `panel.rs`."
     ],
     "donts": [
-      "Don't add empty card space around Fullbright.",
-      "Don't store navigation or enabled flags in preferences."
+      "**Don't** add shadows, gradients, or a second accent; depth is alpha layering on flat plates.",
+      "**Don't** fold the columns back into a single modal dialog card or reintroduce a light theme.",
+      "**Don't** round rows, tints, or the settings well; only plates, fields, switches, and knobs carry radii.",
+      "**Don't** use characters outside Inter Medium's embedded set or draw icons as text.",
+      "**Don't** persist enabled flags, row expansion, or Menu visibility.",
+      "**Don't** ease column drags."
     ]
   }
 }

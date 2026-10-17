@@ -33,10 +33,12 @@ pub struct Preferences {
     pub aim_strength: u8,
     pub aim_mode: AimMode,
     pub reach_blocks: f32,
-    pub dark_mode: bool,
     pub fake_lag_ms: u16,
     pub show_real_position: bool,
     pub netherite_range: u8,
+    /// Column origins relative to the reference box centre: Combat, Network, Render, Menu.
+    pub columns: [[f32; 2]; 4],
+    pub collapsed: [bool; 4],
 }
 
 impl Default for Preferences {
@@ -52,10 +54,11 @@ impl Default for Preferences {
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
             reach_blocks: MIN_REACH,
-            dark_mode: true,
             fake_lag_ms: 100,
             show_real_position: false,
             netherite_range: 64,
+            columns: crate::panel::DEFAULT_COLUMNS,
+            collapsed: [false; 4],
         }
     }
 }
@@ -85,8 +88,23 @@ impl Preferences {
             preferences.reach_blocks =
                 (value as f32).clamp(MIN_REACH, mod_api::MAX_ENTITY_REACH_BLOCKS);
         }
-        if let Some(value) = values.get("dark_mode").and_then(Value::as_bool) {
-            preferences.dark_mode = value;
+        if let Some(Value::Array(columns)) = values.get("columns") {
+            for (target, value) in preferences.columns.iter_mut().zip(columns) {
+                let position = value.as_array().and_then(|pair| match pair.as_slice() {
+                    [x, y] => Some([x.as_f64()? as f32, y.as_f64()? as f32]),
+                    _ => None,
+                });
+                if let Some(position) = position.filter(|p| p.iter().all(|v| v.is_finite())) {
+                    *target = clamp_column(position);
+                }
+            }
+        }
+        if let Some(Value::Array(collapsed)) = values.get("collapsed") {
+            for (target, value) in preferences.collapsed.iter_mut().zip(collapsed) {
+                if let Some(value) = value.as_bool() {
+                    *target = value;
+                }
+            }
         }
         if let Some(value) = values.get("fake_lag_ms").and_then(Value::as_u64) {
             preferences.fake_lag_ms = value.min(u64::from(mod_api::MAX_PACKET_DELAY_MS)) as u16;
@@ -191,7 +209,35 @@ pub struct Controls<'a> {
     pub focused: bool,
     pub panel_open: bool,
     pub keys: &'a [String],
+    /// Physical keys held this frame; a held MouseLeft keeps a column drag alive.
+    pub held: &'a [String],
+    pub seconds: f32,
     pub events: &'a [Event],
+}
+
+/// One column drag: the pointer's offset from the column origin and whether it moved.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Drag {
+    pub column: usize,
+    grab: [f32; 2],
+    start: [f32; 2],
+    moved: bool,
+}
+
+/// Seconds the menu column stays hit-testable while its exit fade plays.
+const MENU_FADE_SECONDS: f32 = 0.2;
+/// Pointer travel, in logical units, that turns a header press into a drag.
+const DRAG_THRESHOLD: f32 = 3.0;
+/// Published pad value while no drag is active; a real pointer never maps here.
+const PAD_IDLE: f32 = -crate::panel::PAD_HALF;
+
+/// Keep a column header within the reference box, so it stays visible on any viewport.
+pub fn clamp_column([x, y]: [f32; 2]) -> [f32; 2] {
+    let [width, height] = crate::panel::REFERENCE;
+    [
+        x.clamp(-width / 2.0, width / 2.0 - crate::panel::COLUMN_WIDTH),
+        y.clamp(-height / 2.0, height / 2.0 - 22.0),
+    ]
 }
 
 #[derive(Debug, Default)]
@@ -221,8 +267,12 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded_module: Option<usize>,
-    pub settings_open: bool,
+    pub expanded: [bool; 6],
+    pub menu_open: bool,
+    menu_fade: f32,
+    pub drag: Option<Drag>,
+    press_armed: bool,
+    pointer: [f32; 2],
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
     pub finder_dirty: bool,
@@ -237,8 +287,12 @@ impl State {
             modules: Modules::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded_module: Some(1),
-            settings_open: false,
+            expanded: [false; 6],
+            menu_open: false,
+            menu_fade: 0.0,
+            drag: None,
+            press_armed: false,
+            pointer: [PAD_IDLE; 2],
             preferences_dirty: false,
             reservations_dirty: true,
             finder_dirty: true,
@@ -255,6 +309,16 @@ impl State {
             self.capturing_key = None;
             self.panel_dirty = true;
         }
+        if self.drag.is_some() && (!controls.focused || !controls.panel_open) {
+            self.end_drag(false);
+        }
+        if self.menu_fade > 0.0 {
+            self.menu_fade -= controls.seconds.max(0.0);
+            if self.menu_fade <= 0.0 {
+                self.menu_fade = 0.0;
+                self.panel_dirty = true;
+            }
+        }
         if !controls.focused {
             return;
         }
@@ -262,8 +326,32 @@ impl State {
             return;
         }
         if controls.panel_open {
+            if controls.keys.iter().any(|key| key == "MouseLeft") {
+                if self.drag.is_some() {
+                    self.end_drag(false);
+                }
+                self.press_armed = true;
+            }
+            let mut touched = false;
             for event in controls.events {
-                self.event(event);
+                let axis = match event.id.as_str() {
+                    "drag_x" => 0,
+                    "drag_y" => 1,
+                    _ => {
+                        self.event(event);
+                        continue;
+                    }
+                };
+                if event.value.is_finite() {
+                    self.pointer[axis] = event.value;
+                    touched = true;
+                }
+            }
+            if touched {
+                self.drag_pointer();
+            }
+            if self.drag.is_some() && !controls.held.iter().any(|key| key == "MouseLeft") {
+                self.end_drag(true);
             }
         }
         if let Some(target) = self.capturing_key {
@@ -334,6 +422,99 @@ impl State {
         .any(|(other, binding)| *other != target && key == *binding)
     }
 
+    /// Start, continue or ignore a column drag from this frame's pointer-pad samples.
+    /// Every header shares one screen-fixed pad that publishes an unreachable idle value,
+    /// so each press reports both axes; the press point selects the topmost header.
+    fn drag_pointer(&mut self) {
+        let pointer = self.pointer;
+        if pointer.iter().any(|value| *value <= PAD_IDLE) {
+            return;
+        }
+        match self.drag {
+            Some(mut drag) => {
+                let travel = (pointer[0] - drag.start[0]).hypot(pointer[1] - drag.start[1]);
+                drag.moved |= travel >= DRAG_THRESHOLD;
+                if drag.moved {
+                    let origin = [pointer[0] - drag.grab[0], pointer[1] - drag.grab[1]];
+                    self.preferences.columns[drag.column] = clamp_column(origin);
+                }
+                self.drag = Some(drag);
+                self.panel_dirty = true;
+            }
+            None if self.press_armed => {
+                self.press_armed = false;
+                let Some(column) = self.header_at(pointer) else {
+                    return;
+                };
+                let [x, y] = self.preferences.columns[column];
+                self.drag = Some(Drag {
+                    column,
+                    grab: [pointer[0] - x, pointer[1] - y],
+                    start: pointer,
+                    moved: false,
+                });
+                self.capturing_key = None;
+                self.panel_dirty = true;
+            }
+            None => {}
+        }
+    }
+
+    /// The topmost visible column header under a pointer, in draw order.
+    fn header_at(&self, [x, y]: [f32; 2]) -> Option<usize> {
+        (0..4).rev().find(|column| {
+            let [left, top] = self.preferences.columns[*column];
+            (*column < 3 || self.menu_visible())
+                && (left..=left + crate::panel::COLUMN_WIDTH).contains(&x)
+                && (top..=top + 22.0).contains(&y)
+        })
+    }
+
+    /// Finish a drag; a header press that never moved collapses or expands its column.
+    fn end_drag(&mut self, released: bool) {
+        let Some(drag) = self.drag.take() else {
+            return;
+        };
+        if released && !drag.moved {
+            self.preferences.collapsed[drag.column] = !self.preferences.collapsed[drag.column];
+        }
+        if released {
+            self.preferences_dirty = true;
+        }
+        self.pointer = [PAD_IDLE; 2];
+        self.press_armed = false;
+        self.panel_dirty = true;
+    }
+
+    /// Runtime enabled flags in panel order.
+    pub fn enabled_flags(&self) -> [bool; 7] {
+        let m = &self.modules;
+        [
+            m.clicker,
+            m.aim,
+            m.reach,
+            m.jump_reset,
+            m.fake_lag,
+            m.netherite,
+            m.fullbright,
+        ]
+    }
+
+    pub fn key_for(&self, target: KeybindTarget) -> &str {
+        match target {
+            KeybindTarget::Menu => &self.preferences.menu_key,
+            KeybindTarget::Clicker => &self.preferences.clicker_key,
+            KeybindTarget::Aim => &self.preferences.aim_key,
+            KeybindTarget::Reach => &self.preferences.reach_key,
+            KeybindTarget::JumpReset => &self.preferences.jump_reset_key,
+        }
+    }
+
+    /// The menu column stays hit-testable only while open or fading out.
+    pub fn menu_visible(&self) -> bool {
+        self.menu_open || self.menu_fade > 0.0
+    }
+
     fn event(&mut self, event: &Event) {
         let value = event.value;
         if !value.is_finite() {
@@ -353,15 +534,27 @@ impl State {
                 .iter()
                 .position(|id| *id == event.id)
                 .unwrap();
-                self.expanded_module = (self.expanded_module != Some(index)).then_some(index);
+                self.expanded[index] = !self.expanded[index];
                 self.capturing_key = None;
-                self.settings_open = false;
                 self.panel_dirty = true;
                 return;
             }
             "menu_settings" => {
-                self.settings_open = !self.settings_open;
+                self.menu_open = !self.menu_open;
+                self.menu_fade = if self.menu_open {
+                    0.0
+                } else {
+                    MENU_FADE_SECONDS
+                };
                 self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
+            "reset_layout" => {
+                let defaults = Preferences::default();
+                self.preferences.columns = defaults.columns;
+                self.preferences.collapsed = defaults.collapsed;
+                self.preferences_dirty = true;
                 self.panel_dirty = true;
                 return;
             }
@@ -421,7 +614,6 @@ impl State {
                 &mut self.preferences.netherite_range,
                 value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
             ),
-            "dark_mode" => replace(&mut self.preferences.dark_mode, value >= 0.5),
             _ => false,
         };
         if changed {
@@ -511,7 +703,26 @@ impl State {
     }
 
     /// Publish current control values against a tiny placeholder before selecting the retained route.
+    /// Built from static fragments: serde's escaping and float formatting would not fit the
+    /// host's per-frame fuel alongside the binding patch.
     pub fn panel_shell_json(&self) -> Result<String, serde_json::Error> {
+        let mut json = String::with_capacity(3072);
+        crate::panel::shell(&mut json, self);
+        Ok(json)
+    }
+
+    /// The published value of a drag pad axis: the pointer while dragging, otherwise idle.
+    pub fn pad_value(&self, axis: usize) -> f32 {
+        if self.drag.is_some() {
+            self.pointer[axis]
+        } else {
+            PAD_IDLE
+        }
+    }
+
+    /// Serde reference for the hand-built shell; tests keep both schemas identical.
+    #[cfg(test)]
+    pub fn panel_reference_json(&self) -> Result<String, serde_json::Error> {
         self.panel_content(false)
     }
 
@@ -522,11 +733,11 @@ impl State {
 
     /// Serialize the common schema without resolving or cloning native geometry.
     fn panel_content(&self, full: bool) -> Result<String, serde_json::Error> {
-        let controls = vec![
+        let mut controls = vec![
             Control::Keybind {
                 id: "menu_key",
                 label: "Menu key",
-                key: &self.preferences.menu_key,
+                key: crate::panel::key_legend(&self.preferences.menu_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Menu),
             },
             Control::Toggle {
@@ -545,7 +756,7 @@ impl State {
             Control::Keybind {
                 id: "clicker_key",
                 label: "Clicker key",
-                key: binding_label(&self.preferences.clicker_key),
+                key: crate::panel::key_legend(&self.preferences.clicker_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Clicker),
             },
             Control::Toggle {
@@ -570,7 +781,7 @@ impl State {
             Control::Keybind {
                 id: "aim_key",
                 label: "Aim assist key",
-                key: binding_label(&self.preferences.aim_key),
+                key: crate::panel::key_legend(&self.preferences.aim_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Aim),
             },
             Control::Toggle {
@@ -589,7 +800,7 @@ impl State {
             Control::Keybind {
                 id: "reach_key",
                 label: "Reach key",
-                key: binding_label(&self.preferences.reach_key),
+                key: crate::panel::key_legend(&self.preferences.reach_key),
                 capturing: self.capturing_key == Some(KeybindTarget::Reach),
             },
             Control::Toggle {
@@ -608,7 +819,7 @@ impl State {
             Control::Keybind {
                 id: "jump_reset_key",
                 label: "Jump reset key",
-                key: binding_label(&self.preferences.jump_reset_key),
+                key: crate::panel::key_legend(&self.preferences.jump_reset_key),
                 capturing: self.capturing_key == Some(KeybindTarget::JumpReset),
             },
             Control::Toggle {
@@ -628,11 +839,6 @@ impl State {
                 id: "show_real_position",
                 label: "Show real position",
                 value: self.preferences.show_real_position,
-            },
-            Control::Toggle {
-                id: "dark_mode",
-                label: "Dark mode",
-                value: self.preferences.dark_mode,
             },
             Control::Toggle {
                 id: "netherite",
@@ -680,14 +886,31 @@ impl State {
                 id: "menu_settings",
                 label: "Menu settings",
             },
+            Control::Button {
+                id: "reset_layout",
+                label: "Reset layout",
+            },
         ];
+        for (axis, (id, label)) in [("drag_x", "Column drag x"), ("drag_y", "Column drag y")]
+            .into_iter()
+            .enumerate()
+        {
+            controls.push(Control::Slider {
+                id,
+                label,
+                value: self.pad_value(axis),
+                min: -crate::panel::PAD_HALF,
+                max: crate::panel::PAD_HALF,
+                step: 0.5,
+            });
+        }
         let panel = Panel {
             title: PRODUCT_NAME,
             toggle_key: &self.preferences.menu_key,
-            dark: self.preferences.dark_mode,
+            dark: true,
             capture_key: self.capturing_key.is_some(),
             style: "compact",
-            reference_size: [472.0, 240.0],
+            reference_size: crate::panel::REFERENCE,
             motion: true,
             controls,
         };
@@ -752,11 +975,6 @@ impl ClickCadence {
         };
         true
     }
-}
-
-/// Show an explicit label for a module without a keyboard shortcut.
-fn binding_label(key: &str) -> &str {
-    if key.is_empty() { "None" } else { key }
 }
 
 /// Keep primary clicks and Escape available for panel controls and keybind clearing.

@@ -29,79 +29,121 @@ fn child<'a>(parent: &'a Value, name: &str) -> &'a Value {
                 .iter()
                 .find_map(|(key, value)| (key.split('@').next() == Some(name)).then_some(value))
         })
-        .unwrap()
+        .unwrap_or_else(|| panic!("missing child {name}"))
+}
+
+fn panel(state: &crate::state::State) -> (Value, Value) {
+    let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    let document = serde_json::from_str(panel["surface"]["document"].as_str().unwrap()).unwrap();
+    (panel, document)
+}
+
+fn column<'a>(document: &'a Value, id: &str) -> &'a Value {
+    child(child(&document["panel"], "desk"), id)
 }
 
 #[test]
-fn fold_keeps_every_control_reachable_on_one_retained_scrollable_surface() {
-    for dark in [true, false] {
-        let preferences = crate::state::Preferences {
-            dark_mode: dark,
-            ..Default::default()
-        };
-        let state = crate::state::State::new(preferences);
-        let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-        let surface = &panel["surface"];
-        let document: Value = serde_json::from_str(surface["document"].as_str().unwrap()).unwrap();
-        let root = &document["panel"];
-        let dialog = child(root, "dialog");
-        let view = child(dialog, "modules");
-        assert_eq!(view["scroll_content"], "module_rows");
-        let viewport = child(view, "viewport");
-        assert_eq!(viewport["clips_children"], true);
-        let modules = child(viewport, "module_rows");
-        assert_eq!(modules["controls"].as_array().unwrap().len(), 7);
-        let fullbright = child(modules, "fullbright");
-        assert_eq!(fullbright["size"], serde_json::json!([440, 36]));
+fn every_control_is_reachable_from_the_floating_columns() {
+    let state = crate::state::State::new(Default::default());
+    let (panel, document) = panel(&state);
+    let controls = panel["controls"].as_array().unwrap();
+    let mut routes = Vec::new();
+    actions(&document["panel"], &mut routes);
+    for (index, control) in controls.iter().enumerate().take(28) {
         assert!(
-            fullbright["controls"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|entry| entry.get("details").is_none())
+            routes.contains(&format!("mod.control:{index}")),
+            "missing native control {index} ({})",
+            control["id"]
         );
-        for (name, _) in super::MODULES.iter().take(6) {
-            assert_eq!(
-                child(child(modules, name), "details")["clips_children"],
-                true
-            );
-        }
-        let mut routes = Vec::new();
-        actions(root, &mut routes);
-        for index in 0..28 {
-            assert!(
-                routes.contains(&format!("mod.control:{index}")),
-                "missing native control {index}"
-            );
-        }
-        for index in [2, 5, 9, 12, 15, 19] {
-            assert!(routes.contains(&format!("mod.edit:{index}")));
-        }
-        assert!(
-            !routes.iter().any(|route| route.starts_with("mod.category:")
-                || matches!(route.as_str(), "mod.next" | "mod.prev"))
-        );
-        assert!(routes.contains(&"mod.close".to_owned()));
-        assert_eq!(panel["motion"], true);
-        assert!(surface["transitions"].get("#menu_scale").is_none());
+    }
+    for index in [2, 5, 9, 12, 15, 18] {
+        assert_eq!(controls[index]["kind"], "slider");
+        assert!(routes.contains(&format!("mod.edit:{index}")));
+    }
+    assert_eq!(controls[28]["id"], "drag_x");
+    assert_eq!(controls[29]["id"], "drag_y");
+    assert_eq!(controls.len(), 30);
+    let pads = routes
+        .iter()
+        .filter(|route| route.starts_with("mod.vector:"))
+        .count();
+    assert_eq!(pads, 4);
+    assert!(routes.contains(&"mod.vector:28:29".to_owned()));
+    for id in super::COLUMNS {
+        let header = child(child(column(&document, id), "entrance"), "grip");
         assert_eq!(
-            surface["transitions"]["#menu_offset"]["from"],
-            serde_json::json!([0, 6])
+            header["clips_children"], true,
+            "pads only take presses on headers"
         );
-        assert_eq!(surface["bindings"]["#fold_aim_height"], 88.0);
-        assert_eq!(surface["bindings"]["#fold_reach_height"], 0.0);
+    }
+    assert!(!routes.iter().any(|route| route == "mod.close"));
+    assert_eq!(panel["motion"], true);
+    assert_eq!(panel["dark"], true);
+}
+
+#[test]
+fn generated_settings_heights_match_the_row_layout() {
+    let state = crate::state::State::new(Default::default());
+    let (_, document) = panel(&state);
+    for (module, owner, height) in super::MODULES {
+        let body = child(
+            child(column(&document, super::COLUMNS[owner]), "entrance"),
+            "body",
+        );
+        let row = child(body, module);
+        if height == 0 {
+            assert!(row["controls"].as_array().unwrap().iter().all(|entry| {
+                !entry
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .any(|key| key.starts_with("details"))
+            }));
+            continue;
+        }
+        let details = child(row, "details");
+        assert_eq!(details["clips_children"], true);
+        assert_eq!(child(details, "content")["size"][1], height, "{module}");
     }
 }
 
 #[test]
-fn disclosure_changes_only_bindings_and_keeps_summaries_current() {
+fn open_and_close_motion_is_reversible_and_dims_the_world() {
+    let state = crate::state::State::new(Default::default());
+    let (panel, _) = panel(&state);
+    let surface = &panel["surface"];
+    let transitions = &surface["transitions"];
+    assert_eq!(transitions["#world_blur"]["from"], 0);
+    assert_eq!(transitions["#world_blur"]["exit"], 0);
+    assert_eq!(
+        transitions["#col_combat_in"]["from"],
+        serde_json::json!([0, 10])
+    );
+    assert!(
+        transitions.get("#col_combat_pos").is_none(),
+        "drags follow the pointer directly"
+    );
+    assert!(transitions.as_object().unwrap().len() <= 128);
+    let bindings = surface["bindings"].as_object().unwrap();
+    assert!(bindings.len() <= 128, "{} bindings", bindings.len());
+    assert_eq!(bindings["#world_blur"], 4);
+    assert_eq!(bindings["#col_menu_alpha"], 0);
+    assert_eq!(bindings["#menu_visible"], false);
+    assert_eq!(bindings["#menu_capture"], 0);
+    assert_eq!(transitions["#menu_capture"]["duration"], 0.14);
+}
+
+#[test]
+fn disclosure_and_toggles_change_only_bindings() {
     use crate::state::{Controls, Event, Preferences, State};
     let mut state = State::new(Preferences::default());
-    let initial: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    let (initial, _) = panel(&state);
     state.controls(Controls {
         focused: true,
         panel_open: true,
         keys: &[],
+        held: &[],
+        seconds: 0.0,
         events: &[
             Event {
                 id: "expand_reach".into(),
@@ -111,21 +153,116 @@ fn disclosure_changes_only_bindings_and_keeps_summaries_current() {
                 id: "reach_blocks".into(),
                 value: 4.2,
             },
+            Event {
+                id: "fake_lag".into(),
+                value: 1.0,
+            },
         ],
     });
-    let updated: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
+    let (updated, _) = panel(&state);
     assert_eq!(
         initial["surface"]["document"],
         updated["surface"]["document"]
     );
-    assert_eq!(updated["surface"]["bindings"]["#fold_aim_height"], 0.0);
-    assert_eq!(updated["surface"]["bindings"]["#fold_reach_height"], 56.0);
+    let bindings = &updated["surface"]["bindings"];
+    assert_eq!(bindings["#reach_h"], 60);
+    assert_eq!(bindings["#reach_angle"], 0);
+    assert_eq!(bindings["#aim_h"], 0);
+    assert_eq!(bindings["#jump_reset_y"], serde_json::json!([0, 120]));
+    assert_eq!(bindings["#col_combat_h"], 140);
+    assert_eq!(bindings["#col_combat_bg"], 166);
+    assert_eq!(bindings["#reach_value"], "4.2 blocks");
+    assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
+    assert_eq!(bindings["#col_network_count"], "1/1");
+    assert_eq!(bindings["#enabled_count"], "1 of 7 enabled");
+}
+
+#[test]
+fn rows_keep_values_and_show_bound_keys_as_keycaps() {
+    use crate::state::{Preferences, State};
+    let mut state = State::new(Preferences {
+        clicker_key: "KeyR".into(),
+        aim_key: "Digit4".into(),
+        ..Preferences::default()
+    });
+    state.modules.clicker = true;
+    state.capturing_key = Some(crate::state::KeybindTarget::Aim);
+    let (panel, _) = panel(&state);
+    let bindings = &panel["surface"]["bindings"];
+    assert_eq!(bindings["#clicker_bind"], "R");
+    assert_eq!(bindings["#aim_bind"], "4");
+    assert_eq!(bindings["#reach_bind"], "");
+    assert_eq!(bindings["#reach_keycap"], 0);
+    assert_eq!(bindings["#clicker_keycap"], 1);
     assert_eq!(
-        updated["surface"]["bindings"]["#summary_reach"],
-        "4.2 blocks"
+        bindings["#clicker_value"], "20 CPS",
+        "values stay visible when bound"
     );
+    assert_eq!(bindings["#reach_value"], "3.0 blocks");
+    assert_eq!(bindings["#clicker_key_color"][0], 1);
+    assert_eq!(bindings["#aim_capture"], 1);
+    assert_eq!(bindings["#clicker_capture"], 0);
     assert_eq!(
-        updated["surface"]["bindings"]["#enabled_count"],
-        "0 of 7 enabled"
+        bindings["#hint"],
+        "Press a key for Aim assist. Esc clears it."
     );
+    assert_eq!(super::key_legend(""), "None");
+    assert_eq!(super::key_legend("F7"), "F7");
+    assert_eq!(super::key_legend("Key"), "Key");
+}
+
+#[test]
+fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
+    use crate::state::{Preferences, State};
+    let mut preferences = Preferences::default();
+    preferences.collapsed[2] = true;
+    preferences.columns[2] = [12.5, -40.0];
+    let state = State::new(preferences);
+    let (panel, _) = panel(&state);
+    let bindings = &panel["surface"]["bindings"];
+    assert_eq!(bindings["#col_render_h"], 0);
+    assert_eq!(bindings["#col_render_bg"], 22);
+    assert_eq!(bindings["#col_render_angle"], -90);
+    assert_eq!(bindings["#col_render_pos"], serde_json::json!([12.5, -40]));
+    assert_eq!(
+        bindings["#col_render_pad"],
+        serde_json::json!([-2060.5, -2008])
+    );
+}
+
+/// Numbers compare by value: the shell writes `1`, serde writes `1.0`.
+fn normalize(value: Value) -> Value {
+    match value {
+        Value::Number(number) => serde_json::json!(number.as_f64().unwrap()),
+        Value::Array(items) => Value::Array(items.into_iter().map(normalize).collect()),
+        Value::Object(map) => {
+            Value::Object(map.into_iter().map(|(k, v)| (k, normalize(v))).collect())
+        }
+        other => other,
+    }
+}
+
+#[test]
+fn hand_built_shell_matches_the_serde_schema_in_every_state() {
+    use crate::state::{KeybindTarget, Preferences, State};
+    let mut states = vec![State::new(Preferences::default())];
+    let mut busy = State::new(Preferences {
+        clicker_key: "KeyR".into(),
+        aim_key: "Digit4".into(),
+        reach_key: "F9".into(),
+        reach_blocks: 4.2,
+        aim_mode: crate::state::AimMode::Continuous,
+        menu_key: "F6".into(),
+        ..Preferences::default()
+    });
+    busy.modules.clicker = true;
+    busy.modules.fullbright = true;
+    busy.capturing_key = Some(KeybindTarget::Reach);
+    states.push(busy);
+    for state in states {
+        let fast: Value = serde_json::from_str(&state.panel_shell_json().unwrap()).unwrap();
+        let reference: Value =
+            serde_json::from_str(&state.panel_reference_json().unwrap()).unwrap();
+        assert_eq!(normalize(fast), normalize(reference));
+    }
 }

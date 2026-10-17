@@ -2,7 +2,7 @@
 
 Import `cinnaroids.wasm` through Cinnabar’s **Settings → Mods → Import**, approve its requested permissions and select **Enable**. [Installation and updates](install.md).
 
-Press **F7** to open or close the module interface. All modules and settings share one panel without category tabs. It manages:
+Press **F7** to open or close the module interface. Modules sit in Combat, Network and Render columns over the softened world; click a module to toggle it and use its arrow for settings. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key starts unbound and can be set in the panel.
 - **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its toggle key starts unbound.
@@ -11,7 +11,7 @@ Press **F7** to open or close the module interface. All modules and settings sha
 - **Netherite Finder:** highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It cannot reveal terrain the server has not sent.
 - **Fullbright:** brighten world lighting without changing server data. Starts off; turning it off or unloading restores normal lighting.
 - **Auto Jump Reset:** jump once on the first eligible ground contact after new server knockback. Its toggle key starts unbound. The hit window is 1–10 simulation ticks (default 4); it starts off.
-- **Appearance:** neutral dark mode by default, with a light option.
+- **Layout:** drag a column by its header to move it, or click the header to collapse it. Positions and collapsed columns are saved; **Reset layout** in the Menu column restores them.
 
 Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; the configured menu key retains its reserved action.
 
