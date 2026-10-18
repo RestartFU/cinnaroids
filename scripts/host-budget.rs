@@ -308,7 +308,7 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(grants.players && grants.camera && grants.interaction);
     assert!(grants.packet_delay && grants.movement);
     assert!(grants.fullbright && grants.block_highlights);
-    assert!(!grants.environment && !grants.player_state);
+    assert!(!grants.environment && grants.player_state);
     assert!(grants.render && grants.world_draw && grants.entity_observe && grants.render_through_walls);
     let directory = tempfile::tempdir().unwrap();
     let installed = directory.path().join("cinnaroids.wasm");
@@ -330,7 +330,7 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("esp.wasm");
         let mut host = ModHost::load_snapshot_with_grants(&path, &component, ModGrants {
-            hud: true, players: true, controls: true, render: true, world_draw: true, entity_observe: true, render_through_walls: granted,
+            hud: true, players: true, player_state: true, controls: true, render: true, world_draw: true, entity_observe: true, render_through_walls: granted,
             ..Default::default()
         }).unwrap();
         let mut controls = empty_controls(); controls.focused = true; controls.panel_open = true;
@@ -341,9 +341,13 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
             yaw: 0., pitch: 0., attack_held: false, frame_seconds: 1. / 120., players: vec![],
         };
         let observe = |host: &mut ModHost| {
+            // Connection generations and actor-store generations are different identity domains.
+            host.observe_presentation(Some(mod_host::WorldObservation {
+                session: 2, dimension: 0, world: "local-fixture".into(), position: (0., 0., 0.), alive: true,
+            }), None, None, Vec::new()).unwrap();
             host.observe_modules(ModuleObservations {
                 actors: (0..mod_api::MAX_OBSERVED_ACTORS).map(|index| ActorObservation {
-                    session: 1, dimension: 0, runtime_id: index as u64 + 1, player: true,
+                    session: 2, dimension: 0, runtime_id: index as u64 + 1, player: true,
                     position: (index as f32, 0., -4.),
                     boxes: vec![ActorObservationBounds { min: (index as f32 - 0.3, 0., -4.3), max: (index as f32 + 0.3, 1.8, -3.7) }; mod_api::MAX_OBSERVED_ACTOR_BOXES],
                     name: "P".repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES), identifier: "minecraft:player".into(), yaw: 0., pitch: 0.,
@@ -366,16 +370,20 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
             }
         }
         // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
-        for reason in 0..4 {
+        for reason in 0..5 {
+            observe(&mut host);
+            let mut active = empty_controls(); active.focused = true; active.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), active).unwrap();
             observe(&mut host);
             let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
             match reason {
                 0 => controls.focused = false,
                 1 => controls.panel_open = true,
-                2 => { controls.panel_open = true; controls.events.push(ControlEvent { id: "player_esp".into(), value: 0. }); },
+                3 => host.observe_presentation(None, None, None, Vec::new()).unwrap(),
+                4 => { controls.panel_open = true; controls.events.push(ControlEvent { id: "player_esp".into(), value: 0. }); },
                 _ => (),
             }
-            host.frame_with_controls(false, if reason == 3 { None } else { Some(snapshot()) }, controls).unwrap();
+            host.frame_with_controls(false, if reason == 2 { None } else { Some(snapshot()) }, controls).unwrap();
             assert!(host.render().0.retained.iter().all(|r| r.instances.is_empty())); assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
         }
     }

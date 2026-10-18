@@ -130,14 +130,16 @@ impl Guest for Cinnaroids {
                 && drawing::capabilities()
                     .contains(Permissions::WORLD_DRAW | Permissions::RENDER_THROUGH_WALLS)
                 && let Some(frame) = snapshot.as_ref()
-                && let Some(geometry) = esp_geometry(frame.session, frame.dimension)
+                && let Ok(Some(world)) = player_state::read_world()
+                && world.dimension == frame.dimension
+                && let Some(geometry) = esp_geometry(world.session, world.dimension)
                 && let Ok(actors) =
                     player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
             {
                 let output = crate::esp::build(
                     &modules.preferences,
-                    frame.session,
-                    frame.dimension,
+                    world.session,
+                    world.dimension,
                     [frame.eye.x, frame.eye.y, frame.eye.z],
                     &actors,
                     geometry,

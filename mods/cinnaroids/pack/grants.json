@@ -12,5 +12,6 @@
   "render": true,
   "world_draw": true,
   "entity_observe": true,
-  "render_through_walls": true
+  "render_through_walls": true,
+  "player_state": true
 }
