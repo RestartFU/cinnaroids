@@ -116,7 +116,7 @@ pub fn build(
         }
         if p.esp_distance {
             if !text.is_empty() {
-                text.push_str(" · ");
+                text.push('\n');
             }
             integer(&mut text, distance.round() as i32);
             text.push_str(" blocks");
@@ -125,7 +125,7 @@ pub fn build(
             && let Some(health) = actor.health.filter(|n| n.is_finite() && *n >= 0.)
         {
             if !text.is_empty() {
-                text.push_str(" · ");
+                text.push_str(if p.esp_distance { " · " } else { "\n" });
             }
             integer(&mut text, health.ceil().min(i32::MAX as f32) as i32);
             text.push_str(" HP");
@@ -138,7 +138,7 @@ pub fn build(
             output.labels.push_str("{\"position\":[");
             for (i, value) in [
                 (min[0] + max[0]) * 0.5,
-                max[1] + 0.25,
+                max[1] + 0.65,
                 (min[2] + max[2]) * 0.5,
             ]
             .into_iter()
@@ -153,7 +153,7 @@ pub fn build(
             // Names are untrusted server text, so always use JSON string escaping.
             quoted(&mut output.labels, &text);
             output.labels.push_str(
-                ",\"scale\":0.8,\"padding\":2,\"shadow\":false,\"background_opacity\":0.65}",
+                ",\"scale\":1.2,\"padding\":2,\"shadow\":false,\"background_opacity\":0.65}",
             );
         }
     }
