@@ -49,7 +49,11 @@ fn every_control_is_reachable_from_the_floating_columns() {
     let controls = panel["controls"].as_array().unwrap();
     let mut routes = Vec::new();
     actions(&document["panel"], &mut routes);
-    for (index, control) in controls.iter().enumerate().take(27) {
+    for (index, control) in controls
+        .iter()
+        .enumerate()
+        .filter(|(_, control)| control["id"] != "drag_x" && control["id"] != "drag_y")
+    {
         assert!(
             routes.contains(&format!("mod.control:{index}")),
             "missing native control {index} ({})",
@@ -62,7 +66,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 29);
+    assert_eq!(controls.len(), 30);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
@@ -269,6 +273,7 @@ fn hand_built_shell_matches_the_serde_schema_in_every_state() {
         reach_key: "F9".into(),
         reach_blocks: 4.2,
         aim_mode: crate::state::AimMode::Continuous,
+        aim_horizontal_only: true,
         menu_key: "F6".into(),
         ..Preferences::default()
     });

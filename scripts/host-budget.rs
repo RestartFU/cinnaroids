@@ -6,6 +6,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
     for settings in [
         "{}",
+        r#"{"aim_horizontal_only":true}"#,
         r#"{"clicker_key":"F7","aim_key":"F6","menu_key":"F7"}"#,
         r#"{"cps":20,"toggle_key":"VK:119","aim_strength":100,"aim_mode":"continuous","dark_mode":true,"columns":[[0,0],[-9000,9000]],"collapsed":[true,true]}"#,
         r#"{"cps":30,"clicker_key":"NumpadSubtract","aim_key":"ArrowRight","reach_key":"NumpadDecimal","aim_strength":100,"aim_mode":"continuous","reach_blocks":6,"dark_mode":false,"fake_lag_ms":1000,"show_real_position":true,"netherite_range":128}"#,
@@ -33,6 +34,8 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
         for (id, value) in [
             ("expand_clicker", 1.0),
             ("expand_aim", 1.0),
+            ("aim_horizontal_only", 1.0),
+            ("aim_horizontal_only", 0.0),
             ("expand_reach", 1.0),
             ("expand_jump_reset", 1.0),
             ("expand_fake_lag", 1.0),
@@ -70,6 +73,13 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 .controls
                 .iter()
                 .any(|control| control.id() == "jump_reset"));
+            if id == "aim_horizontal_only" {
+                let preferences: serde_json::Value =
+                    serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+                assert_eq!(preferences["aim_horizontal_only"], value >= 0.5);
+                assert!(host.panel().unwrap().controls.iter()
+                    .any(|control| control.id() == "aim_horizontal_only"));
+            }
             if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
                 let spec = host.block_highlights().unwrap();
                 assert_eq!(

@@ -23,7 +23,7 @@ const MENU_BODY: i32 = 52;
 /// Module binding prefix, owning column and the height of its generated settings region.
 const MODULES: [(&str, usize, i32); 7] = [
     ("clicker", 0, 60),
-    ("aim", 0, 92),
+    ("aim", 0, 112),
     ("reach", 0, 60),
     ("jump_reset", 0, 60),
     ("fake_lag", 1, 58),
@@ -178,6 +178,12 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         r#""drag_y","label":"Column drag y""#,
         state.pad_value(1),
         "-2048,\"max\":2048,\"step\":0.5",
+    );
+    toggle(
+        json,
+        "aim_horizontal_only",
+        "Horizontal only",
+        p.aim_horizontal_only,
     );
     json.push(']');
     json.push('}');

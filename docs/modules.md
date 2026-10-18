@@ -5,7 +5,7 @@ Import `cinnaroids.wasm` through Cinnabar’s **Settings → Mods → Import**, 
 Press **F7** to open or close the module interface. Modules sit in Combat, Network and Render columns over the softened world; click a module to toggle it and use its arrow for settings. It manages:
 
 - **Clicker:** hold the physical Attack control to click at the selected CPS. The toggle key starts unbound and can be set in the panel.
-- **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Its toggle key starts unbound.
+- **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Enable **Horizontal only** to turn off vertical camera movement. Its toggle key starts unbound.
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its toggle key starts unbound.
 - **FakeLag:** delay inbound and outbound game packets by 0–1000 milliseconds each. Default delay is 100 ms; the module starts off. Slider values can also be typed.
 - **Netherite Finder:** highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It cannot reveal terrain the server has not sent.
@@ -19,7 +19,7 @@ To change a module's binding, click its keycap, then press the next keyboard key
 
 Enabled switches are runtime state and start off for a new session. Disable the registration in Cinnabar’s Mods screen to unload the component; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
 
-Aim assist reads player coordinates, selects a target within six blocks and a 30-degree cone, and smoothly steers toward the chest. Strength zero produces no motion. The API exposes positions without visibility or team information, so the module cannot filter occluded players or teammates. Menus, loss of cursor capture, and server-controlled cameras pause assistance.
+Aim assist reads player coordinates, selects a target within six blocks and a 30-degree cone, and smoothly steers toward the chest. **Horizontal only** preserves your vertical aim while steering left or right; it defaults to off and saves with your preferences. Target selection still uses the same cone. Strength zero produces no motion. The API exposes positions without visibility or team information, so the module cannot filter occluded players or teammates. Menus, loss of cursor capture, and server-controlled cameras pause assistance.
 
 Reach changes the client's actor attack selection distance. It preserves block targeting and normal server authority; a server can reject an attack outside its own range.
 

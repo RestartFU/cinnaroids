@@ -37,7 +37,8 @@ COLUMNS = [
 MODULES = [
     ("clicker", "Clicker", "combat", 1, 20, 3, [("slider", 2, "Clicks per second", "CPS")]),
     ("aim", "Aim assist", "combat", 4, 21, 7,
-     [("slider", 5, "Strength", "%"), ("choice", 6, "Activation")]),
+     [("slider", 5, "Strength", "%"), ("choice", 6, "Activation"),
+      ("toggle", 29, "Horizontal only")]),
     ("reach", "Reach", "combat", 8, 22, 10, [("slider", 9, "Distance", "blocks")]),
     ("jump_reset", "Auto Jump Reset", "combat", 11, 23, 13,
      [("slider", 12, "Hit window", "ticks")]),
