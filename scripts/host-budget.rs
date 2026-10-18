@@ -1,4 +1,4 @@
-use mod_host::{empty_controls, ControlEvent, ModGrants, ModHost};
+use mod_host::{ControlEvent, ModGrants, ModHost, empty_controls};
 
 #[test]
 fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
@@ -40,6 +40,12 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("expand_jump_reset", 1.0),
             ("expand_fake_lag", 1.0),
             ("expand_netherite", 1.0),
+            ("expand_esp", 1.0),
+            ("esp_range", 128.0),
+            ("esp_color", 3.0),
+            ("esp_names", 0.0),
+            ("esp_distance", 0.0),
+            ("esp_health", 0.0),
             ("expand_netherite", 1.0),
             ("fullbright", 1.0),
             ("fullbright", 0.0),
@@ -67,18 +73,24 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             host.frame_with_controls(false, None, controls)
                 .unwrap_or_else(|error| panic!("event {id}, settings {settings}: {error:#}"));
             assert!(host.is_active());
-            assert!(host
-                .panel()
-                .unwrap()
-                .controls
-                .iter()
-                .any(|control| control.id() == "jump_reset"));
+            assert!(
+                host.panel()
+                    .unwrap()
+                    .controls
+                    .iter()
+                    .any(|control| control.id() == "jump_reset")
+            );
             if id == "aim_horizontal_only" {
                 let preferences: serde_json::Value =
                     serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
                 assert_eq!(preferences["aim_horizontal_only"], value >= 0.5);
-                assert!(host.panel().unwrap().controls.iter()
-                    .any(|control| control.id() == "aim_horizontal_only"));
+                assert!(
+                    host.panel()
+                        .unwrap()
+                        .controls
+                        .iter()
+                        .any(|control| control.id() == "aim_horizontal_only")
+                );
             }
             if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
                 let spec = host.block_highlights().unwrap();
@@ -140,7 +152,10 @@ fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
         }
         if frame < 120 {
             controls.keys_held.push("MouseLeft".into());
-            for (axis, value) in [("x", -370.0 + frame as f32), ("y", -160.0 + frame as f32 / 2.0)] {
+            for (axis, value) in [
+                ("x", -370.0 + frame as f32),
+                ("y", -160.0 + frame as f32 / 2.0),
+            ] {
                 controls.events.push(ControlEvent {
                     id: format!("drag_{axis}"),
                     value,
@@ -154,7 +169,10 @@ fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
     assert!(pad(&host, "drag_x").contains("-2048"));
     let preferences: serde_json::Value =
         serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
-    assert_eq!(preferences["columns"][0], serde_json::json!([-261.0, -106.5]));
+    assert_eq!(
+        preferences["columns"][0],
+        serde_json::json!([-261.0, -106.5])
+    );
     assert_eq!(preferences["collapsed"][0], false);
 }
 
@@ -300,19 +318,27 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
 
 #[test]
 fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
-    let source = std::path::PathBuf::from(
-        std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap(),
-    );
+    let source = std::path::PathBuf::from(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap());
     let declarations = mod_host::declarations(&source).unwrap();
     assert_eq!(declarations.metadata.name.as_deref(), Some("Cinnaroids"));
     assert!(declarations.metadata.version.is_some());
     assert!(declarations.metadata.icon.is_some());
-    let grants = declarations.requested.unwrap().expect("explicit import permissions");
+    let grants = declarations
+        .requested
+        .unwrap()
+        .expect("explicit import permissions");
     assert!(grants.controls && grants.settings && grants.hud);
     assert!(grants.players && grants.camera && grants.interaction);
     assert!(grants.packet_delay && grants.movement);
     assert!(grants.fullbright && grants.block_highlights);
-    assert!(!grants.environment && !grants.render && !grants.player_state);
+    assert!(!grants.environment && grants.player_state);
+    assert!(
+        grants.render
+            && grants.world_draw
+            && grants.entity_highlight
+            && grants.entity_observe
+            && grants.render_through_walls
+    );
     let directory = tempfile::tempdir().unwrap();
     let installed = directory.path().join("cinnaroids.wasm");
     let component = std::fs::read(&source).unwrap();
@@ -323,4 +349,211 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(host.is_active());
     assert_eq!(host.panel().unwrap().toggle_key, "F7");
     assert_eq!(host.reserved_keys(), ["F7"]);
+}
+
+#[test]
+fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
+    use mod_host::{
+        ActorObservation, ActorObservationBounds, GameplaySnapshot, GameplayVector3, ObservedActor,
+        module_observations::ModuleObservations,
+    };
+    let component =
+        std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
+    for (highlight, through_walls) in [(true, true), (true, false), (false, true)] {
+        let granted = highlight && through_walls;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("esp.wasm");
+        let mut host = ModHost::load_snapshot_with_grants(
+            &path,
+            &component,
+            ModGrants {
+                hud: true,
+                players: true,
+                player_state: true,
+                controls: true,
+                render: true,
+                world_draw: true,
+                entity_observe: true,
+                entity_highlight: highlight,
+                render_through_walls: through_walls,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::fs::write(&path, &component).unwrap();
+        host.bind_drawing_session(mod_api::drawing::DrawingSession {
+            connection: 1,
+            dimension: 0,
+            local: true,
+            permissions: mod_api::drawing::DrawingPermissions::ALL,
+        });
+        assert!(host.reload_if_changed().unwrap());
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.panel_open = true;
+        controls.events.push(ControlEvent {
+            id: "player_esp".into(),
+            value: 1.,
+        });
+        host.frame_with_controls(false, None, controls).unwrap();
+        let snapshot = || GameplaySnapshot {
+            session: 1,
+            dimension: 0,
+            eye: GameplayVector3 {
+                x: 0.,
+                y: 1.6,
+                z: 0.,
+            },
+            yaw: 0.,
+            pitch: 0.,
+            attack_held: false,
+            frame_seconds: 1. / 120.,
+            players: vec![],
+        };
+        let observe = |host: &mut ModHost, non_players: usize| {
+            // Connection generations and actor-store generations are different identity domains.
+            host.observe_presentation(
+                Some(mod_host::WorldObservation {
+                    session: 2,
+                    dimension: 0,
+                    world: "local-fixture".into(),
+                    position: (0., 0., 0.),
+                    alive: true,
+                }),
+                None,
+                None,
+                Vec::new(),
+            )
+            .unwrap();
+            host.publish_mask_targets(
+                &(0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| {
+                        (
+                            mod_api::drawing::MaskEntity {
+                                connection: 1,
+                                dimension: 0,
+                                runtime_id: index as u64 + 1,
+                                spawn_revision: 1,
+                            },
+                            72,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            host.observe_modules(ModuleObservations {
+                actors: (0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| ObservedActor {
+                        actor: ActorObservation {
+                            session: 2,
+                            dimension: 0,
+                            runtime_id: index as u64 + 1,
+                            player: index >= non_players,
+                            position: (index as f32, 0., -4.),
+                            boxes: vec![
+                                ActorObservationBounds {
+                                    min: (index as f32 - 0.3, 0., -4.3),
+                                    max: (index as f32 + 0.3, 1.8, -3.7)
+                                };
+                                mod_api::MAX_OBSERVED_ACTOR_BOXES
+                            ],
+                            name: "P".repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES),
+                            identifier: "minecraft:player".into(),
+                            yaw: 0.,
+                            pitch: 0.,
+                            pickable: true,
+                            hittable: None,
+                            look_origin: None,
+                            look_direction: None,
+                            invisible: false,
+                            sneaking: false,
+                            hurt: false,
+                            health: Some(10.),
+                        },
+                        max_health: Some(40.),
+                    })
+                    .collect(),
+                ..Default::default()
+            })
+            .unwrap();
+        };
+        for frame in 0..3 {
+            // Player-only consent filters mobs before the bounded six-row result.
+            observe(&mut host, frame * 5);
+            let mut controls = empty_controls();
+            controls.focused = true;
+            controls.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), controls)
+                .unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
+            assert!(host.is_active());
+            assert_eq!(host.render().0.masks.len(), usize::from(granted));
+            assert_eq!(
+                host.hud().map_or(0, |hud| hud.world_labels.len()),
+                if granted { 6 } else { 0 }
+            );
+            if granted {
+                let output = host.render().0;
+                assert!(
+                    output
+                        .retained
+                        .iter()
+                        .all(|r| r.instances.is_empty() && r.geometry.is_empty())
+                );
+                assert_eq!(output.masks[0].entities.len(), 6);
+                assert_eq!(output.masks[0].depth, mod_api::drawing::MaskDepth::Always);
+                let style = output.masks[0].style.unwrap();
+                assert!(
+                    style.outline_radius > 0.
+                        && style.glow_radius > style.outline_radius
+                        && style.glow[3] > 0.
+                );
+            }
+        }
+        if granted {
+            // Missing admitted meshes cannot leave old silhouettes or labels behind.
+            host.publish_mask_targets(&[]);
+            let mut controls = empty_controls();
+            controls.focused = true;
+            controls.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), controls)
+                .unwrap();
+            assert!(host.render().0.masks.is_empty());
+            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+        }
+        // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
+        for reason in 0..5 {
+            observe(&mut host, 10);
+            let mut active = empty_controls();
+            active.focused = true;
+            active.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), active)
+                .unwrap();
+            observe(&mut host, 10);
+            let mut controls = empty_controls();
+            controls.focused = true;
+            controls.gameplay = true;
+            match reason {
+                0 => controls.focused = false,
+                1 => controls.panel_open = true,
+                3 => host
+                    .observe_presentation(None, None, None, Vec::new())
+                    .unwrap(),
+                4 => {
+                    controls.panel_open = true;
+                    controls.events.push(ControlEvent {
+                        id: "player_esp".into(),
+                        value: 0.,
+                    });
+                }
+                _ => (),
+            }
+            host.frame_with_controls(
+                false,
+                if reason == 2 { None } else { Some(snapshot()) },
+                controls,
+            )
+            .unwrap();
+            assert!(host.render().0.masks.is_empty());
+            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+        }
+    }
 }

@@ -37,6 +37,11 @@ pub struct Preferences {
     pub fake_lag_ms: u16,
     pub show_real_position: bool,
     pub netherite_range: u8,
+    pub esp_range: u8,
+    pub esp_color: u8,
+    pub esp_names: bool,
+    pub esp_distance: bool,
+    pub esp_health: bool,
     /// Column origins relative to the reference box centre: Combat, Network, Render, Menu.
     pub columns: [[f32; 2]; 4],
     pub collapsed: [bool; 4],
@@ -59,6 +64,11 @@ impl Default for Preferences {
             fake_lag_ms: 100,
             show_real_position: false,
             netherite_range: 64,
+            esp_range: 64,
+            esp_color: 0,
+            esp_names: true,
+            esp_distance: true,
+            esp_health: true,
             columns: crate::panel::DEFAULT_COLUMNS,
             collapsed: [false; 4],
         }
@@ -121,6 +131,21 @@ impl Preferences {
         if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
             preferences.netherite_range =
                 value.clamp(1, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u64) as u8;
+        }
+        if let Some(value) = values.get("esp_range").and_then(Value::as_u64) {
+            preferences.esp_range = value.clamp(1, crate::esp::MAX_RANGE as u64) as u8;
+        }
+        if let Some(value) = values.get("esp_color").and_then(Value::as_u64) {
+            preferences.esp_color = value.min((crate::esp::COLOR_NAMES.len() - 1) as u64) as u8;
+        }
+        for (field, target) in [
+            ("esp_names", &mut preferences.esp_names),
+            ("esp_distance", &mut preferences.esp_distance),
+            ("esp_health", &mut preferences.esp_health),
+        ] {
+            if let Some(value) = values.get(field).and_then(Value::as_bool) {
+                *target = value;
+            }
         }
         if let Some(value) = values
             .get("jump_reset_window_ticks")
@@ -258,6 +283,7 @@ pub struct Modules {
     pub fake_lag: bool,
     pub netherite: bool,
     pub fullbright: bool,
+    pub player_esp: bool,
     pub jump_reset: bool,
 }
 
@@ -277,7 +303,7 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded: [bool; 6],
+    pub expanded: [bool; 8],
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -295,7 +321,7 @@ impl State {
             modules: Modules::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded: [false; 6],
+            expanded: [false; 8],
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -485,7 +511,7 @@ impl State {
     }
 
     /// Runtime enabled flags in panel order.
-    pub fn enabled_flags(&self) -> [bool; 7] {
+    pub fn enabled_flags(&self) -> [bool; 8] {
         let m = &self.modules;
         [
             m.clicker,
@@ -495,6 +521,7 @@ impl State {
             m.fake_lag,
             m.netherite,
             m.fullbright,
+            m.player_esp,
         ]
     }
 
@@ -528,6 +555,12 @@ impl State {
                 .position(|id| *id == event.id)
                 .unwrap();
                 self.expanded[index] = !self.expanded[index];
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
+            "expand_esp" => {
+                self.expanded[7] = !self.expanded[7];
                 self.capturing_key = None;
                 self.panel_dirty = true;
                 return;
@@ -594,6 +627,20 @@ impl State {
             ),
             "show_real_position" => replace(&mut self.preferences.show_real_position, value >= 0.5),
             "netherite" => replace(&mut self.modules.netherite, value >= 0.5),
+            "player_esp" => replace(&mut self.modules.player_esp, value >= 0.5),
+            "esp_range" => replace(
+                &mut self.preferences.esp_range,
+                value.round().clamp(1., crate::esp::MAX_RANGE) as u8,
+            ),
+            "esp_color" => replace(
+                &mut self.preferences.esp_color,
+                value
+                    .round()
+                    .clamp(0., (crate::esp::COLOR_NAMES.len() - 1) as f32) as u8,
+            ),
+            "esp_names" => replace(&mut self.preferences.esp_names, value >= 0.5),
+            "esp_distance" => replace(&mut self.preferences.esp_distance, value >= 0.5),
+            "esp_health" => replace(&mut self.preferences.esp_health, value >= 0.5),
             "fullbright" => replace(&mut self.modules.fullbright, value >= 0.5),
             "netherite_range" => replace(
                 &mut self.preferences.netherite_range,
@@ -621,6 +668,7 @@ impl State {
                     | "netherite"
                     | "fullbright"
                     | "jump_reset"
+                    | "player_esp"
             ) {
                 self.preferences_dirty = true;
             }
@@ -762,7 +810,7 @@ impl State {
                 id: "aim_mode",
                 label: "Mode",
                 index: u32::from(self.preferences.aim_mode == AimMode::WhileClicking),
-                options: ["Continuous", "While clicking"],
+                options: &["Continuous", "While clicking"],
             },
             Control::Keybind {
                 id: "aim_key",
@@ -891,6 +939,46 @@ impl State {
             label: "Horizontal only",
             value: self.preferences.aim_horizontal_only,
         });
+        controls.extend([
+            Control::Toggle {
+                id: "player_esp",
+                label: "Player ESP",
+                value: self.modules.player_esp,
+            },
+            Control::Slider {
+                id: "esp_range",
+                label: "ESP range",
+                value: f32::from(self.preferences.esp_range),
+                min: 1.,
+                max: crate::esp::MAX_RANGE,
+                step: 1.,
+            },
+            Control::Choice {
+                id: "esp_color",
+                label: "Outline color",
+                index: u32::from(self.preferences.esp_color),
+                options: crate::esp::COLOR_NAMES,
+            },
+            Control::Toggle {
+                id: "esp_names",
+                label: "Names",
+                value: self.preferences.esp_names,
+            },
+            Control::Toggle {
+                id: "esp_distance",
+                label: "Distance",
+                value: self.preferences.esp_distance,
+            },
+            Control::Toggle {
+                id: "esp_health",
+                label: "Health",
+                value: self.preferences.esp_health,
+            },
+            Control::Button {
+                id: "expand_esp",
+                label: "Player ESP settings",
+            },
+        ]);
         let panel = Panel {
             title: PRODUCT_NAME,
             toggle_key: &self.preferences.menu_key,
@@ -1047,7 +1135,7 @@ enum Control<'a> {
         id: &'a str,
         label: &'a str,
         index: u32,
-        options: [&'a str; 2],
+        options: &'a [&'a str],
     },
 }
 

@@ -60,13 +60,14 @@ fn every_control_is_reachable_from_the_floating_columns() {
             control["id"]
         );
     }
-    for index in [2, 5, 9, 12, 15, 18] {
-        assert_eq!(controls[index]["kind"], "slider");
+    for (index, _) in controls.iter().enumerate().filter(|(_, control)| {
+        control["kind"] == "slider" && !control["id"].as_str().unwrap().starts_with("drag_")
+    }) {
         assert!(routes.contains(&format!("mod.edit:{index}")));
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 30);
+    assert_eq!(controls.len(), 37);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))

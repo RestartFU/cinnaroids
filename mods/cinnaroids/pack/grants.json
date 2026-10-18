@@ -8,5 +8,11 @@
   "settings": true,
   "packet_delay": true,
   "block_highlights": true,
-  "fullbright": true
+  "fullbright": true,
+  "render": true,
+  "world_draw": true,
+  "entity_observe": true,
+  "entity_highlight": true,
+  "render_through_walls": true,
+  "player_state": true
 }

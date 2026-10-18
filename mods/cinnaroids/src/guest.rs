@@ -4,7 +4,14 @@ use std::cell::RefCell;
 
 use mod_api::bindings::{
     Guest,
-    cinnabar::extension::{environment, gameplay, hud, input, panel, render, settings},
+    cinnabar::extension::{
+        environment, gameplay, hud, input, panel, player_state, render, settings,
+    },
+};
+
+use mod_api::bindings::cinnabar::world_draw::{
+    drawing::{self, Handle, Permissions},
+    masks,
 };
 
 use crate::{
@@ -16,6 +23,8 @@ use crate::{
 thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
+    static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
+    static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
 }
 
@@ -31,6 +40,8 @@ impl Guest for Cinnaroids {
             *modules = State::new(preferences);
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
+        ESP_MASK.with(|mask| *mask.borrow_mut() = None);
+        ESP_LABELS.with(|labels| *labels.borrow_mut() = false);
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
     }
@@ -40,6 +51,7 @@ impl Guest for Cinnaroids {
             AIM.with(|aim| aim.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
+            clear_esp();
             return;
         };
         MODULES.with(|modules| {
@@ -115,6 +127,44 @@ impl Guest for Cinnaroids {
                     reset.reset();
                 }
             });
+
+            if modules.modules.player_esp
+                && !controls.panel_open
+                && drawing::capabilities().contains(
+                    Permissions::ENTITY_OBSERVE
+                        | Permissions::ENTITY_HIGHLIGHT
+                        | Permissions::RENDER_THROUGH_WALLS,
+                )
+                && let Some(frame) = snapshot.as_ref()
+                && let Ok(Some(world)) = player_state::read_world()
+                && world.dimension == frame.dimension
+                && let Ok(actors) =
+                    player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
+            {
+                let output = crate::esp::build(
+                    &modules.preferences,
+                    world.session,
+                    world.dimension,
+                    [frame.eye.x, frame.eye.y, frame.eye.z],
+                    &actors,
+                );
+                if show_esp(
+                    world.session,
+                    world.dimension,
+                    modules.preferences.esp_color,
+                    &output.players,
+                ) {
+                    if hud::set_content(&output.labels).is_ok() {
+                        ESP_LABELS.with(|labels| *labels.borrow_mut() = true);
+                    } else {
+                        clear_esp();
+                    }
+                } else {
+                    clear_esp();
+                }
+            } else {
+                clear_esp();
+            }
 
             let Some(snapshot) = snapshot else {
                 AIM.with(|aim| aim.borrow_mut().reset());
@@ -217,3 +267,55 @@ fn publish(modules: &mut State) {
 }
 
 mod_api::bindings::export!(Cinnaroids with_types_in mod_api::bindings);
+
+/// Releases the retained selection and labels when the overlay cannot be presented.
+fn clear_esp() {
+    ESP_MASK.with(|cached| {
+        if let Some((_, _, mask)) = cached.borrow_mut().take() {
+            let _ = masks::remove(mask);
+        }
+    });
+    ESP_LABELS.with(|labels| {
+        let mut labels = labels.borrow_mut();
+        if *labels && hud::set_content("").is_ok() {
+            *labels = false;
+        }
+    });
+}
+
+/// Refreshes a bounded union of admitted actor meshes with host-owned outline and glow.
+fn show_esp(session: u64, dimension: i32, color: u8, players: &[u64]) -> bool {
+    if players.is_empty() {
+        return false;
+    }
+    ESP_MASK.with(|cached| {
+        let mut cached = cached.borrow_mut();
+        if cached
+            .as_ref()
+            .is_some_and(|(old_session, old_dimension, _)| {
+                (*old_session, *old_dimension) != (session, dimension)
+            })
+        {
+            if let Some((_, _, mask)) = cached.take() {
+                let _ = masks::remove(mask);
+            }
+        }
+        let mask = match *cached {
+            Some((_, _, mask)) => mask,
+            None => {
+                let Ok(mask) = masks::create(masks::DepthPolicy::Always) else {
+                    return false;
+                };
+                *cached = Some((session, dimension, mask));
+                mask
+            }
+        };
+        let entities: Vec<_> = players
+            .iter()
+            .filter_map(|id| masks::entity(*id).ok())
+            .collect();
+        !entities.is_empty()
+            && masks::select(mask, &entities).is_ok()
+            && masks::set_style(mask, Some(crate::esp::appearance(color))).is_ok()
+    })
+}
