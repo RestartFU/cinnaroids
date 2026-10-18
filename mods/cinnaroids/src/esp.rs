@@ -1,9 +1,12 @@
 //! Bounded player overlays using native actor bounds and reported health attributes.
 
 use crate::state::Preferences;
-use mod_api::bindings::cinnabar::extension::{
-    player_state::Actor,
-    render::{Line, LinePattern, Rgba, Vector3, WireBox},
+use mod_api::bindings::cinnabar::{
+    extension::player_state::Actor,
+    world_draw::drawing::{
+        self, Anchor, Blend, Cap, Depth, GeometrySpec, Handle, Instance, Join, Polyline, Transform,
+        Vertex, WidthMode, WorldAnchor,
+    },
 };
 
 /// Leaves callback fuel for combat assistance and maximum-size host observations.
@@ -16,11 +19,10 @@ const COLORS: [[f32; 4]; 4] = [
     [0.2, 0.85, 1., 1.],
     [0.95, 0.95, 0.95, 1.],
 ];
-/// One callback's overlay lines and camera-projected HUD labels.
+/// One callback's shared-geometry instances and camera-projected HUD labels.
 #[derive(Default)]
 pub struct Output {
-    pub boxes: Vec<WireBox>,
-    pub lines: Vec<Line>,
+    pub draws: Vec<Instance>,
     pub labels: String,
 }
 
@@ -31,15 +33,16 @@ pub fn build(
     dimension: i32,
     eye: [f32; 3],
     actors: &[Actor],
+    geometry: Geometry,
 ) -> Output {
     let mut output = Output {
-        boxes: Vec::with_capacity(MAX_PLAYERS),
-        lines: Vec::with_capacity(MAX_PLAYERS),
+        draws: Vec::with_capacity(MAX_PLAYERS * 2),
         labels: String::with_capacity(MAX_PLAYERS * 256),
     };
     output.labels.push_str("{\"cards\":[],\"world_labels\":[");
     let color = COLORS[usize::from(p.esp_color).min(COLORS.len() - 1)];
     let mut labels = 0;
+    let mut players = 0;
     for actor in actors.iter().take(mod_api::MAX_OBSERVED_ACTORS) {
         if !actor.player
             || actor.session != session
@@ -48,7 +51,7 @@ pub fn build(
         {
             continue;
         }
-        if output.boxes.len() == MAX_PLAYERS {
+        if players == MAX_PLAYERS {
             break;
         }
         let position = [actor.position.0, actor.position.1, actor.position.2];
@@ -71,25 +74,15 @@ pub fn build(
         if (0..3).all(|i| eye[i] >= min[i] && eye[i] <= max[i]) {
             continue;
         }
-        output.boxes.push(WireBox {
-            min: Vector3 {
-                x: min[0],
-                y: min[1],
-                z: min[2],
-            },
-            max: Vector3 {
-                x: max[0],
-                y: max[1],
-                z: max[2],
-            },
-            width: 1.5,
-            color: Rgba {
-                r: color[0],
-                g: color[1],
-                b: color[2],
-                a: color[3],
-            },
-        });
+        players += 1;
+        output.draws.push(instance(
+            geometry.boxes,
+            dimension,
+            min,
+            [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+            color,
+            1.5,
+        ));
         if p.esp_health
             && let (Some(health), Some(maximum)) = (actor.health, actor.max_health)
             && health.is_finite()
@@ -100,8 +93,6 @@ pub fn build(
             let ratio = (health / maximum).clamp(0., 1.);
             if ratio > 0. {
                 // The box's full-height edge is the track; the thicker colored segment is health.
-                let start = [min[0], min[1], min[2]];
-                let end = [min[0], min[1] + (max[1] - min[1]) * ratio, min[2]];
                 let tint = if ratio > 0.5 {
                     [0.3, 1., 0.45, 1.]
                 } else if ratio > 0.25 {
@@ -109,7 +100,14 @@ pub fn build(
                 } else {
                     [1., 0.25, 0.2, 1.]
                 };
-                output.lines.push(line(vec![start, end], tint, 3.));
+                output.draws.push(instance(
+                    geometry.health,
+                    dimension,
+                    min,
+                    [1., (max[1] - min[1]) * ratio, 1.],
+                    tint,
+                    3.,
+                ));
             }
         }
         let mut text = String::with_capacity(actor.name.len() + 32);
@@ -186,21 +184,83 @@ fn bounds(actor: &Actor) -> Option<([f32; 3], [f32; 3])> {
     (0..3).all(|i| lo[i] < hi[i]).then_some((lo, hi))
 }
 
-/// Converts bounded geometry to the host's world-space, constant-pixel-width line contract.
-fn line(points: Vec<[f32; 3]>, color: [f32; 4], width: f32) -> Line {
-    Line {
-        points: points
+/// Immutable unit shapes are admitted once and reused by all observed players.
+#[derive(Clone, Copy)]
+pub struct Geometry {
+    pub boxes: Handle,
+    pub health: Handle,
+}
+
+impl Geometry {
+    /// Creates two owner-scoped resources, rolling back the first if the second is rejected.
+    pub fn create() -> Option<Self> {
+        let boxes = drawing::create_geometry(&box_geometry()).ok()?;
+        match drawing::create_geometry(&polyline([(0., 0., 0.), (0., 1., 0.)])) {
+            Ok(health) => Some(Self { boxes, health }),
+            Err(_) => {
+                let _ = drawing::remove(boxes);
+                None
+            }
+        }
+    }
+}
+
+/// Traverses all twelve cube edges with one immutable polyline, including corner revisits.
+fn box_geometry() -> GeometrySpec {
+    polyline(
+        [0u8, 1, 3, 2, 0, 4, 5, 1, 5, 7, 3, 7, 6, 2, 6, 4, 0].map(|corner| {
+            (
+                f32::from(corner & 1),
+                f32::from((corner >> 1) & 1),
+                f32::from((corner >> 2) & 1),
+            )
+        }),
+    )
+}
+
+/// Unit vertices carry neutral linear tint; each instance supplies its own color.
+fn polyline(points: impl IntoIterator<Item = (f32, f32, f32)>) -> GeometrySpec {
+    GeometrySpec::Line(Polyline {
+        vertices: points
             .into_iter()
-            .map(|[x, y, z]| Vector3 { x, y, z })
+            .map(|position| Vertex {
+                position,
+                color: (1., 1., 1., 1.),
+                uv: (0., 0.),
+                data: (0., 0., 0., 0.),
+            })
             .collect(),
-        width,
-        color: Rgba {
-            r: color[0],
-            g: color[1],
-            b: color[2],
-            a: color[3],
+        closed: false,
+    })
+}
+
+/// Places a unit shape at native bounds using the retained renderer's elevated depth mode.
+fn instance(
+    geometry: Handle,
+    dimension: i32,
+    min: [f32; 3],
+    scale: [f32; 3],
+    tint: [f32; 4],
+    width: f32,
+) -> Instance {
+    Instance {
+        geometry,
+        anchor: Anchor::World(WorldAnchor {
+            dimension,
+            origin: (min[0].into(), min[1].into(), min[2].into()),
+        }),
+        transform: Transform {
+            translation: (0., 0., 0.),
+            rotation: (0., 0., 0., 1.),
+            scale: scale.into(),
         },
-        pattern: LinePattern::Solid,
+        tint: tint.into(),
+        depth: Depth::Always,
+        blend: Blend::Premultiplied,
+        width,
+        width_mode: WidthMode::Pixels,
+        join: Join::Bevel,
+        cap: Cap::Butt,
     }
 }
 

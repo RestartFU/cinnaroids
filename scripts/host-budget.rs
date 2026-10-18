@@ -330,7 +330,7 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("esp.wasm");
         let mut host = ModHost::load_snapshot_with_grants(&path, &component, ModGrants {
-            hud: true, players: true, controls: true, render: true, render_through_walls: granted,
+            hud: true, players: true, controls: true, render: true, world_draw: true, entity_observe: true, render_through_walls: granted,
             ..Default::default()
         }).unwrap();
         let mut controls = empty_controls(); controls.focused = true; controls.panel_open = true;
@@ -357,8 +357,13 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
             let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
             host.frame_with_controls(false, Some(snapshot()), controls).unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
             assert!(host.is_active());
-            assert_eq!(host.render().0.primitives.ribbons.len(), if granted { 12 } else { 0 });
+            assert_eq!(host.render().0.retained.iter().map(|r| r.instances.len()).sum::<usize>(), if granted { 12 } else { 0 });
             assert_eq!(host.hud().map_or(0, |hud| hud.world_labels.len()), if granted { 6 } else { 0 });
+            if granted {
+                let output = host.render().0;
+                assert_eq!(output.retained.iter().map(|r| r.geometry.len()).sum::<usize>(), 2);
+                assert!(output.retained.iter().flat_map(|r| r.instances.values()).all(|i| i.depth == mod_render::retained::Depth::Always));
+            }
         }
         // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
         for reason in 0..4 {
@@ -371,7 +376,7 @@ fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output(
                 _ => (),
             }
             host.frame_with_controls(false, if reason == 3 { None } else { Some(snapshot()) }, controls).unwrap();
-            assert!(host.render().0.primitives.is_empty()); assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+            assert!(host.render().0.retained.iter().all(|r| r.instances.is_empty())); assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
         }
     }
 }

@@ -9,6 +9,8 @@ use mod_api::bindings::{
     },
 };
 
+use mod_api::bindings::cinnabar::world_draw::drawing::{self, Permissions};
+
 use crate::{
     aim::{AimAssist, Frame, Player, Vec3},
     jump_reset::{Frame as JumpFrame, JumpReset},
@@ -18,6 +20,7 @@ use crate::{
 thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
+    static ESP_GEOMETRY: RefCell<Option<(u64, i32, crate::esp::Geometry)>> = const { RefCell::new(None) };
     static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
 }
@@ -34,6 +37,7 @@ impl Guest for Cinnaroids {
             *modules = State::new(preferences);
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
+        ESP_GEOMETRY.with(|geometry| *geometry.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = false);
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
@@ -123,7 +127,10 @@ impl Guest for Cinnaroids {
 
             if modules.modules.player_esp
                 && !controls.panel_open
+                && drawing::capabilities()
+                    .contains(Permissions::WORLD_DRAW | Permissions::RENDER_THROUGH_WALLS)
                 && let Some(frame) = snapshot.as_ref()
+                && let Some(geometry) = esp_geometry(frame.session, frame.dimension)
                 && let Ok(actors) =
                     player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
             {
@@ -133,10 +140,9 @@ impl Guest for Cinnaroids {
                     frame.dimension,
                     [frame.eye.x, frame.eye.y, frame.eye.z],
                     &actors,
+                    geometry,
                 );
-                if render::draw_wire_boxes(&output.boxes, true).is_ok()
-                    && render::draw_overlay_lines(&output.lines).is_ok()
-                {
+                if drawing::replace_frame_group("player_esp", &output.draws).is_ok() {
                     if hud::set_content(&output.labels).is_ok() {
                         ESP_LABELS.with(|labels| *labels.borrow_mut() = true);
                     } else {
@@ -259,4 +265,22 @@ fn clear_esp_labels() {
             *labels = false;
         }
     });
+}
+
+/// Reuses resources within one session and releases superseded handles when still valid.
+fn esp_geometry(session: u64, dimension: i32) -> Option<crate::esp::Geometry> {
+    ESP_GEOMETRY.with(|cached| {
+        let mut cached = cached.borrow_mut();
+        if let Some((old_session, old_dimension, geometry)) = *cached {
+            if old_session == session && old_dimension == dimension {
+                return Some(geometry);
+            }
+            let _ = drawing::remove(geometry.boxes);
+            let _ = drawing::remove(geometry.health);
+            *cached = None;
+        }
+        let geometry = crate::esp::Geometry::create()?;
+        *cached = Some((session, dimension, geometry));
+        Some(geometry)
+    })
 }
