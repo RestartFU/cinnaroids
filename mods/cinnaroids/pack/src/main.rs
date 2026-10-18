@@ -6,6 +6,8 @@ use wasmparser::{Parser, Payload};
 
 /// Optional release discovery metadata, readable without granting mod network access.
 const UPDATE_REPOSITORY_SECTION: &str = "cinnabar:extension/update-repository@1";
+/// Exact single-file release asset for hosts supporting automatic mod updates.
+const UPDATE_URL_SECTION: &str = "cinnabar:extension/update-url@1";
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -20,7 +22,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut name = ComponentNameSection::new();
     name.component("Cinnaroids");
     name.append_to_component(&mut component);
-    append_release_metadata(&mut component);
+    let asset = Path::new(&args[1])
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("Component output must have a UTF-8 file name")?;
+    append_release_metadata(&mut component, asset);
     append_section(
         &mut component,
         "description",
@@ -86,14 +92,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Adds the workspace release version and its author-selected update repository at the root.
-fn append_release_metadata(component: &mut Vec<u8>) {
+/// Adds the workspace version, update repository and exact latest-release asset at the root.
+fn append_release_metadata(component: &mut Vec<u8>, asset: &str) {
     append_section(component, "version", env!("CARGO_PKG_VERSION").as_bytes());
     append_section(
         component,
         UPDATE_REPOSITORY_SECTION,
         env!("CARGO_PKG_REPOSITORY").as_bytes(),
     );
+    append_section(component, UPDATE_URL_SECTION, update_url(asset).as_bytes());
+}
+
+/// Derives the stable download URL from the workspace repository and packaged asset name.
+fn update_url(asset: &str) -> String {
+    format!(
+        "{}/releases/latest/download/{asset}",
+        env!("CARGO_PKG_REPOSITORY")
+    )
 }
 
 /// Adds one top-level resource or metadata section to the finished component.
@@ -123,7 +138,7 @@ mod tests {
     #[test]
     fn packaged_release_metadata_is_present_once_at_the_component_root() {
         let mut component = wasm_encoder::Component::new().finish();
-        append_release_metadata(&mut component);
+        append_release_metadata(&mut component, "cinnaroids.wasm");
         wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
             .validate_all(&component)
             .unwrap();
@@ -146,6 +161,10 @@ mod tests {
                 (
                     UPDATE_REPOSITORY_SECTION.into(),
                     env!("CARGO_PKG_REPOSITORY").as_bytes().to_vec()
+                ),
+                (
+                    UPDATE_URL_SECTION.into(),
+                    update_url("cinnaroids.wasm").into_bytes()
                 ),
             ]
         );
