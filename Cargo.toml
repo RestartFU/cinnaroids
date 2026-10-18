@@ -7,6 +7,7 @@ resolver = "3"
 version = "2.6.17"
 edition = "2024"
 rust-version = "1.99.0"
+repository = "https://github.com/RestartFU/cinnaroids"
 
 [workspace.dependencies]
 mod-api = { git = "https://github.com/bedrock-mc/cinnabar", rev = "8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2" }

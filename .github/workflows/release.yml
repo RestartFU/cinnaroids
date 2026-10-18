@@ -70,7 +70,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Test the module
-        run: cargo test --locked -p cinnaroids-mod
+        run: cargo test --locked --workspace
       - name: Build and validate the single-file WASM release
         run: python scripts/build-cinnaroids.py
       - uses: actions/upload-artifact@v4

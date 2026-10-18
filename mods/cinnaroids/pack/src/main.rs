@@ -4,6 +4,9 @@ use std::{borrow::Cow, error::Error, path::Path};
 use wasm_encoder::{ComponentNameSection, ComponentSection, CustomSection};
 use wasmparser::{Parser, Payload};
 
+/// Optional release discovery metadata, readable without granting mod network access.
+const UPDATE_REPOSITORY_SECTION: &str = "cinnabar:extension/update-repository@1";
+
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     if args.len() != 3 {
@@ -17,11 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut name = ComponentNameSection::new();
     name.component("Cinnaroids");
     name.append_to_component(&mut component);
-    append_section(
-        &mut component,
-        "version",
-        env!("CARGO_PKG_VERSION").as_bytes(),
-    );
+    append_release_metadata(&mut component);
     append_section(
         &mut component,
         "description",
@@ -87,6 +86,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Adds the workspace release version and its author-selected update repository at the root.
+fn append_release_metadata(component: &mut Vec<u8>) {
+    append_section(component, "version", env!("CARGO_PKG_VERSION").as_bytes());
+    append_section(
+        component,
+        UPDATE_REPOSITORY_SECTION,
+        env!("CARGO_PKG_REPOSITORY").as_bytes(),
+    );
+}
+
 /// Adds one top-level resource or metadata section to the finished component.
 fn append_section(component: &mut Vec<u8>, name: &str, data: &[u8]) {
     CustomSection {
@@ -105,4 +114,41 @@ fn panel_bundle() -> Result<Vec<u8>, serde_json::Error> {
         "panel": panel,
         "surfaces": { "clickgui": panel["surface"] }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packaged_release_metadata_is_present_once_at_the_component_root() {
+        let mut component = wasm_encoder::Component::new().finish();
+        append_release_metadata(&mut component);
+        wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all())
+            .validate_all(&component)
+            .unwrap();
+        let metadata: Vec<_> = Parser::new(0)
+            .parse_all(&component)
+            .filter_map(|payload| match payload.unwrap() {
+                Payload::CustomSection(section) => {
+                    Some((section.name().to_owned(), section.data().to_vec()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            metadata,
+            vec![
+                (
+                    "version".into(),
+                    env!("CARGO_PKG_VERSION").as_bytes().to_vec()
+                ),
+                (
+                    UPDATE_REPOSITORY_SECTION.into(),
+                    env!("CARGO_PKG_REPOSITORY").as_bytes().to_vec()
+                ),
+            ]
+        );
+        assert!(env!("CARGO_PKG_REPOSITORY").starts_with("https://github.com/"));
+    }
 }
