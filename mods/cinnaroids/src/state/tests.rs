@@ -521,6 +521,13 @@ fn panel_exposes_all_controls_without_category_sections() {
             "reset_layout",
             "drag_x",
             "drag_y",
+            "player_esp",
+            "esp_range",
+            "esp_color",
+            "esp_names",
+            "esp_distance",
+            "esp_health",
+            "expand_esp",
         ]
     );
 }
@@ -927,11 +934,14 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
-    assert_eq!(state.expanded, [false; 6]);
+    assert_eq!(state.expanded, [false; 8]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
-    assert_eq!(state.expanded, [false, false, true, false, false, false]);
+    assert_eq!(
+        state.expanded,
+        [false, false, true, false, false, false, false, false]
+    );
     assert!(!state.modules.reach);
     assert_eq!(state.preferences, preferences);
     assert!(state.panel_dirty);
@@ -939,11 +949,14 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     controls(&mut state, &[], &[("expand_aim", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, true, true, false, false, false],
+        [false, true, true, false, false, false, false, false],
         "independent rows"
     );
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
-    assert_eq!(state.expanded, [false, true, false, false, false, false]);
+    assert_eq!(
+        state.expanded,
+        [false, true, false, false, false, false, false, false]
+    );
     assert!(!state.preferences_dirty);
 }
 
@@ -1204,4 +1217,32 @@ fn duplicate_saved_module_shortcuts_clear_without_assigning_new_keys() {
             && preferences.reach_key.is_empty()
             && preferences.jump_reset_key.is_empty()
     );
+}
+
+#[test]
+fn esp_preferences_round_trip_clamp_and_do_not_restore_enablement() {
+    let p = Preferences::from_json(
+        r#"{"player_esp":true,"esp_range":999,"esp_color":999,"esp_names":false,"esp_distance":false,"esp_health":false}"#,
+    );
+    assert_eq!(p.esp_range, 128);
+    assert_eq!(p.esp_color, 3);
+    assert!(!p.esp_names && !p.esp_distance && !p.esp_health);
+    assert!(!State::new(p.clone()).modules.player_esp);
+    assert_eq!(
+        Preferences::from_json(&serde_json::to_string(&p).unwrap()),
+        p
+    );
+    let mut s = state();
+    controls(&mut s, &[], &[("player_esp", 1.), ("expand_esp", 1.)]);
+    assert!(s.modules.player_esp && s.expanded[7]);
+    assert!(!s.preferences_dirty);
+    controls(
+        &mut s,
+        &[],
+        &[("esp_range", 0.), ("esp_color", -1.), ("esp_health", 0.)],
+    );
+    assert_eq!(s.preferences.esp_range, 1);
+    assert_eq!(s.preferences.esp_color, 0);
+    assert!(!s.preferences.esp_health);
+    assert!(s.preferences_dirty);
 }

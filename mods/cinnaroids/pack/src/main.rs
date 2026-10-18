@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     append_section(
         &mut component,
         "description",
-        b"Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset",
+        b"Clicker, aim assist, reach, FakeLag, Player ESP, Netherite Finder, Fullbright and Auto Jump Reset",
     );
     append_section(
         &mut component,

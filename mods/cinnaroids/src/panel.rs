@@ -21,7 +21,7 @@ pub const DEFAULT_COLUMNS: [[f32; 2]; 4] = [
 const MENU_BODY: i32 = 52;
 
 /// Module binding prefix, owning column and the height of its generated settings region.
-const MODULES: [(&str, usize, i32); 7] = [
+const MODULES: [(&str, usize, i32); 8] = [
     ("clicker", 0, 60),
     ("aim", 0, 92),
     ("reach", 0, 60),
@@ -29,6 +29,7 @@ const MODULES: [(&str, usize, i32); 7] = [
     ("fake_lag", 1, 58),
     ("netherite", 2, 38),
     ("fullbright", 2, 0),
+    ("player_esp", 2, 130),
 ];
 const KEYED: [(usize, KeybindTarget); 4] = [
     (0, KeybindTarget::Clicker),
@@ -179,8 +180,20 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         state.pad_value(1),
         "-2048,\"max\":2048,\"step\":0.5",
     );
-    json.push(']');
-    json.push('}');
+    toggle(json, "player_esp", "Player ESP", m.player_esp);
+    slider(
+        json,
+        r#""esp_range","label":"ESP range""#,
+        f32::from(p.esp_range),
+        "1,\"max\":128,\"step\":1",
+    );
+    json.push_str(r#",{"kind":"choice","id":"esp_color","label":"Box color","index":"#);
+    integer(json, i32::from(p.esp_color));
+    json.push_str(r#","options":["Coral","Pink","Cyan","White"]}"#);
+    toggle(json, "esp_names", "Names", p.esp_names);
+    toggle(json, "esp_distance", "Distance", p.esp_distance);
+    toggle(json, "esp_health", "Health", p.esp_health);
+    json.push_str(r#",{"kind":"button","id":"expand_esp","label":"Player ESP settings"}] }"#);
     append_shell(json);
 }
 
@@ -346,6 +359,10 @@ fn value(json: &mut String, state: &State, module: usize) {
             integer(json, p.netherite_range.into());
             json.push_str(" blocks");
         }
+        7 => {
+            integer(json, p.esp_range.into());
+            json.push_str(" blocks");
+        }
         _ => {}
     }
     json.push('"');
@@ -367,7 +384,7 @@ fn bindings_json(state: &State) -> String {
     let mut heights = [0, 0, 0, MENU_BODY];
     for (index, (module, column, details)) in MODULES.iter().enumerate() {
         let on = enabled[index];
-        let expanded = index < 6 && state.expanded[index];
+        let expanded = *details > 0 && state.expanded[index];
         name_parts(&mut json, &[module, "_y"]);
         json.push_str("[0,");
         integer(&mut json, heights[*column]);
@@ -376,7 +393,7 @@ fn bindings_json(state: &State) -> String {
         json.push_str(if on { "[1,1]" } else { "[1,0]" });
         name_parts(&mut json, &[module, "_indent"]);
         json.push_str(if on { "[13,6]" } else { "[10,6]" });
-        if index < 6 {
+        if *details > 0 {
             name_parts(&mut json, &[module, "_h"]);
             integer(&mut json, if expanded { *details } else { 0 });
             name_parts(&mut json, &[module, "_detail"]);

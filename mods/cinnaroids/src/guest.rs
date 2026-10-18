@@ -4,7 +4,9 @@ use std::cell::RefCell;
 
 use mod_api::bindings::{
     Guest,
-    cinnabar::extension::{environment, gameplay, hud, input, panel, render, settings},
+    cinnabar::extension::{
+        environment, gameplay, hud, input, panel, player_state, render, settings,
+    },
 };
 
 use crate::{
@@ -16,6 +18,7 @@ use crate::{
 thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
+    static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
 }
 
@@ -31,6 +34,7 @@ impl Guest for Cinnaroids {
             *modules = State::new(preferences);
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
+        ESP_LABELS.with(|labels| *labels.borrow_mut() = false);
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
     }
@@ -40,6 +44,7 @@ impl Guest for Cinnaroids {
             AIM.with(|aim| aim.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
+            clear_esp_labels();
             return;
         };
         MODULES.with(|modules| {
@@ -115,6 +120,34 @@ impl Guest for Cinnaroids {
                     reset.reset();
                 }
             });
+
+            if modules.modules.player_esp
+                && !controls.panel_open
+                && let Some(frame) = snapshot.as_ref()
+                && let Ok(actors) =
+                    player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
+            {
+                let output = crate::esp::build(
+                    &modules.preferences,
+                    frame.session,
+                    frame.dimension,
+                    [frame.eye.x, frame.eye.y, frame.eye.z],
+                    &actors,
+                );
+                if render::draw_wire_boxes(&output.boxes, true).is_ok()
+                    && render::draw_overlay_lines(&output.lines).is_ok()
+                {
+                    if hud::set_content(&output.labels).is_ok() {
+                        ESP_LABELS.with(|labels| *labels.borrow_mut() = true);
+                    } else {
+                        clear_esp_labels();
+                    }
+                } else {
+                    clear_esp_labels();
+                }
+            } else {
+                clear_esp_labels();
+            }
 
             let Some(snapshot) = snapshot else {
                 AIM.with(|aim| aim.borrow_mut().reset());
@@ -217,3 +250,13 @@ fn publish(modules: &mut State) {
 }
 
 mod_api::bindings::export!(Cinnaroids with_types_in mod_api::bindings);
+
+/// Clears retained labels whenever ESP, focus, session data or drawing authority is absent.
+fn clear_esp_labels() {
+    ESP_LABELS.with(|labels| {
+        let mut labels = labels.borrow_mut();
+        if *labels && hud::set_content("").is_ok() {
+            *labels = false;
+        }
+    });
+}

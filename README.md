@@ -1,6 +1,6 @@
 # Cinnaroids
 
-Clicker, aim assist, reach, FakeLag, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar, controlled in-game with **F7**.
+Clicker, aim assist, reach, FakeLag, Player ESP, Netherite Finder, Fullbright and Auto Jump Reset for Cinnabar, controlled in-game with **F7**.
 
 ![Cinnaroids](assets/screenshot.png)
 
@@ -18,7 +18,7 @@ cargo test --locked -p cinnaroids-mod
 python3 -m unittest discover -s scripts/tests -v
 ```
 
-The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `8cb8bf5b3bd76fb03de3e5abf04e399b68a68ca2`.
+The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `90d5d327190968787930cdf8cc7ccbd22e489371`.
 
 Opening blurs and dims the world while the columns settle in; closing reverses it. Toggles, disclosures, chevrons and key capture ease with Cinnabar's surface transitions, and drags follow the pointer directly. The client's **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
 

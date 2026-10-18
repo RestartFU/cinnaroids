@@ -49,20 +49,24 @@ fn every_control_is_reachable_from_the_floating_columns() {
     let controls = panel["controls"].as_array().unwrap();
     let mut routes = Vec::new();
     actions(&document["panel"], &mut routes);
-    for (index, control) in controls.iter().enumerate().take(27) {
+    for (index, control) in controls
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| ![27, 28].contains(index))
+    {
         assert!(
             routes.contains(&format!("mod.control:{index}")),
             "missing native control {index} ({})",
             control["id"]
         );
     }
-    for index in [2, 5, 9, 12, 15, 18] {
+    for index in [2, 5, 9, 12, 15, 18, 30] {
         assert_eq!(controls[index]["kind"], "slider");
         assert!(routes.contains(&format!("mod.edit:{index}")));
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 29);
+    assert_eq!(controls.len(), 36);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))

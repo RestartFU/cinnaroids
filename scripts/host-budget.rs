@@ -37,6 +37,12 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("expand_jump_reset", 1.0),
             ("expand_fake_lag", 1.0),
             ("expand_netherite", 1.0),
+            ("expand_esp", 1.0),
+            ("esp_range", 128.0),
+            ("esp_color", 3.0),
+            ("esp_names", 0.0),
+            ("esp_distance", 0.0),
+            ("esp_health", 0.0),
             ("expand_netherite", 1.0),
             ("fullbright", 1.0),
             ("fullbright", 0.0),
@@ -302,7 +308,8 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(grants.players && grants.camera && grants.interaction);
     assert!(grants.packet_delay && grants.movement);
     assert!(grants.fullbright && grants.block_highlights);
-    assert!(!grants.environment && !grants.render && !grants.player_state);
+    assert!(!grants.environment && !grants.player_state);
+    assert!(grants.render && grants.world_draw && grants.entity_observe && grants.render_through_walls);
     let directory = tempfile::tempdir().unwrap();
     let installed = directory.path().join("cinnaroids.wasm");
     let component = std::fs::read(&source).unwrap();
@@ -313,4 +320,58 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(host.is_active());
     assert_eq!(host.panel().unwrap().toggle_key, "F7");
     assert_eq!(host.reserved_keys(), ["F7"]);
+}
+
+#[test]
+fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output() {
+    use mod_host::{ActorObservation, ActorObservationBounds, GameplaySnapshot, GameplayVector3, module_observations::ModuleObservations};
+    let component = std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
+    for granted in [true, false] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("esp.wasm");
+        let mut host = ModHost::load_snapshot_with_grants(&path, &component, ModGrants {
+            hud: true, players: true, controls: true, render: true, render_through_walls: granted,
+            ..Default::default()
+        }).unwrap();
+        let mut controls = empty_controls(); controls.focused = true; controls.panel_open = true;
+        controls.events.push(ControlEvent { id: "player_esp".into(), value: 1. });
+        host.frame_with_controls(false, None, controls).unwrap();
+        let snapshot = || GameplaySnapshot {
+            session: 1, dimension: 0, eye: GameplayVector3 { x: 0., y: 1.6, z: 0. },
+            yaw: 0., pitch: 0., attack_held: false, frame_seconds: 1. / 120., players: vec![],
+        };
+        let observe = |host: &mut ModHost| {
+            host.observe_modules(ModuleObservations {
+                actors: (0..mod_api::MAX_OBSERVED_ACTORS).map(|index| ActorObservation {
+                    session: 1, dimension: 0, runtime_id: index as u64 + 1, player: true,
+                    position: (index as f32, 0., -4.),
+                    boxes: vec![ActorObservationBounds { min: (index as f32 - 0.3, 0., -4.3), max: (index as f32 + 0.3, 1.8, -3.7) }; mod_api::MAX_OBSERVED_ACTOR_BOXES],
+                    name: "P".repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES), identifier: "minecraft:player".into(), yaw: 0., pitch: 0.,
+                    pickable: true, hittable: None, look_origin: None, look_direction: None,
+                    invisible: false, sneaking: false, hurt: false, health: Some(10.), max_health: Some(40.),
+                }).collect(), ..Default::default()
+            }).unwrap();
+        };
+        for frame in 0..3 {
+            observe(&mut host);
+            let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), controls).unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
+            assert!(host.is_active());
+            assert_eq!(host.render().0.primitives.ribbons.len(), if granted { 12 } else { 0 });
+            assert_eq!(host.hud().map_or(0, |hud| hud.world_labels.len()), if granted { 6 } else { 0 });
+        }
+        // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
+        for reason in 0..4 {
+            observe(&mut host);
+            let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
+            match reason {
+                0 => controls.focused = false,
+                1 => controls.panel_open = true,
+                2 => { controls.panel_open = true; controls.events.push(ControlEvent { id: "player_esp".into(), value: 0. }); },
+                _ => (),
+            }
+            host.frame_with_controls(false, if reason == 3 { None } else { Some(snapshot()) }, controls).unwrap();
+            assert!(host.render().0.primitives.is_empty()); assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+        }
+    }
 }

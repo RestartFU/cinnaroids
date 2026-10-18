@@ -46,6 +46,9 @@ MODULES = [
     ("netherite", "Netherite Finder", "render", 17, 25, None,
      [("slider", 18, "Range", "blocks")]),
     ("fullbright", "Fullbright", "render", 19, None, None, []),
+    ("player_esp", "Player ESP", "render", 29, 35, None,
+     [("slider", 30, "Range", "blocks"), ("choice", 31, "Box color"),
+      ("toggle", 32, "Names"), ("toggle", 33, "Distance"), ("toggle", 34, "Health")]),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 
