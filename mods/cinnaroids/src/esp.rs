@@ -2,7 +2,7 @@
 
 use crate::state::Preferences;
 use mod_api::bindings::cinnabar::{
-    extension::player_state::Actor,
+    extension::player_state::{Actor, ObservedActor},
     world_draw::masks::{Rgba, Style},
 };
 
@@ -29,7 +29,7 @@ pub fn build(
     session: u64,
     dimension: i32,
     eye: [f32; 3],
-    actors: &[Actor],
+    actors: &[ObservedActor],
 ) -> Output {
     let mut output = Output {
         players: Vec::with_capacity(MAX_PLAYERS),
@@ -38,7 +38,8 @@ pub fn build(
     output.labels.push_str("{\"cards\":[],\"world_labels\":[");
     let mut labels = 0;
     let mut players = 0;
-    for actor in actors.iter().take(mod_api::MAX_OBSERVED_ACTORS) {
+    for observed in actors.iter().take(mod_api::MAX_OBSERVED_ACTORS) {
+        let actor = &observed.actor;
         if !actor.player
             || actor.session != session
             || actor.dimension != dimension
@@ -89,7 +90,7 @@ pub fn build(
                 text.push_str(if p.esp_distance { " · " } else { "\n" });
             }
             integer(&mut text, health.ceil().min(i32::MAX as f32) as i32);
-            if let Some(maximum) = actor.max_health.filter(|n| n.is_finite() && *n > 0.) {
+            if let Some(maximum) = observed.max_health.filter(|n| n.is_finite() && *n > 0.) {
                 text.push('/');
                 integer(&mut text, maximum.ceil().min(i32::MAX as f32) as i32);
             }

@@ -37,7 +37,8 @@ COLUMNS = [
 MODULES = [
     ("clicker", "Clicker", "combat", 1, 20, 3, [("slider", 2, "Clicks per second", "CPS")]),
     ("aim", "Aim assist", "combat", 4, 21, 7,
-     [("slider", 5, "Strength", "%"), ("choice", 6, "Activation")]),
+     [("slider", 5, "Strength", "%"), ("choice", 6, "Activation"),
+      ("toggle", 29, "Horizontal only")]),
     ("reach", "Reach", "combat", 8, 22, 10, [("slider", 9, "Distance", "blocks")]),
     ("jump_reset", "Auto Jump Reset", "combat", 11, 23, 13,
      [("slider", 12, "Hit window", "ticks")]),
@@ -46,9 +47,9 @@ MODULES = [
     ("netherite", "Netherite Finder", "render", 17, 25, None,
      [("slider", 18, "Range", "blocks")]),
     ("fullbright", "Fullbright", "render", 19, None, None, []),
-    ("player_esp", "Player ESP", "render", 29, 35, None,
-     [("slider", 30, "Range", "blocks"), ("choice", 31, "Box color"),
-      ("toggle", 32, "Names"), ("toggle", 33, "Distance"), ("toggle", 34, "Health")]),
+    ("player_esp", "Player ESP", "render", 30, 36, None,
+     [("slider", 31, "Range", "blocks"), ("choice", 32, "Outline color"),
+      ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 

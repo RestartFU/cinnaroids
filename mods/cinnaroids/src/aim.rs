@@ -16,6 +16,7 @@ pub struct Config {
     pub enabled: bool,
     pub strength: u8,
     pub only_when_clicking: bool,
+    pub horizontal_only: bool,
 }
 
 impl Default for Config {
@@ -24,6 +25,7 @@ impl Default for Config {
             enabled: false,
             strength: 35,
             only_when_clicking: true,
+            horizontal_only: false,
         }
     }
 }
@@ -145,7 +147,11 @@ impl AimAssist {
         // speed cap prevents snapping when acquiring a target near the cone edge.
         let alpha = 1.0 - (-strength * 16.0 * seconds).exp();
         let mut yaw = error.yaw * alpha;
-        let mut pitch = error.pitch * alpha;
+        let mut pitch = if config.horizontal_only {
+            0.0
+        } else {
+            error.pitch * alpha
+        };
         let movement = yaw.hypot(pitch);
         let limit = (strength * 3.0 * seconds).min(MAX_FRAME_ROTATION);
         if movement > limit {

@@ -4,12 +4,13 @@ default-members = ["mods/cinnaroids"]
 resolver = "3"
 
 [workspace.package]
-version = "2.6.16"
+version = "2.6.19"
 edition = "2024"
 rust-version = "1.99.0"
+repository = "https://github.com/RestartFU/cinnaroids"
 
 [workspace.dependencies]
-mod-api = { git = "https://github.com/cinnabar-mc/cinnabar", rev = "8b082806d1a7d2fd5110c4467fbedef5a6d2a1b1" }
+mod-api = { git = "https://github.com/cinnabar-mc/cinnabar", rev = "17d5edab7cf61546e744415c5ac6620b6b3245fb" }
 
 [profile.release]
 # Callback fuel is bounded by the host; optimize execution rather than file size.

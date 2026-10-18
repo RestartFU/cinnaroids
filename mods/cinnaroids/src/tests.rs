@@ -5,6 +5,7 @@ fn config() -> Config {
         enabled: true,
         strength: 35,
         only_when_clicking: false,
+        horizontal_only: false,
     }
 }
 
@@ -44,6 +45,7 @@ fn configuration_defaults_are_disabled_click_only_and_thirty_five_percent() {
             enabled: false,
             strength: 35,
             only_when_clicking: true,
+            horizontal_only: false,
         }
     );
 }
@@ -68,6 +70,63 @@ fn yaw_left_and_pitch_up_follow_actor_conventions() {
     let mut above = player(1, 0.0, 3.0);
     above.feet.y = 0.5;
     assert!(rotation_error(&f, candidate(&f, above).unwrap()).pitch > 0.0);
+}
+
+#[test]
+fn horizontal_only_preserves_pitch_above_and_below_and_can_be_switched_live() {
+    for height in [-0.8, 0.8] {
+        let mut target = player(1, 0.2, 3.0);
+        target.feet.y = height;
+        let players = [target];
+        let mut f = frame(&players);
+        f.pitch = height.signum() * 0.05;
+        let mut aim = AimAssist::default();
+        let normal = aim.update(config(), Some(&f)).unwrap();
+        assert_eq!(normal.pitch.signum(), height.signum());
+        let horizontal = aim
+            .update(
+                Config {
+                    horizontal_only: true,
+                    ..config()
+                },
+                Some(&f),
+            )
+            .unwrap();
+        assert_eq!(horizontal.pitch, 0.0);
+        assert!(horizontal.yaw > 0.0);
+        assert!(
+            horizontal.yaw > normal.yaw,
+            "vertical error must not consume the yaw budget"
+        );
+        assert!(horizontal.yaw <= 0.35 * 3.0 * f.seconds + 1e-6);
+        assert_eq!(aim.target, Some(1));
+        assert_eq!(aim.update(config(), Some(&f)), Some(normal));
+    }
+}
+
+#[test]
+fn horizontal_only_does_not_move_when_yaw_is_aligned() {
+    let mut target = player(1, 0.0, 3.0);
+    target.feet.y = 0.5;
+    let players = [target];
+    let f = frame(&players);
+    assert!(
+        AimAssist::default()
+            .update(config(), Some(&f))
+            .unwrap()
+            .pitch
+            > 0.0
+    );
+    assert_eq!(
+        AimAssist::default().update(
+            Config {
+                horizontal_only: true,
+                ..config()
+            },
+            Some(&f)
+        ),
+        None
+    );
 }
 
 #[test]

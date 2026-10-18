@@ -32,6 +32,7 @@ pub struct Preferences {
     pub jump_reset_window_ticks: u8,
     pub aim_strength: u8,
     pub aim_mode: AimMode,
+    pub aim_horizontal_only: bool,
     pub reach_blocks: f32,
     pub fake_lag_ms: u16,
     pub show_real_position: bool,
@@ -58,6 +59,7 @@ impl Default for Preferences {
             jump_reset_window_ticks: DEFAULT_WINDOW_TICKS,
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
+            aim_horizontal_only: false,
             reach_blocks: MIN_REACH,
             fake_lag_ms: 100,
             show_real_position: false,
@@ -91,6 +93,9 @@ impl Preferences {
                 "continuous" => AimMode::Continuous,
                 _ => AimMode::WhileClicking,
             };
+        }
+        if let Some(value) = values.get("aim_horizontal_only").and_then(Value::as_bool) {
+            preferences.aim_horizontal_only = value;
         }
         if let Some(value) = values.get("reach_blocks").and_then(Value::as_f64)
             && value.is_finite()
@@ -585,6 +590,9 @@ impl State {
                 return;
             }
             "aim" => replace(&mut self.modules.aim, value >= 0.5),
+            "aim_horizontal_only" => {
+                replace(&mut self.preferences.aim_horizontal_only, value >= 0.5)
+            }
             "aim_strength" => replace(
                 &mut self.preferences.aim_strength,
                 value.round().clamp(0.0, 100.0) as u8,
@@ -672,6 +680,7 @@ impl State {
             enabled: self.modules.aim,
             strength: self.preferences.aim_strength,
             only_when_clicking: self.preferences.aim_mode == AimMode::WhileClicking,
+            horizontal_only: self.preferences.aim_horizontal_only,
         }
     }
 
@@ -925,6 +934,11 @@ impl State {
                 step: 0.5,
             });
         }
+        controls.push(Control::Toggle {
+            id: "aim_horizontal_only",
+            label: "Horizontal only",
+            value: self.preferences.aim_horizontal_only,
+        });
         controls.extend([
             Control::Toggle {
                 id: "player_esp",
@@ -941,7 +955,7 @@ impl State {
             },
             Control::Choice {
                 id: "esp_color",
-                label: "Box color",
+                label: "Outline color",
                 index: u32::from(self.preferences.esp_color),
                 options: crate::esp::COLOR_NAMES,
             },

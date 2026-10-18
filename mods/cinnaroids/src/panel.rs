@@ -23,7 +23,7 @@ const MENU_BODY: i32 = 52;
 /// Module binding prefix, owning column and the height of its generated settings region.
 const MODULES: [(&str, usize, i32); 8] = [
     ("clicker", 0, 60),
-    ("aim", 0, 92),
+    ("aim", 0, 112),
     ("reach", 0, 60),
     ("jump_reset", 0, 60),
     ("fake_lag", 1, 58),
@@ -180,6 +180,12 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         state.pad_value(1),
         "-2048,\"max\":2048,\"step\":0.5",
     );
+    toggle(
+        json,
+        "aim_horizontal_only",
+        "Horizontal only",
+        p.aim_horizontal_only,
+    );
     toggle(json, "player_esp", "Player ESP", m.player_esp);
     slider(
         json,
@@ -187,7 +193,7 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         f32::from(p.esp_range),
         "1,\"max\":128,\"step\":1",
     );
-    json.push_str(r#",{"kind":"choice","id":"esp_color","label":"Box color","index":"#);
+    json.push_str(r#",{"kind":"choice","id":"esp_color","label":"Outline color","index":"#);
     integer(json, i32::from(p.esp_color));
     json.push_str(r#","options":["Coral","Pink","Cyan","White"]}"#);
     toggle(json, "esp_names", "Names", p.esp_names);

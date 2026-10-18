@@ -38,6 +38,31 @@ fn state_with_bindings() -> State {
 }
 
 #[test]
+fn horizontal_only_defaults_off_and_persists_panel_changes() {
+    assert!(!Preferences::from_json("{}").aim_horizontal_only);
+    assert!(!Preferences::from_json(r#"{"aim_horizontal_only":"true"}"#).aim_horizontal_only);
+    let mut state = state();
+    assert!(!state.aim_config().horizontal_only);
+    controls(&mut state, &[], &[("aim_horizontal_only", 1.0)]);
+    assert!(state.aim_config().horizontal_only);
+    assert!(state.preferences_dirty);
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let restored = State::new(Preferences::from_json(&saved));
+    assert!(restored.aim_config().horizontal_only);
+    assert!(!restored.modules.aim);
+    let panel: Value = serde_json::from_str(&restored.panel_json().unwrap()).unwrap();
+    assert!(
+        panel["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|control| { control["id"] == "aim_horizontal_only" && control["value"] == true })
+    );
+    controls(&mut state, &[], &[("aim_horizontal_only", 0.0)]);
+    assert!(!state.aim_config().horizontal_only);
+}
+
+#[test]
 fn preferences_restore_without_enabling_any_module() {
     let preferences = Preferences::from_json(
         r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0],[0,0],[900,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
@@ -521,6 +546,7 @@ fn panel_exposes_all_controls_without_category_sections() {
             "reset_layout",
             "drag_x",
             "drag_y",
+            "aim_horizontal_only",
             "player_esp",
             "esp_range",
             "esp_color",
