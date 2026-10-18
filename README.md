@@ -18,7 +18,7 @@ cargo test --locked -p cinnaroids-mod
 python3 -m unittest discover -s scripts/tests -v
 ```
 
-The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `c7316e67f35d380db2699434d7c4132bf0bacc33`.
+The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned in the workspace manifest to Cinnabar commit `8b082806d1a7d2fd5110c4467fbedef5a6d2a1b1`.
 
 Opening blurs and dims the world while the columns settle in; closing reverses it. Toggles, disclosures, chevrons and key capture ease with Cinnabar's surface transitions, and drags follow the pointer directly. The client's **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
 

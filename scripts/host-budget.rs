@@ -309,7 +309,7 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(grants.packet_delay && grants.movement);
     assert!(grants.fullbright && grants.block_highlights);
     assert!(!grants.environment && grants.player_state);
-    assert!(grants.render && grants.world_draw && grants.entity_observe && grants.render_through_walls);
+    assert!(grants.render && grants.world_draw && grants.entity_highlight && grants.entity_observe && grants.render_through_walls);
     let directory = tempfile::tempdir().unwrap();
     let installed = directory.path().join("cinnaroids.wasm");
     let component = std::fs::read(&source).unwrap();
@@ -323,68 +323,202 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
 }
 
 #[test]
-fn player_esp_uses_real_wasm_overlay_and_hud_imports_and_clears_retained_output() {
-    use mod_host::{ActorObservation, ActorObservationBounds, GameplaySnapshot, GameplayVector3, module_observations::ModuleObservations};
-    let component = std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
-    for granted in [true, false] {
+fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
+    use mod_host::{
+        ActorObservation, ActorObservationBounds, GameplaySnapshot, GameplayVector3,
+        module_observations::ModuleObservations,
+    };
+    let component =
+        std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
+    for (highlight, through_walls) in [(true, true), (true, false), (false, true)] {
+        let granted = highlight && through_walls;
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("esp.wasm");
-        let mut host = ModHost::load_snapshot_with_grants(&path, &component, ModGrants {
-            hud: true, players: true, player_state: true, controls: true, render: true, world_draw: true, entity_observe: true, render_through_walls: granted,
-            ..Default::default()
-        }).unwrap();
-        let mut controls = empty_controls(); controls.focused = true; controls.panel_open = true;
-        controls.events.push(ControlEvent { id: "player_esp".into(), value: 1. });
+        let mut host = ModHost::load_snapshot_with_grants(
+            &path,
+            &component,
+            ModGrants {
+                hud: true,
+                players: true,
+                player_state: true,
+                controls: true,
+                render: true,
+                world_draw: true,
+                entity_observe: true,
+                entity_highlight: highlight,
+                render_through_walls: through_walls,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        std::fs::write(&path, &component).unwrap();
+        host.bind_drawing_session(mod_api::drawing::DrawingSession {
+            connection: 1,
+            dimension: 0,
+            local: true,
+            permissions: mod_api::drawing::DrawingPermissions::ALL,
+        });
+        assert!(host.reload_if_changed().unwrap());
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.panel_open = true;
+        controls.events.push(ControlEvent {
+            id: "player_esp".into(),
+            value: 1.,
+        });
         host.frame_with_controls(false, None, controls).unwrap();
         let snapshot = || GameplaySnapshot {
-            session: 1, dimension: 0, eye: GameplayVector3 { x: 0., y: 1.6, z: 0. },
-            yaw: 0., pitch: 0., attack_held: false, frame_seconds: 1. / 120., players: vec![],
+            session: 1,
+            dimension: 0,
+            eye: GameplayVector3 {
+                x: 0.,
+                y: 1.6,
+                z: 0.,
+            },
+            yaw: 0.,
+            pitch: 0.,
+            attack_held: false,
+            frame_seconds: 1. / 120.,
+            players: vec![],
         };
         let observe = |host: &mut ModHost| {
             // Connection generations and actor-store generations are different identity domains.
-            host.observe_presentation(Some(mod_host::WorldObservation {
-                session: 2, dimension: 0, world: "local-fixture".into(), position: (0., 0., 0.), alive: true,
-            }), None, None, Vec::new()).unwrap();
+            host.observe_presentation(
+                Some(mod_host::WorldObservation {
+                    session: 2,
+                    dimension: 0,
+                    world: "local-fixture".into(),
+                    position: (0., 0., 0.),
+                    alive: true,
+                }),
+                None,
+                None,
+                Vec::new(),
+            )
+            .unwrap();
+            host.publish_mask_targets(
+                &(0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| {
+                        (
+                            mod_api::drawing::MaskEntity {
+                                connection: 1,
+                                dimension: 0,
+                                runtime_id: index as u64 + 1,
+                                spawn_revision: 1,
+                            },
+                            72,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
             host.observe_modules(ModuleObservations {
-                actors: (0..mod_api::MAX_OBSERVED_ACTORS).map(|index| ActorObservation {
-                    session: 2, dimension: 0, runtime_id: index as u64 + 1, player: true,
-                    position: (index as f32, 0., -4.),
-                    boxes: vec![ActorObservationBounds { min: (index as f32 - 0.3, 0., -4.3), max: (index as f32 + 0.3, 1.8, -3.7) }; mod_api::MAX_OBSERVED_ACTOR_BOXES],
-                    name: "P".repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES), identifier: "minecraft:player".into(), yaw: 0., pitch: 0.,
-                    pickable: true, hittable: None, look_origin: None, look_direction: None,
-                    invisible: false, sneaking: false, hurt: false, health: Some(10.), max_health: Some(40.),
-                }).collect(), ..Default::default()
-            }).unwrap();
+                actors: (0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| ActorObservation {
+                        session: 2,
+                        dimension: 0,
+                        runtime_id: index as u64 + 1,
+                        player: true,
+                        position: (index as f32, 0., -4.),
+                        boxes: vec![
+                            ActorObservationBounds {
+                                min: (index as f32 - 0.3, 0., -4.3),
+                                max: (index as f32 + 0.3, 1.8, -3.7)
+                            };
+                            mod_api::MAX_OBSERVED_ACTOR_BOXES
+                        ],
+                        name: "P".repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES),
+                        identifier: "minecraft:player".into(),
+                        yaw: 0.,
+                        pitch: 0.,
+                        pickable: true,
+                        hittable: None,
+                        look_origin: None,
+                        look_direction: None,
+                        invisible: false,
+                        sneaking: false,
+                        hurt: false,
+                        health: Some(10.),
+                        max_health: Some(40.),
+                    })
+                    .collect(),
+                ..Default::default()
+            })
+            .unwrap();
         };
         for frame in 0..3 {
             observe(&mut host);
-            let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
-            host.frame_with_controls(false, Some(snapshot()), controls).unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
+            let mut controls = empty_controls();
+            controls.focused = true;
+            controls.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), controls)
+                .unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
             assert!(host.is_active());
-            assert_eq!(host.render().0.retained.iter().map(|r| r.instances.len()).sum::<usize>(), if granted { 12 } else { 0 });
-            assert_eq!(host.hud().map_or(0, |hud| hud.world_labels.len()), if granted { 6 } else { 0 });
+            assert_eq!(host.render().0.masks.len(), usize::from(granted));
+            assert_eq!(
+                host.hud().map_or(0, |hud| hud.world_labels.len()),
+                if granted { 6 } else { 0 }
+            );
             if granted {
                 let output = host.render().0;
-                assert_eq!(output.retained.iter().map(|r| r.geometry.len()).sum::<usize>(), 2);
-                assert!(output.retained.iter().flat_map(|r| r.instances.values()).all(|i| i.depth == mod_render::retained::Depth::Always));
+                assert!(
+                    output
+                        .retained
+                        .iter()
+                        .all(|r| r.instances.is_empty() && r.geometry.is_empty())
+                );
+                assert_eq!(output.masks[0].entities.len(), 6);
+                assert_eq!(output.masks[0].depth, mod_api::drawing::MaskDepth::Always);
+                let style = output.masks[0].style.unwrap();
+                assert!(
+                    style.outline_radius > 0.
+                        && style.glow_radius > style.outline_radius
+                        && style.glow[3] > 0.
+                );
             }
+        }
+        if granted {
+            // Missing admitted meshes cannot leave old silhouettes or labels behind.
+            host.publish_mask_targets(&[]);
+            let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), controls).unwrap();
+            assert!(host.render().0.masks.is_empty());
+            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
         }
         // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
         for reason in 0..5 {
             observe(&mut host);
-            let mut active = empty_controls(); active.focused = true; active.gameplay = true;
-            host.frame_with_controls(false, Some(snapshot()), active).unwrap();
+            let mut active = empty_controls();
+            active.focused = true;
+            active.gameplay = true;
+            host.frame_with_controls(false, Some(snapshot()), active)
+                .unwrap();
             observe(&mut host);
-            let mut controls = empty_controls(); controls.focused = true; controls.gameplay = true;
+            let mut controls = empty_controls();
+            controls.focused = true;
+            controls.gameplay = true;
             match reason {
                 0 => controls.focused = false,
                 1 => controls.panel_open = true,
-                3 => host.observe_presentation(None, None, None, Vec::new()).unwrap(),
-                4 => { controls.panel_open = true; controls.events.push(ControlEvent { id: "player_esp".into(), value: 0. }); },
+                3 => host
+                    .observe_presentation(None, None, None, Vec::new())
+                    .unwrap(),
+                4 => {
+                    controls.panel_open = true;
+                    controls.events.push(ControlEvent {
+                        id: "player_esp".into(),
+                        value: 0.,
+                    });
+                }
                 _ => (),
             }
-            host.frame_with_controls(false, if reason == 2 { None } else { Some(snapshot()) }, controls).unwrap();
-            assert!(host.render().0.retained.iter().all(|r| r.instances.is_empty())); assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+            host.frame_with_controls(
+                false,
+                if reason == 2 { None } else { Some(snapshot()) },
+                controls,
+            )
+            .unwrap();
+            assert!(host.render().0.masks.is_empty());
+            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
         }
     }
 }
