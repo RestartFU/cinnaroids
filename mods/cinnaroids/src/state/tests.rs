@@ -928,8 +928,8 @@ fn menu_binding_capture_updates_panel_reservations_and_saved_preferences() {
 }
 
 #[test]
-fn menu_defaults_avoid_zeno_and_restore_invalid_preferences_independently() {
-    assert_ne!(Preferences::default().menu_key, "ShiftRight");
+fn menu_defaults_to_f7_and_restores_invalid_preferences_independently() {
+    assert_eq!(Preferences::default().menu_key, "F7");
     for key in ["Escape", "", "Key:V"] {
         let prefs = Preferences::from_json(&format!(r#"{{"menu_key":"{key}","cps":17}}"#));
         assert_eq!(prefs.menu_key, PANEL_KEY);
