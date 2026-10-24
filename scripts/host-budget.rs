@@ -1,5 +1,15 @@
 use mod_host::{ControlEvent, ModGrants, ModHost, empty_controls};
 
+/// Retained world-drawing instances across this component's owners.
+fn drawn_instances(host: &ModHost) -> usize {
+    host.render()
+        .0
+        .retained
+        .iter()
+        .map(|retained| retained.instances.len())
+        .sum()
+}
+
 #[test]
 fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
     let component =
@@ -24,7 +34,9 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 interaction: true,
                 settings: true,
                 packet_delay: true,
-                block_highlights: true,
+                terrain: true,
+                world_draw: true,
+                render_through_walls: true,
                 fullbright: true,
                 movement: true,
                 ..Default::default()
@@ -93,22 +105,20 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 );
             }
             if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
-                let spec = host.block_highlights().unwrap();
-                assert_eq!(
-                    spec.identifiers,
-                    ["minecraft:ancient_debris", "minecraft:netherite_block"]
-                );
-                assert_eq!(spec.color, [1.0, 0.12, 0.55, 1.0]);
-                if id == "netherite_range" {
-                    assert_eq!(spec.range, 128.0);
-                }
+                // The finder searches and draws only over focused gameplay, not in the panel.
+                assert_eq!(drawn_instances(&host), 0);
                 assert!(host.fullbright(), "Finder does not disable Fullbright");
+            }
+            if id == "netherite_range" {
+                let preferences: serde_json::Value =
+                    serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+                assert_eq!(preferences["netherite_range"], 128);
             }
             if id == "fullbright" {
                 assert_eq!(host.fullbright(), value >= 0.5);
             }
         }
-        assert!(host.block_highlights().is_none());
+        assert_eq!(drawn_instances(&host), 0);
         assert!(!host.fullbright());
     }
 }
@@ -330,7 +340,7 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     assert!(grants.controls && grants.settings && grants.hud);
     assert!(grants.players && grants.camera && grants.interaction);
     assert!(grants.packet_delay && grants.movement);
-    assert!(grants.fullbright && grants.block_highlights);
+    assert!(grants.fullbright && grants.terrain);
     assert!(!grants.environment && grants.player_state);
     assert!(
         grants.render
@@ -419,6 +429,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                     world: "local-fixture".into(),
                     position: (0., 0., 0.),
                     alive: true,
+                    runtime_id: 99,
                 }),
                 None,
                 None,

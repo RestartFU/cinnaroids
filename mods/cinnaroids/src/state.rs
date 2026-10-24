@@ -129,8 +129,7 @@ impl Preferences {
             preferences.show_real_position = value;
         }
         if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
-            preferences.netherite_range =
-                value.clamp(1, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u64) as u8;
+            preferences.netherite_range = value.clamp(1, crate::finder::MAX_RANGE as u64) as u8;
         }
         if let Some(value) = values.get("esp_range").and_then(Value::as_u64) {
             preferences.esp_range = value.clamp(1, crate::esp::MAX_RANGE as u64) as u8;
@@ -309,7 +308,6 @@ pub struct State {
     pointer: [f32; 2],
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
-    pub finder_dirty: bool,
     pub fullbright_dirty: bool,
     clicker: ClickCadence,
 }
@@ -327,7 +325,6 @@ impl State {
             pointer: [PAD_IDLE; 2],
             preferences_dirty: false,
             reservations_dirty: true,
-            finder_dirty: true,
             fullbright_dirty: true,
             clicker: ClickCadence::default(),
         }
@@ -644,7 +641,7 @@ impl State {
             "fullbright" => replace(&mut self.modules.fullbright, value >= 0.5),
             "netherite_range" => replace(
                 &mut self.preferences.netherite_range,
-                value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
+                value.round().clamp(1.0, crate::finder::MAX_RANGE) as u8,
             ),
             _ => false,
         };
@@ -652,9 +649,6 @@ impl State {
             self.panel_dirty = true;
             if event.id == "fullbright" {
                 self.fullbright_dirty = true;
-            }
-            if matches!(event.id.as_str(), "netherite" | "netherite_range") {
-                self.finder_dirty = true;
             }
             if matches!(event.id.as_str(), "clicker" | "cps") {
                 self.clicker.reset();
@@ -692,19 +686,16 @@ impl State {
         }
     }
 
+    /// Whether FakeLag's real-position marker should be drawn: only while packets are delayed.
     pub fn show_real_position(&self) -> bool {
         self.packet_delay_ms() != 0 && self.preferences.show_real_position
     }
 
-    pub fn block_highlights(&self) -> Option<mod_api::BlockHighlightSpec> {
-        self.modules.netherite.then(|| mod_api::BlockHighlightSpec {
-            identifiers: vec![
-                "minecraft:ancient_debris".into(),
-                "minecraft:netherite_block".into(),
-            ],
-            range: f32::from(self.preferences.netherite_range),
-            color: [1.0, 0.12, 0.55, 1.0],
-        })
+    /// The Netherite Finder range in blocks while the module is enabled.
+    pub fn finder_range(&self) -> Option<u8> {
+        self.modules
+            .netherite
+            .then_some(self.preferences.netherite_range)
     }
 
     pub fn attack_reach(&self, gameplay: bool) -> Option<f32> {
@@ -884,7 +875,7 @@ impl State {
                 label: "Finder range",
                 value: f32::from(self.preferences.netherite_range),
                 min: 1.0,
-                max: mod_api::MAX_BLOCK_HIGHLIGHT_RANGE,
+                max: crate::finder::MAX_RANGE,
                 step: 1.0,
             },
             Control::Toggle {

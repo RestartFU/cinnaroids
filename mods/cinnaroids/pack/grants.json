@@ -7,7 +7,7 @@
   "movement": true,
   "settings": true,
   "packet_delay": true,
-  "block_highlights": true,
+  "terrain": true,
   "fullbright": true,
   "render": true,
   "world_draw": true,

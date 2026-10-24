@@ -5,17 +5,18 @@ use std::cell::RefCell;
 use mod_api::bindings::{
     Guest,
     cinnabar::extension::{
-        environment, gameplay, hud, input, panel, player_state, render, settings,
+        environment, gameplay, hud, input, panel, player_state, settings, terrain,
     },
 };
 
 use mod_api::bindings::cinnabar::world_draw::{
-    drawing::{self, Handle, Permissions},
+    drawing::{self, DrawError, ErrorCode, Handle, Permissions},
     masks,
 };
 
 use crate::{
     aim::{AimAssist, Frame, Player, Vec3},
+    finder::{self, Finder},
     jump_reset::{Frame as JumpFrame, JumpReset},
     state::{Controls, Event, Preferences, State},
 };
@@ -26,6 +27,8 @@ thread_local! {
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
     static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
+    static FINDER: RefCell<Finder> = RefCell::new(Finder::default());
+    static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
 }
 
 struct Cinnaroids;
@@ -44,6 +47,7 @@ impl Guest for Cinnaroids {
         ESP_LABELS.with(|labels| *labels.borrow_mut() = false);
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
+        FINDER.with(|finder| finder.borrow_mut().reset());
     }
 
     fn frame() {
@@ -52,6 +56,7 @@ impl Guest for Cinnaroids {
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
             clear_esp();
+            netherite(None, None);
             return;
         };
         MODULES.with(|modules| {
@@ -81,6 +86,9 @@ impl Guest for Cinnaroids {
             } else {
                 None
             };
+            // Cubes draw only over focused gameplay, as the host-drawn highlights did.
+            let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
+            netherite(modules.finder_range(), drawn);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
             let cadence = snapshot.as_ref().map(|frame| {
                 (
@@ -223,26 +231,6 @@ fn publish(modules: &mut State) {
             }
         }
     }
-    if modules.finder_dirty {
-        let spec = modules
-            .block_highlights()
-            .map(|spec| render::BlockHighlightSpec {
-                identifiers: spec.identifiers,
-                range: spec.range,
-                color: render::Rgba {
-                    r: spec.color[0],
-                    g: spec.color[1],
-                    b: spec.color[2],
-                    a: spec.color[3],
-                },
-            });
-        match render::set_block_highlights(spec.as_ref()) {
-            Ok(()) => modules.finder_dirty = false,
-            Err(error) => {
-                let _ = hud::set_label(&format!("Netherite Finder: {error}"));
-            }
-        }
-    }
     if modules.reservations_dirty && input::reserve_keys(&modules.reserved_keys()).is_ok() {
         modules.reservations_dirty = false;
     }
@@ -281,6 +269,93 @@ fn clear_esp() {
             *labels = false;
         }
     });
+}
+
+/// Whether a drawing error means a retained geometry token no longer exists.
+fn stale(error: &DrawError) -> bool {
+    error.code == ErrorCode::StaleHandle
+}
+
+/// Searches for the finder's blocks on its cadence and replaces the retained cubes when the
+/// selection changes. `range` is set while the module is enabled.
+fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>) {
+    FINDER.with(|finder| {
+        let mut finder = finder.borrow_mut();
+        if range.is_none() {
+            finder.clear_notice();
+        }
+        let (Some(range), Some(frame)) = (range, frame) else {
+            clear_cubes(&mut finder);
+            return;
+        };
+        let capabilities = drawing::capabilities();
+        if !capabilities.contains(Permissions::WORLD_DRAW) {
+            finder.hide();
+            return;
+        }
+        let through_walls = capabilities.contains(Permissions::RENDER_THROUGH_WALLS);
+        if !finder.due(
+            frame.session,
+            frame.dimension,
+            range,
+            through_walls,
+            frame.frame_seconds,
+        ) {
+            return;
+        }
+        let found = FINDER_BLOCKS
+            .with(|blocks| terrain::find_blocks(blocks, f32::from(range), finder::LIMIT as u32));
+        let positions = match found {
+            Ok(positions) => positions,
+            Err(error) => {
+                clear_cubes(&mut finder);
+                if error == terrain::ReadError::Denied && finder.notify_denied() {
+                    let _ = hud::set_label("Netherite Finder: terrain permission denied");
+                }
+                return;
+            }
+        };
+        if !finder.changed(&positions) {
+            return;
+        }
+        let geometry = match finder.geometry {
+            Some(geometry) => geometry,
+            None => match drawing::create_geometry(&finder::cube()) {
+                Ok(geometry) => *finder.geometry.insert(geometry),
+                Err(_) => {
+                    finder.hide();
+                    return;
+                }
+            },
+        };
+        let mut instances = std::mem::take(&mut finder.instances);
+        finder::place(
+            &mut instances,
+            geometry,
+            frame.dimension,
+            &positions,
+            through_walls,
+        );
+        let replaced = drawing::replace_frame_group(finder::GROUP, &instances);
+        finder.instances = instances;
+        if let Err(error) = replaced {
+            if stale(&error) {
+                finder.reset();
+            } else {
+                finder.hide();
+            }
+        }
+    });
+}
+
+/// Empties a shown finder group; a lost geometry token restarts the finder.
+fn clear_cubes(finder: &mut Finder) {
+    if finder.hide()
+        && let Err(error) = drawing::replace_frame_group(finder::GROUP, &[])
+        && stale(&error)
+    {
+        finder.reset();
+    }
 }
 
 /// Refreshes a bounded union of admitted actor meshes with host-owned outline and glow.

@@ -2,6 +2,7 @@
 
 pub mod aim;
 pub mod esp;
+pub mod finder;
 #[cfg(target_arch = "wasm32")]
 mod guest;
 pub mod jump_reset;

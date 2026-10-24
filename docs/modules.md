@@ -8,7 +8,7 @@ Press **F7** to open or close the module interface. Modules sit in Combat, Netwo
 - **Aim assist:** strength from 0–100%, with **Continuous** or **While clicking** activation. Enable **Horizontal only** to turn off vertical camera movement. Its toggle key starts unbound.
 - **Reach:** adjustable local attack distance, bounded at six blocks. Its toggle key starts unbound.
 - **FakeLag:** delay inbound and outbound game packets by 0–1000 milliseconds each. Default delay is 100 ms; the module starts off. Slider values can also be typed.
-- **Netherite Finder:** highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It cannot reveal terrain the server has not sent.
+- **Netherite Finder:** highlight loaded ancient debris and netherite blocks with solid pink cubes through walls. Range is adjustable from 1–128 blocks (default 64), including typed values. It draws the nearest 256 matches and refreshes four times a second. It cannot reveal terrain the server has not sent.
 - **Player ESP:** trace observed players with a crisp body outline and a soft glow through walls. Range is 1–128 blocks (default 64), with Coral, Pink, Cyan or White outlines and independent Names, Distance and Health switches. Starts off; preferences persist.
 - **Fullbright:** brighten world lighting without changing server data. Starts off; turning it off or unloading restores normal lighting.
 - **Auto Jump Reset:** jump once on the first eligible ground contact after new server knockback. Its toggle key starts unbound. The hit window is 1–10 simulation ticks (default 4); it starts off.
@@ -36,7 +36,7 @@ Player ESP requires a Cinnabar build containing actor mask outline/glow composit
 
 Cinnabar owns the registration, permissions and component lifecycle. Preferences save to the component's fixed companion settings file. Runtime enabled switches start off whenever the component initializes. The WASM has no WASI or ambient filesystem, network or operating-system input access.
 
-Requested permissions cover the HUD, player snapshots, camera, controls, interaction, movement, settings, packet delay, block highlights, Fullbright, world drawing, entity highlighting, protected entity observations and through-wall rendering. Importing the file does not grant them automatically; review them in Mods. Features using a denied permission cannot operate.
+Requested permissions cover the HUD, player snapshots, camera, controls, interaction, movement, settings, packet delay, terrain, Fullbright, world drawing, entity highlighting, protected entity observations and through-wall rendering. Netherite Finder needs terrain and world drawing, and through-wall rendering to show cubes behind blocks; without it the cubes respect world depth. Importing the file does not grant them automatically; review them in Mods. Features using a denied permission cannot operate.
 
 The panel uses Cinnabar's installed font. Panel sizing follows display DPI independently of Minecraft's GUI scale. Change **Menu key** in the panel by clicking the keycap and pressing a key; the binding saves across restarts. F7 is the default.
 
