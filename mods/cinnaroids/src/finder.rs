@@ -17,17 +17,15 @@ pub const IDENTIFIERS: [&str; 2] = ["minecraft:ancient_debris", "minecraft:nethe
 pub const COLOR: [f32; 4] = [1.0, 0.12, 0.55, 1.0];
 /// Largest range setting: terrain searches reach this far from the player's feet.
 pub const MAX_RANGE: f32 = mod_api::MAX_TERRAIN_DISTANCE as f32;
-/// Retained instances left for FakeLag's real-position marker.
-const MARKER_INSTANCES: usize = 5;
 /// Most cubes drawn at once, leaving retained instances for the real-position marker.
 pub const LIMIT: usize =
-    if mod_api::MAX_FOUND_BLOCKS < mod_api::MAX_DRAW_INSTANCES - MARKER_INSTANCES {
+    if mod_api::MAX_FOUND_BLOCKS < mod_api::MAX_DRAW_INSTANCES - crate::ghost::INSTANCES {
         mod_api::MAX_FOUND_BLOCKS
     } else {
-        mod_api::MAX_DRAW_INSTANCES - MARKER_INSTANCES
+        mod_api::MAX_DRAW_INSTANCES - crate::ghost::INSTANCES
     };
 const _: () = assert!(LIMIT <= mod_api::MAX_FOUND_BLOCKS);
-const _: () = assert!(LIMIT + MARKER_INSTANCES <= mod_api::MAX_DRAW_INSTANCES);
+const _: () = assert!(LIMIT + crate::ghost::INSTANCES <= mod_api::MAX_DRAW_INSTANCES);
 /// Seconds between searches while the selection is unchanged; settings changes search at once.
 pub const REFRESH_SECONDS: f32 = 0.25;
 /// Retained drawing group holding the cubes.

@@ -17,6 +17,7 @@ use mod_api::bindings::cinnabar::world_draw::{
 use crate::{
     aim::{AimAssist, Frame, Player, Vec3},
     finder::{self, Finder},
+    ghost::{self, Marker},
     jump_reset::{Frame as JumpFrame, JumpReset},
     state::{Controls, Event, Preferences, State},
 };
@@ -29,6 +30,7 @@ thread_local! {
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
     static FINDER: RefCell<Finder> = RefCell::new(Finder::default());
     static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
+    static MARKER: RefCell<Marker> = RefCell::new(Marker::default());
 }
 
 struct Cinnaroids;
@@ -48,6 +50,7 @@ impl Guest for Cinnaroids {
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
         FINDER.with(|finder| finder.borrow_mut().reset());
+        MARKER.with(|marker| marker.borrow_mut().reset());
     }
 
     fn frame() {
@@ -57,6 +60,7 @@ impl Guest for Cinnaroids {
             let _ = gameplay::cancel_jump();
             clear_esp();
             netherite(None, None);
+            real_position(false, None);
             return;
         };
         MODULES.with(|modules| {
@@ -79,16 +83,16 @@ impl Guest for Cinnaroids {
             });
             publish(&mut modules);
             let _ = gameplay::set_packet_delay(modules.packet_delay_ms());
-            let _ = gameplay::set_show_real_position(modules.show_real_position());
 
             let snapshot = if controls.focused && controls.gameplay {
                 gameplay::read_frame().ok().flatten()
             } else {
                 None
             };
-            // Cubes draw only over focused gameplay, as the host-drawn highlights did.
+            // Both draw only over focused gameplay, as the host-drawn versions did.
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
             netherite(modules.finder_range(), drawn);
+            real_position(modules.show_real_position(), drawn);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
             let cadence = snapshot.as_ref().map(|frame| {
                 (
@@ -356,6 +360,57 @@ fn clear_cubes(finder: &mut Finder) {
     {
         finder.reset();
     }
+}
+
+/// Draws FakeLag's last relayed position while the option is on and packets are delayed.
+fn real_position(show: bool, frame: Option<&gameplay::Snapshot>) {
+    MARKER.with(|marker| {
+        let mut marker = marker.borrow_mut();
+        let frame =
+            frame.filter(|_| show && drawing::capabilities().contains(Permissions::WORLD_DRAW));
+        let sample = frame.and_then(|frame| {
+            let position = gameplay::read_relayed_position().ok().flatten()?;
+            Some((frame.session, [position.x, position.y, position.z]))
+        });
+        let eye = frame.map_or([0.; 3], |frame| [frame.eye.x, frame.eye.y, frame.eye.z]);
+        let seconds = frame.map_or(0., |frame| frame.frame_seconds);
+        let (Some(feet), Some(frame)) = (marker.update(sample, eye, seconds), frame) else {
+            if std::mem::take(&mut marker.shown)
+                && let Err(error) = drawing::replace_frame_group(ghost::GROUP, &[])
+                && stale(&error)
+            {
+                marker.reset();
+            }
+            return;
+        };
+        let geometries = match marker.geometries {
+            Some(geometries) => geometries,
+            None => {
+                let mut created = Vec::with_capacity(ghost::INSTANCES);
+                for spec in &ghost::geometries() {
+                    match drawing::create_geometry(spec) {
+                        Ok(handle) => created.push(handle),
+                        Err(_) => {
+                            for handle in created {
+                                let _ = drawing::remove(handle);
+                            }
+                            return;
+                        }
+                    }
+                }
+                let Ok(geometries) = <[Handle; ghost::INSTANCES]>::try_from(created) else {
+                    return;
+                };
+                *marker.geometries.insert(geometries)
+            }
+        };
+        let instances = ghost::instances(&geometries, frame.dimension, feet);
+        match drawing::replace_frame_group(ghost::GROUP, &instances) {
+            Ok(()) => marker.shown = true,
+            Err(error) if stale(&error) => marker.reset(),
+            Err(_) => marker.shown = false,
+        }
+    });
 }
 
 /// Refreshes a bounded union of admitted actor meshes with host-owned outline and glow.
