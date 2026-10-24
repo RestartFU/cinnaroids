@@ -6,7 +6,6 @@ use serde_json::Value;
 use crate::aim::Config;
 use crate::jump_reset::{DEFAULT_WINDOW_TICKS, MAX_WINDOW_TICKS, MIN_WINDOW_TICKS};
 
-pub const PRODUCT_NAME: &str = "Cinnaroids";
 pub const PANEL_KEY: &str = "F7";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
@@ -971,11 +970,8 @@ impl State {
             },
         ]);
         let panel = Panel {
-            title: PRODUCT_NAME,
             toggle_key: &self.preferences.menu_key,
-            dark: true,
             capture_key: self.capturing_key.is_some(),
-            style: "compact",
             reference_size: crate::panel::REFERENCE,
             motion: true,
             controls,
@@ -1084,13 +1080,12 @@ fn legacy_key(key: u64) -> Option<String> {
     })
 }
 
+/// Cinnabar's panel schema: the surface is appended after serialization, and the host draws no
+/// title, theme or native layout of its own.
 #[derive(Serialize)]
 struct Panel<'a> {
-    title: &'a str,
     toggle_key: &'a str,
-    dark: bool,
     capture_key: bool,
-    style: &'a str,
     reference_size: [f32; 2],
     motion: bool,
     controls: Vec<Control<'a>>,

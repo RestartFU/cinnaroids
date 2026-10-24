@@ -441,10 +441,14 @@ fn closed_panel_cannot_start_key_capture_and_preserves_normal_toggle() {
 }
 
 #[test]
-fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change() {
+fn panel_has_every_control_without_native_chrome_and_only_rebuilds_after_change() {
     let mut state = state();
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(json["title"], PRODUCT_NAME);
+    // Cinnabar panels carry only a surface, controls and input options.
+    for removed in ["title", "dark", "style", "theme", "sections"] {
+        assert!(json.get(removed).is_none(), "{removed}");
+    }
+    assert!(json["surface"]["document"].is_string());
     assert_eq!(json["toggle_key"], PANEL_KEY);
     assert!(
         json["controls"]
@@ -453,7 +457,6 @@ fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change
             .iter()
             .any(|control| control["id"] == "jump_reset")
     );
-    assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 128 * 1024);
     state.panel_dirty = false;
     controls(&mut state, &[], &[]);
@@ -464,7 +467,7 @@ fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change
         "themes are gone"
     );
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert!(json["dark"].as_bool().unwrap());
+    assert!(json.get("dark").is_none());
     assert_eq!(json["reference_size"], serde_json::json!([760.0, 420.0]));
 }
 

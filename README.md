@@ -20,7 +20,7 @@ python3 -m unittest discover -s scripts/tests -v
 
 The output is `dist/cinnaroids.wasm` and its SHA-256 checksum. The component embeds its Mods-card metadata, requested permissions, icon, Inter Medium panel font, retained UI catalog and license notices. Packaging validates it and rejects WASI imports. The SDK is pinned to a Cinnabar commit in the workspace manifest.
 
-Opening blurs and dims the world while the columns settle in; closing reverses it. Toggles, disclosures, chevrons and key capture ease with Cinnabar's surface transitions, and drags follow the pointer directly. The client's **Screen animations** preference controls all motion; use a Cinnabar build containing the merged surface-animation support.
+Opening blurs and dims the world while the columns settle in; closing reverses it. Toggles, disclosures, chevrons and key capture ease with Cinnabar's surface transitions, and drags follow the pointer directly. The client's **Screen animations** preference controls all motion. Cinnaroids builds against Cinnabar's capability-only mod API: it draws the panel, Player ESP labels, Netherite Finder cubes and the FakeLag position marker itself, so older Cinnabar builds cannot load it.
 
 Edit the layout in `scripts/generate-panel.py`, then run it to regenerate `mods/cinnaroids/ui/panel.json` and the Player ESP label layer, `mods/cinnaroids/ui/hud.json`. Builds check that the generated files are current.
 

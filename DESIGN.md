@@ -133,7 +133,7 @@ Left-click toggles the row. On toggle, Coral Glow fades in, the 2x20 coral bar s
 ### Settings controls
 - **Slider:** an Ash title on the left and a value plus unit on the right; the value is a native typed editor. The track spans the full inset width. The coral fill carries a 6x6 knob.
 - **Dropdown:** a 16-high field with the value at x 6 and a chevron at the right. Selection uses the host dropdown.
-- **Switch:** an 18x10 track whose coral layer fades with toggle progress. The knob slides natively.
+- **Switch:** an 18x10 track whose coral layer fades with toggle progress. The same progress slides the knob across a 10-unit lane.
 - **Bind:** a 58x16 keycap with an edge border. During capture, an Ember cap with a coral border and a "Press a key" prompt fades in over it. Esc clears a module key and keeps the menu key.
 
 ### Settings column
@@ -143,11 +143,13 @@ The Settings column is visible alongside Combat, Network, and Render. It shares 
 Transitions run on bound scalars, with no delays or loops.
 - **Open:** the world eases in over 380ms in-out-cubic. Columns rise 10 units over 300, 345, 390, and 435ms expo, staggered by 45ms, and fade over 140ms plus 20ms per column.
 - **Close:** the same curves reverse from shorter distances (3 and 5). The world's symmetric curve keeps it dimmed until the columns have faded out.
-- **State:** height, row offset, and plate height take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. The divider and keycap fade over 140–180ms out-cubic.
+- **State:** height, row offset, and plate height take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. A row keycap fades in over 220ms settle while its value slides left. Toggle progress (row wash, lift-bar alpha, coral legend, switch track and knob) eases over 100ms out-cubic. The divider shows while the body has any height; hover and press tints switch without easing.
 - **Drag:** no easing, so the column tracks the pointer exactly.
 
 ### Delivery
 `scripts/generate-panel.py` is the single source of geometry, color, and transitions, emitted to `mods/cinnaroids/ui/panel.json` and embedded in the component. `panel.rs` publishes only live scalar bindings and the control shell. The shell is hand-assembled from static fragments to stay within the 100k per-frame guest fuel budget, so keep it that way.
+
+Cinnabar routes the controls but no longer formats them, so `panel.rs` also publishes each control's feedback: `#c<index>_on` toggle progress (eased 0.1s), `#c<index>_text` values in the host's old format, and `#c<index>_fill` slider fractions. Hover and press tints are native button states. A row's trailing value is its first slider's number plus a fixed unit label measured from the embedded font. The surface allows 128 bindings and uses 124, so reuse a binding before adding one.
 
 ## Do's and Don'ts
 
