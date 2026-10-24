@@ -1,5 +1,21 @@
 use mod_host::{ControlEvent, ModGrants, ModHost, empty_controls};
 
+/// Shown Player ESP label slots in the HUD layer Cinnabar retained for this component.
+/// This is the one place that reads the host's HUD surface accessor.
+fn shown_labels(host: &ModHost) -> usize {
+    host.hud_surface().map_or(0, |surface| {
+        surface
+            .bindings
+            .iter()
+            .filter(|(name, value)| {
+                name.starts_with("#esp_")
+                    && name.ends_with("_shown")
+                    && **value == ui::mod_panel::SurfaceValue::Bool(true)
+            })
+            .count()
+    })
+}
+
 /// Retained world-drawing instances across this component's owners.
 fn drawn_instances(host: &ModHost) -> usize {
     host.render()
@@ -497,10 +513,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                 .unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
             assert!(host.is_active());
             assert_eq!(host.render().0.masks.len(), usize::from(granted));
-            assert_eq!(
-                host.hud().map_or(0, |hud| hud.world_labels.len()),
-                if granted { 6 } else { 0 }
-            );
+            assert_eq!(shown_labels(&host), if granted { 6 } else { 0 });
             if granted {
                 let output = host.render().0;
                 assert!(
@@ -528,7 +541,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             host.frame_with_controls(false, Some(snapshot()), controls)
                 .unwrap();
             assert!(host.render().0.masks.is_empty());
-            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+            assert_eq!(shown_labels(&host), 0);
         }
         // Focus loss, returning to a menu, disabling and missing observations all clear retained HUD.
         for reason in 0..5 {
@@ -564,7 +577,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             )
             .unwrap();
             assert!(host.render().0.masks.is_empty());
-            assert!(host.hud().is_none_or(|hud| hud.world_labels.is_empty()));
+            assert_eq!(shown_labels(&host), 0);
         }
     }
 }

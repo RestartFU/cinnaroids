@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the ClickGUI native surface and its retained transition bindings."""
+"""Generate the ClickGUI panel surface and the gameplay HUD surface for Player ESP labels."""
 
 import argparse
 import json
@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "mods/cinnaroids/ui/panel.json"
+HUD_OUTPUT = ROOT / "mods/cinnaroids/ui/hud.json"
 
 # Logical GUI units. The reference box is the area columns may be dragged within; the host
 # scales the whole surface down when a viewport is smaller, so the box always stays visible.
@@ -418,20 +419,65 @@ def compact_document(document):
     return document
 
 
+# Player ESP labels; matches `esp::MAX_PLAYERS`.
+ESP_LABELS = 6
+# Label plates keep the earlier host world-label style: 1.2 scale, 2-unit padding, no shadow
+# and a 65% black background.
+ESP_SCALE = 1.2
+ESP_PADDING = 2 * ESP_SCALE
+
+
+def hud_document():
+    """Centre one dark name plate on each projected label point; the root takes no input."""
+    slots = {}
+    for index in range(ESP_LABELS):
+        text = node("label", [f"100% - {2 * ESP_PADDING}px", f"100% - {2 * ESP_PADDING}px"],
+                    [ESP_PADDING, ESP_PADDING], text=f"#esp_{index}_text",
+                    bindings=[dict(binding_name=f"#esp_{index}_text")], localize=False,
+                    shadow=False, font_scale_factor=0.8 * ESP_SCALE, color=[1, 1, 1, 1],
+                    text_alignment="center")
+        plate = bind(node("panel", [0, 0], controls=children(
+            background=rect(["100%", "100%"], color=[0, 0, 0, 0.65]), text=text)),
+            (f"#esp_{index}_w", "#size_binding_x_absolute"),
+            (f"#esp_{index}_h", "#size_binding_y_absolute"))
+        plate["anchor_to"] = "center"
+        point = bind(node("panel", [0, 0], controls=children(plate=plate)),
+                     (f"#esp_{index}_at", "#offset"), (f"#esp_{index}_at_visible", "#visible"))
+        slots[f"esp_{index}"] = bind(node("panel", ["100%", "100%"], controls=children(point=point)),
+                                     (f"#esp_{index}_shown", "#visible"))
+    root = node("panel", ["100%", "100%"], controls=children(**slots))
+    return dict(namespace="cinnaroids", hud=root)
+
+
+def hud_surface():
+    """The HUD layer with every label hidden until the first update."""
+    bindings = {}
+    for index in range(ESP_LABELS):
+        bindings[f"#esp_{index}_shown"] = False
+        bindings[f"#esp_{index}_text"] = ""
+    return dict(screen="cinnaroids.hud",
+                document=json.dumps(hud_document(), separators=(",", ":")), bindings=bindings)
+
+
 def main():
-    """Regenerate the deterministic native surface or verify its checked-in freshness."""
+    """Regenerate the deterministic surfaces or verify their checked-in freshness."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     authored, _ = document()
-    text = json.dumps(dict(screen="cinnaroids.panel",
-                           document=json.dumps(compact_document(authored), separators=(",", ":")),
-                           transitions=transitions()), separators=(",", ":"))
-    if args.check:
-        if not OUTPUT.exists() or OUTPUT.read_text() != text:
-            raise SystemExit(f"{OUTPUT.relative_to(ROOT)} needs regeneration")
-    else:
-        OUTPUT.write_text(text)
+    outputs = {
+        OUTPUT: json.dumps(dict(screen="cinnaroids.panel",
+                                document=json.dumps(compact_document(authored),
+                                                    separators=(",", ":")),
+                                transitions=transitions()), separators=(",", ":")),
+        HUD_OUTPUT: json.dumps(hud_surface(), separators=(",", ":")),
+    }
+    for output, text in outputs.items():
+        if args.check:
+            if not output.exists() or output.read_text() != text:
+                raise SystemExit(f"{output.relative_to(ROOT)} needs regeneration")
+        else:
+            output.write_text(text)
 
 
 if __name__ == "__main__":

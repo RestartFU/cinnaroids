@@ -37,15 +37,66 @@ fn output(actors: &[ObservedActor], p: &Preferences) -> Output {
     build(p, 3, 0, [0., 1.6, 0.], actors)
 }
 
+/// The shown label slots of one HUD surface update, after checking every slot is set.
+fn labels(output: &Output) -> Vec<Value> {
+    let update: Value = serde_json::from_str(&output.labels).unwrap();
+    let bindings = update["bindings"].as_object().unwrap();
+    assert_eq!(bindings.len(), MAX_PLAYERS * 5, "every slot is replaced");
+    (0..MAX_PLAYERS)
+        .filter(|index| bindings[&format!("#esp_{index}_shown")] == true)
+        .map(|index| {
+            serde_json::json!({
+                "text": bindings[&format!("#esp_{index}_text")],
+                "at": bindings[&format!("#esp_{index}_at")],
+                "size": [bindings[&format!("#esp_{index}_w")], bindings[&format!("#esp_{index}_h")]],
+            })
+        })
+        .collect()
+}
+
 #[test]
 fn selects_native_player_identity_and_preserves_reported_health() {
     let result = output(&[actor()], &Preferences::default());
     assert_eq!(result.players, [8]);
-    let labels: Value = serde_json::from_str(&result.labels).unwrap();
-    let text = labels["world_labels"][0]["text"].as_str().unwrap();
+    let labels = labels(&result);
+    let text = labels[0]["text"].as_str().unwrap();
     assert!(text.contains("Player \"One\""));
     assert!(text.contains("10/40 HP"));
     assert!(text.contains("blocks"));
+}
+
+#[test]
+fn labels_project_above_the_bounds_with_the_earlier_plate_size() {
+    let result = output(&[actor()], &Preferences::default());
+    let labels = labels(&result);
+    assert_eq!(labels.len(), 1);
+    // Cinnabar re-projects the world point every frame; the plate centres on it.
+    assert_eq!(
+        labels[0]["at"],
+        serde_json::json!({"project": {"world": [1.0, 1.85, -4.0]}})
+    );
+    let text = labels[0]["text"].as_str().unwrap();
+    let columns = text.lines().map(|line| line.chars().count()).max().unwrap() as f64;
+    let size = labels[0]["size"].as_array().unwrap();
+    assert!((size[0].as_f64().unwrap() - (columns * 7.2 + 4.8)).abs() < 1e-3);
+    assert!((size[1].as_f64().unwrap() - (2. * 12. + 4.8)).abs() < 1e-3);
+}
+
+#[test]
+fn hud_surface_has_one_hidden_projected_slot_per_player() {
+    let surface: Value = serde_json::from_str(SURFACE).unwrap();
+    assert_eq!(surface["screen"], "cinnaroids.hud");
+    let document = surface["document"].as_str().unwrap();
+    for index in 0..MAX_PLAYERS {
+        assert_eq!(surface["bindings"][format!("#esp_{index}_shown")], false);
+        for name in ["_at", "_at_visible", "_text", "_w", "_h", "_shown"] {
+            assert!(
+                document.contains(&format!("\"#esp_{index}{name}\"")),
+                "{index}{name}"
+            );
+        }
+    }
+    assert!(!document.contains(&format!("#esp_{MAX_PLAYERS}_")));
 }
 
 #[test]
@@ -62,10 +113,7 @@ fn stale_foreign_non_player_out_of_range_and_missing_bounds_draw_nothing() {
         }
         let result = output(&[a], &Preferences::default());
         assert!(result.players.is_empty());
-        assert_eq!(
-            serde_json::from_str::<Value>(&result.labels).unwrap()["world_labels"],
-            serde_json::json!([])
-        );
+        assert!(labels(&result).is_empty());
     }
 }
 
@@ -73,10 +121,8 @@ fn stale_foreign_non_player_out_of_range_and_missing_bounds_draw_nothing() {
 fn missing_health_stays_unknown_and_label_options_are_independent() {
     let mut a = actor();
     a.max_health = None;
-    let labels: Value =
-        serde_json::from_str(&output(&[a.clone()], &Preferences::default()).labels).unwrap();
     assert!(
-        labels["world_labels"][0]["text"]
+        labels(&output(&[a.clone()], &Preferences::default()))[0]["text"]
             .as_str()
             .unwrap()
             .ends_with("10 HP")
@@ -89,7 +135,7 @@ fn missing_health_stays_unknown_and_label_options_are_independent() {
     };
     let result = output(&[a.clone()], &p);
     assert_eq!(result.players.len(), 1);
-    assert_eq!(result.labels, "{\"cards\":[],\"world_labels\":[]}");
+    assert!(labels(&result).is_empty());
     a.max_health = Some(40.);
     a.actor.health = Some(10.);
     let result = output(
@@ -100,7 +146,7 @@ fn missing_health_stays_unknown_and_label_options_are_independent() {
         },
     );
     assert_eq!(result.players.len(), 1);
-    assert_eq!(result.labels, "{\"cards\":[],\"world_labels\":[]}");
+    assert!(labels(&result).is_empty());
 }
 
 #[test]
@@ -114,13 +160,7 @@ fn full_actor_snapshot_stays_bounded_and_excludes_camera() {
         .collect();
     let result = output(&actors, &Preferences::default());
     assert_eq!(result.players.len(), MAX_PLAYERS);
-    assert_eq!(
-        serde_json::from_str::<Value>(&result.labels).unwrap()["world_labels"]
-            .as_array()
-            .unwrap()
-            .len(),
-        MAX_PLAYERS
-    );
+    assert_eq!(labels(&result).len(), MAX_PLAYERS);
     assert!(
         build(&Preferences::default(), 3, 0, [1., 0.6, -4.], &[actor()])
             .players

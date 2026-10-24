@@ -26,6 +26,7 @@ thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
+    /// Whether the ESP label HUD surface is set.
     static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
     static FINDER: RefCell<Finder> = RefCell::new(Finder::default());
@@ -166,9 +167,7 @@ impl Guest for Cinnaroids {
                     modules.preferences.esp_color,
                     &output.players,
                 ) {
-                    if hud::set_content(&output.labels).is_ok() {
-                        ESP_LABELS.with(|labels| *labels.borrow_mut() = true);
-                    } else {
+                    if !show_labels(&output.labels) {
                         clear_esp();
                     }
                 } else {
@@ -269,10 +268,24 @@ fn clear_esp() {
     });
     ESP_LABELS.with(|labels| {
         let mut labels = labels.borrow_mut();
-        if *labels && hud::set_content("").is_ok() {
+        if *labels && hud::set_surface("").is_ok() {
             *labels = false;
         }
     });
+}
+
+/// Sets the label layer on first use, then updates every label slot.
+fn show_labels(update: &str) -> bool {
+    ESP_LABELS.with(|labels| {
+        let mut labels = labels.borrow_mut();
+        if !*labels {
+            if hud::set_surface(crate::esp::SURFACE).is_err() {
+                return false;
+            }
+            *labels = true;
+        }
+        hud::update_surface(update).is_ok()
+    })
 }
 
 /// Whether a drawing error means a retained geometry token no longer exists.
