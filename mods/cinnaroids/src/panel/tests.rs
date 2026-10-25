@@ -1,5 +1,8 @@
 use serde_json::Value;
 
+/// Bindings, and separately transitions, one Cinnabar panel surface retains.
+const MAX_PANEL_BINDINGS: usize = 256;
+
 /// Collect native action routes throughout the authored surface.
 fn actions(node: &Value, result: &mut Vec<String>) {
     if let Some(mappings) = node["button_mappings"].as_array() {
@@ -91,6 +94,21 @@ fn every_control_is_reachable_from_the_floating_columns() {
     for removed in ["title", "dark", "style", "theme", "sections"] {
         assert!(panel.get(removed).is_none(), "{removed}");
     }
+    // Host popups keep the dark look the removed `dark` flag used to give them.
+    let colors = &panel["widget_colors"];
+    assert_eq!(colors.as_object().unwrap().len(), 5);
+    for (slot, color) in ["background", "surface", "text", "accent", "border"]
+        .into_iter()
+        .zip(super::WIDGET_COLORS)
+    {
+        let channels: Vec<f32> = colors[slot]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|channel| channel.as_f64().unwrap() as f32)
+            .collect();
+        assert_eq!(channels, color, "{slot}");
+    }
 }
 
 /// Every binding name a document node reads; bound label text must keep its own binding.
@@ -135,7 +153,11 @@ fn the_surface_reads_only_values_this_component_publishes() {
         );
         assert!(bindings.contains_key(name), "{name} is never published");
     }
-    assert!(bindings.len() <= 128, "{} bindings", bindings.len());
+    assert!(
+        bindings.len() <= MAX_PANEL_BINDINGS,
+        "{} bindings",
+        bindings.len()
+    );
 }
 
 #[test]
@@ -340,9 +362,13 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
         transitions.get("#col_combat_pos").is_none(),
         "drags follow the pointer directly"
     );
-    assert!(transitions.as_object().unwrap().len() <= 128);
+    assert!(transitions.as_object().unwrap().len() <= MAX_PANEL_BINDINGS);
     let bindings = surface["bindings"].as_object().unwrap();
-    assert!(bindings.len() <= 128, "{} bindings", bindings.len());
+    assert!(
+        bindings.len() <= MAX_PANEL_BINDINGS,
+        "{} bindings",
+        bindings.len()
+    );
     assert_eq!(bindings["#world_blur"], 4);
     assert_eq!(bindings["#col_menu_alpha"], 1);
     assert_eq!(bindings["#col_menu_h"], 52);
@@ -356,6 +382,17 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
     );
     assert_eq!(bindings["#menu_capture"], 0);
     assert_eq!(transitions["#menu_capture"]["duration"], 0.14);
+    // The header divider fades with the column's open state.
+    let divider = child(child(column(&document, "combat"), "entrance"), "divider");
+    assert_eq!(divider["bindings"][0]["binding_name"], "#col_combat_open");
+    assert_eq!(divider["bindings"][0]["binding_name_override"], "#alpha");
+    assert_eq!(transitions["#col_combat_open"]["duration"], 0.16);
+    assert_eq!(transitions["#col_combat_open"]["easing"], "out_cubic");
+    assert_eq!(bindings["#col_combat_open"], 1);
+    // A row keycap fades quickly while its value slides with the settle curve.
+    assert_eq!(transitions["#clicker_keycap"]["duration"], 0.16);
+    assert_eq!(transitions["#clicker_keycap"]["easing"], "out_cubic");
+    assert_eq!(transitions["#clicker_value_at"]["duration"], 0.22);
 }
 
 #[test]
@@ -422,6 +459,8 @@ fn rows_keep_values_and_show_bound_keys_as_keycaps() {
     assert_eq!(bindings["#c10_text"], "None");
     assert_eq!(bindings["#reach_keycap"], 0);
     assert_eq!(bindings["#clicker_keycap"], 1);
+    assert_eq!(bindings["#reach_value_at"], serde_json::json!([72, 6]));
+    assert_eq!(bindings["#clicker_value_at"], serde_json::json!([50, 6]));
     assert_eq!(bindings["#c2_text"], "20", "values stay visible when bound");
     assert_eq!(bindings["#reach_value"], "3.0 blocks");
     // Enabled rows light the coral legend with the row's own progress.
@@ -430,7 +469,11 @@ fn rows_keep_values_and_show_bound_keys_as_keycaps() {
     assert_eq!(bindings["#aim_capture"], 1);
     assert_eq!(bindings["#clicker_capture"], 0);
     let (_, document) = panel_of(&state);
-    let keycap = find(find(&document["panel"], "clicker").unwrap(), "keycap").unwrap();
+    let clicker = find(&document["panel"], "clicker").unwrap();
+    let value = find(clicker, "value").unwrap();
+    assert_eq!(value["bindings"][0]["binding_name"], "#clicker_value_at");
+    assert_eq!(value["bindings"][0]["binding_name_override"], "#offset");
+    let keycap = find(clicker, "keycap").unwrap();
     assert_eq!(find(keycap, "legend").unwrap()["text"], "#c3_text");
     assert_eq!(
         find(keycap, "lit").unwrap()["bindings"][1]["binding_name"],
@@ -453,6 +496,7 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
     let bindings = &panel["surface"]["bindings"];
     assert_eq!(bindings["#col_render_h"], 0);
     assert_eq!(bindings["#col_render_bg"], 22);
+    assert_eq!(bindings["#col_render_open"], 0);
     assert_eq!(bindings["#col_render_angle"], -90);
     assert_eq!(bindings["#col_render_pos"], serde_json::json!([12.5, -40]));
     // The pad's centre cancels the column offset; its tints sit back at the column.

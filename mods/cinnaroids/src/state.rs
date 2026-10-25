@@ -969,11 +969,19 @@ impl State {
                 label: "Player ESP settings",
             },
         ]);
+        let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
             toggle_key: &self.preferences.menu_key,
             capture_key: self.capturing_key.is_some(),
             reference_size: crate::panel::REFERENCE,
             motion: true,
+            widget_colors: WidgetColors {
+                background,
+                surface,
+                text,
+                accent,
+                border,
+            },
             controls,
         };
         let mut json = serde_json::to_string(&panel)?;
@@ -1088,7 +1096,18 @@ struct Panel<'a> {
     capture_key: bool,
     reference_size: [f32; 2],
     motion: bool,
+    widget_colors: WidgetColors,
     controls: Vec<Control<'a>>,
+}
+
+/// Colours of the host-drawn popup widgets; see [`crate::panel::WIDGET_COLORS`].
+#[derive(Serialize)]
+struct WidgetColors {
+    background: [f32; 4],
+    surface: [f32; 4],
+    text: [f32; 4],
+    accent: [f32; 4],
+    border: [f32; 4],
 }
 
 #[derive(Serialize)]

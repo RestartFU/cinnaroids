@@ -9,6 +9,21 @@ use crate::state::{KeybindTarget, State};
 
 /// Logical box the columns may be dragged within; the host fits it to small viewports.
 pub const REFERENCE: [f32; 2] = [760.0, 420.0];
+/// Straight RGBA of Cinnabar's popup widgets, the slider value editor and the dropdown, as
+/// `{background, surface, text, accent, border}`: the dark compact palette Cinnabar drew this
+/// panel's popups with before panels lost `dark` and `style`.
+pub const WIDGET_COLORS: [[f32; 4]; 5] = [
+    [0.075, 0.09, 0.115, 0.96],
+    [0.16, 0.185, 0.22, 0.98],
+    [0.94, 0.95, 0.97, 1.0],
+    [1.0, 0.34, 0.32, 1.0],
+    [0.22, 0.26, 0.31, 0.9],
+];
+/// [`WIDGET_COLORS`] as the shell's static `widget_colors` member.
+const WIDGET_COLORS_JSON: &str = concat!(
+    r#""widget_colors":{"background":[0.075,0.09,0.115,0.96],"surface":[0.16,0.185,0.22,0.98],"#,
+    r#""text":[0.94,0.95,0.97,1],"accent":[1,0.34,0.32,1],"border":[0.22,0.26,0.31,0.9]}"#,
+);
 pub const COLUMN_WIDTH: f32 = 150.0;
 const HEADER: i32 = 22;
 const ROW: i32 = 20;
@@ -74,7 +89,9 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     json.push_str(&p.menu_key);
     json.push_str(r#"","capture_key":"#);
     flag(json, state.capturing_key.is_some());
-    json.push_str(r#","reference_size":[760,420],"motion":true,"controls":["#);
+    json.push_str(r#","reference_size":[760,420],"motion":true,"#);
+    json.push_str(WIDGET_COLORS_JSON);
+    json.push_str(r#","controls":["#);
     keybind(
         json,
         "menu_key",
@@ -608,8 +625,12 @@ fn bindings_json(state: &State) -> String {
     json.push_str(" blocks\"");
     for (index, target) in KEYED {
         let module = MODULES[index].0;
+        let bound = !state.key_for(target).is_empty();
         name_parts(&mut json, &[module, "_keycap"]);
-        integer(&mut json, (!state.key_for(target).is_empty()).into());
+        integer(&mut json, bound.into());
+        // The trailing value slides left to make room for the keycap.
+        name_parts(&mut json, &[module, "_value_at"]);
+        json.push_str(if bound { "[50,6]" } else { "[72,6]" });
         name_parts(&mut json, &[module, "_capture"]);
         integer(&mut json, (state.capturing_key == Some(target)).into());
     }
@@ -631,6 +652,8 @@ fn bindings_json(state: &State) -> String {
         integer(&mut json, body);
         name_parts(&mut json, &["col_", id, "_bg"]);
         integer(&mut json, HEADER + body + if open { FOOTER } else { 0 });
+        name_parts(&mut json, &["col_", id, "_open"]);
+        integer(&mut json, open.into());
         name_parts(&mut json, &["col_", id, "_angle"]);
         integer(&mut json, if open { 0 } else { -90 });
         let lifted = state.drag.is_some_and(|drag| drag.column == column);

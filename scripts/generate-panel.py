@@ -315,18 +315,13 @@ def module_row(module, title, toggle_index, expand, key, settings, first):
     name = bind(label(title, [width - 14, 10], [10, 6], scale=0.92), (f"#{module}_indent", "#offset"))
     contents = dict(name=name)
     # The trailing value always reads in muted text; a bound key gets its own small keycap.
-    # Bound modules slide the value left to make room for the keycap: the value hangs off a
-    # spacer that grows with the keycap's progress.
+    # Bound modules slide the value left to make room for the keycap.
     if expand is not None:
         value = trailing_value(module, settings)
-        if key is None:
-            value["offset"] = [width - 56, 6]
-        else:
-            value.update(anchor_from="left_middle", anchor_to="right_middle")
-            spacer = bind(node("panel", [0, 10], controls=children(value=value)),
-                          (f"#{module}_keycap", "#size_binding_x"))
-            spacer.update(anchor_from="right_middle", anchor_to="right_middle")
-            value = node("panel", [22, 10], [width - 26, 6], controls=children(spacer=spacer))
+        value["offset"] = [width - 56, 6]
+        if key is not None:
+            value.setdefault("bindings", []).append(
+                dict(binding_name=f"#{module}_value_at", binding_name_override="#offset"))
         contents["value"] = value
     if key is not None:
         # Enabled rows draw the legend in coral over the same Bone legend.
@@ -398,12 +393,11 @@ def column(identifier, title, pad):
     chevron = icon("chevron", [5, 3], [COLUMN - 14, 10])
     chevron["cinnabar_transform"] = {"rotation": 0}
     bind(chevron, (f"#col_{identifier}_angle", "#cinnabar_rotation"))
-    # One translucent surface per column; a hairline divides the header while the body has
-    # any height, and the border lifts while the column is dragged.
-    divider = bind(node("panel", [COLUMN, 0], [0, HEADER - 0.5], clips_children=True,
-                        controls=children(line=rect([COLUMN - 2 * INSET, 0.5], [INSET, 0],
-                                                    color=rgba("ffffff", 0.09)))),
-                   (f"#col_{identifier}_h", "#size_binding_y_absolute"))
+    # One translucent surface per column; a hairline divides the header while the column is
+    # open, and the border lifts while the column is dragged.
+    divider = bind(rect([COLUMN - 2 * INSET, 0.5], [INSET, HEADER - 0.5],
+                        color=rgba("ffffff", 0.09)),
+                   (f"#col_{identifier}_open", "#alpha"))
     header = dict(
         background=bind(rect([COLUMN, HEADER], radius=5, color=COLUMN_FILL,
                              border_color=rgba("ffffff", 0), border_width=0.5),
@@ -452,6 +446,7 @@ def transitions():
         result[f"#col_{identifier}_edge"] = dict(duration=0.12, easing="out_cubic")
         for prop in ["h", "bg"]:
             result[f"#col_{identifier}_{prop}"] = dict(duration=0.26, easing=EXPO)
+        result[f"#col_{identifier}_open"] = dict(duration=0.16, easing="out_cubic")
         result[f"#col_{identifier}_angle"] = dict(duration=0.22, easing=SETTLE)
     firsts = set()
     for module, _, owner, toggle, expand, key, settings in MODULES:
@@ -465,7 +460,8 @@ def transitions():
             result[f"#{module}_angle"] = dict(duration=0.22, easing=SETTLE)
             result[f"#{module}_detail"] = dict(duration=0.22, easing="out_cubic")
         if key is not None:
-            result[f"#{module}_keycap"] = dict(duration=0.22, easing=SETTLE)
+            result[f"#{module}_keycap"] = dict(duration=0.16, easing="out_cubic")
+            result[f"#{module}_value_at"] = dict(duration=0.22, easing=SETTLE)
             result[f"#{module}_capture"] = dict(duration=0.14, easing="out_cubic")
     result["#menu_capture"] = dict(duration=0.14, easing="out_cubic")
     # Toggle feedback eases briefly, as Cinnabar's native controls did.
