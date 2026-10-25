@@ -26,8 +26,8 @@ thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
-    /// Whether the ESP label HUD surface is set.
-    static ESP_LABELS: RefCell<bool> = const { RefCell::new(false) };
+    /// The ESP label slots while their HUD surface is set.
+    static ESP_LABELS: RefCell<Option<crate::esp::Labels>> = const { RefCell::new(None) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
     static FINDER: RefCell<Finder> = RefCell::new(Finder::default());
     static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
@@ -47,7 +47,7 @@ impl Guest for Cinnaroids {
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
-        ESP_LABELS.with(|labels| *labels.borrow_mut() = false);
+        ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
         FINDER.with(|finder| finder.borrow_mut().reset());
@@ -90,8 +90,9 @@ impl Guest for Cinnaroids {
             } else {
                 None
             };
-            // Both draw only over focused gameplay, as the host-drawn versions did.
+            // These draw only over focused gameplay, as the host-drawn versions did.
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
+            player_esp(&modules, drawn);
             netherite(modules.finder_range(), drawn);
             real_position(modules.show_real_position(), drawn);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
@@ -140,42 +141,6 @@ impl Guest for Cinnaroids {
                     reset.reset();
                 }
             });
-
-            if modules.modules.player_esp
-                && !controls.panel_open
-                && drawing::capabilities().contains(
-                    Permissions::ENTITY_OBSERVE
-                        | Permissions::ENTITY_HIGHLIGHT
-                        | Permissions::RENDER_THROUGH_WALLS,
-                )
-                && let Some(frame) = snapshot.as_ref()
-                && let Ok(Some(world)) = player_state::read_world()
-                && world.dimension == frame.dimension
-                && let Ok(actors) =
-                    player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
-            {
-                let output = crate::esp::build(
-                    &modules.preferences,
-                    world.session,
-                    world.dimension,
-                    [frame.eye.x, frame.eye.y, frame.eye.z],
-                    &actors,
-                );
-                if show_esp(
-                    world.session,
-                    world.dimension,
-                    modules.preferences.esp_color,
-                    &output.players,
-                ) {
-                    if !show_labels(&output.labels) {
-                        clear_esp();
-                    }
-                } else {
-                    clear_esp();
-                }
-            } else {
-                clear_esp();
-            }
 
             let Some(snapshot) = snapshot else {
                 AIM.with(|aim| aim.borrow_mut().reset());
@@ -259,6 +224,50 @@ fn publish(modules: &mut State) {
 
 mod_api::bindings::export!(Cinnaroids with_types_in mod_api::bindings);
 
+/// Outlines and labels nearby players over focused gameplay, `frame`, while Player ESP is on
+/// and its drawing authority is granted; otherwise clears both. Returns whether a label took a
+/// new name, the costliest change.
+fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>) -> bool {
+    if modules.modules.player_esp
+        && drawing::capabilities().contains(
+            Permissions::ENTITY_OBSERVE
+                | Permissions::ENTITY_HIGHLIGHT
+                | Permissions::RENDER_THROUGH_WALLS,
+        )
+        && let Some(frame) = frame
+        && let Ok(Some(world)) = player_state::read_world()
+        && world.dimension == frame.dimension
+        && let Ok(actors) = player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
+    {
+        let (shown, named) = ESP_LABELS.with(|labels| {
+            let mut labels = labels.borrow_mut();
+            let fresh = labels.is_none();
+            let output = labels.get_or_insert_with(Default::default).update(
+                &modules.preferences,
+                world.session,
+                world.dimension,
+                [frame.eye.x, frame.eye.y, frame.eye.z],
+                &actors,
+            );
+            let shown = show_esp(
+                world.session,
+                world.dimension,
+                modules.preferences.esp_color,
+                &output.players,
+            ) && (!fresh || hud::set_surface(crate::esp::SURFACE).is_ok())
+                && output
+                    .labels
+                    .is_none_or(|update| hud::update_surface(&update).is_ok());
+            (shown, output.named)
+        });
+        if shown {
+            return named;
+        }
+    }
+    clear_esp();
+    false
+}
+
 /// Releases the retained selection and labels when the overlay cannot be presented.
 fn clear_esp() {
     ESP_MASK.with(|cached| {
@@ -266,26 +275,9 @@ fn clear_esp() {
             let _ = masks::remove(mask);
         }
     });
-    ESP_LABELS.with(|labels| {
-        let mut labels = labels.borrow_mut();
-        if *labels && hud::set_surface("").is_ok() {
-            *labels = false;
-        }
-    });
-}
-
-/// Sets the label layer on first use, then updates every label slot.
-fn show_labels(update: &str) -> bool {
-    ESP_LABELS.with(|labels| {
-        let mut labels = labels.borrow_mut();
-        if !*labels {
-            if hud::set_surface(crate::esp::SURFACE).is_err() {
-                return false;
-            }
-            *labels = true;
-        }
-        hud::update_surface(update).is_ok()
-    })
+    if ESP_LABELS.with(|labels| labels.borrow_mut().take().is_some()) {
+        let _ = hud::set_surface("");
+    }
 }
 
 /// Whether a drawing error means a retained geometry token no longer exists.
@@ -438,10 +430,9 @@ fn show_esp(session: u64, dimension: i32, color: u8, players: &[u64]) -> bool {
             .is_some_and(|(old_session, old_dimension, _)| {
                 (*old_session, *old_dimension) != (session, dimension)
             })
+            && let Some((_, _, mask)) = cached.take()
         {
-            if let Some((_, _, mask)) = cached.take() {
-                let _ = masks::remove(mask);
-            }
+            let _ = masks::remove(mask);
         }
         let mask = match *cached {
             Some((_, _, mask)) => mask,

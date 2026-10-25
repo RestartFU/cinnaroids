@@ -517,19 +517,25 @@ ESP_LABELS = 6
 # and a 65% black background.
 ESP_SCALE = 1.2
 ESP_PADDING = 2 * ESP_SCALE
+# One line of label text, as `esp.rs` sizes plates.
+ESP_LINE = 10 * ESP_SCALE
 
 
 def hud_document():
     """Centre one dark name plate on each projected label point; the root takes no input."""
     slots = {}
     for index in range(ESP_LABELS):
-        text = node("label", [f"100% - {2 * ESP_PADDING}px", f"100% - {2 * ESP_PADDING}px"],
-                    [ESP_PADDING, ESP_PADDING], text=f"#esp_{index}_text",
-                    bindings=[dict(binding_name=f"#esp_{index}_text")], localize=False,
-                    shadow=False, font_scale_factor=0.8 * ESP_SCALE, color=[1, 1, 1, 1],
-                    text_alignment="center")
+        # Surface text holds no line breaks, so each of the two lines is its own label.
+        lines = {}
+        for line in (1, 2):
+            name = f"#esp_{index}_line{line}"
+            lines[f"line{line}"] = node(
+                "label", [f"100% - {2 * ESP_PADDING}px", ESP_LINE],
+                [ESP_PADDING, ESP_PADDING + (line - 1) * ESP_LINE], text=name,
+                bindings=[dict(binding_name=name)], localize=False, shadow=False,
+                font_scale_factor=0.8 * ESP_SCALE, color=[1, 1, 1, 1], text_alignment="center")
         plate = bind(node("panel", [0, 0], controls=children(
-            background=rect(["100%", "100%"], color=[0, 0, 0, 0.65]), text=text)),
+            background=rect(["100%", "100%"], color=[0, 0, 0, 0.65]), **lines)),
             (f"#esp_{index}_w", "#size_binding_x_absolute"),
             (f"#esp_{index}_h", "#size_binding_y_absolute"))
         plate["anchor_to"] = "center"
@@ -546,7 +552,8 @@ def hud_surface():
     bindings = {}
     for index in range(ESP_LABELS):
         bindings[f"#esp_{index}_shown"] = False
-        bindings[f"#esp_{index}_text"] = ""
+        for line in (1, 2):
+            bindings[f"#esp_{index}_line{line}"] = ""
     return dict(screen="cinnaroids.hud",
                 document=json.dumps(hud_document(), separators=(",", ":")), bindings=bindings)
 
