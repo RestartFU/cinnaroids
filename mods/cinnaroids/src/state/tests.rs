@@ -441,10 +441,14 @@ fn closed_panel_cannot_start_key_capture_and_preserves_normal_toggle() {
 }
 
 #[test]
-fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change() {
+fn panel_has_every_control_without_native_chrome_and_only_rebuilds_after_change() {
     let mut state = state();
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(json["title"], PRODUCT_NAME);
+    // Cinnabar panels carry only a surface, controls and input options.
+    for removed in ["title", "dark", "style", "theme", "sections"] {
+        assert!(json.get(removed).is_none(), "{removed}");
+    }
+    assert!(json["surface"]["document"].is_string());
     assert_eq!(json["toggle_key"], PANEL_KEY);
     assert!(
         json["controls"]
@@ -453,7 +457,6 @@ fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change
             .iter()
             .any(|control| control["id"] == "jump_reset")
     );
-    assert!(json["dark"].as_bool().unwrap());
     assert!(state.panel_json().unwrap().len() < 128 * 1024);
     state.panel_dirty = false;
     controls(&mut state, &[], &[]);
@@ -464,41 +467,40 @@ fn panel_has_every_control_in_one_dark_appearance_and_only_rebuilds_after_change
         "themes are gone"
     );
     let json: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert!(json["dark"].as_bool().unwrap());
+    assert!(json.get("dark").is_none());
     assert_eq!(json["reference_size"], serde_json::json!([760.0, 420.0]));
 }
 
 #[test]
-fn netherite_finder_is_full_pink_loaded_block_selection_and_disabling_clears_it() {
+fn netherite_finder_searches_its_saved_range_only_while_enabled() {
     let mut state = state();
-    assert!(state.block_highlights().is_none());
-    state.finder_dirty = false;
+    assert_eq!(state.finder_range(), None);
     state.preferences_dirty = false;
     controls(&mut state, &[], &[("netherite", 1.0)]);
-    let spec = state.block_highlights().unwrap();
-    assert_eq!(
-        spec.identifiers,
-        ["minecraft:ancient_debris", "minecraft:netherite_block"]
-    );
-    assert_eq!(spec.range, 64.0);
-    assert_eq!(spec.color[3], 1.0);
-    assert!(spec.color[0] > spec.color[1] && spec.color[2] > spec.color[1]);
-    assert!(state.finder_dirty && !state.preferences_dirty);
+    assert_eq!(state.finder_range(), Some(64));
+    assert!(!state.preferences_dirty, "enablement is runtime state");
     controls(&mut state, &[], &[("netherite_range", 500.0)]);
+    // Terrain searches reach the terrain distance limit and no further.
     assert_eq!(
-        state.block_highlights().unwrap().range,
-        mod_api::MAX_BLOCK_HIGHLIGHT_RANGE
+        crate::finder::MAX_RANGE,
+        mod_api::MAX_TERRAIN_DISTANCE as f32
     );
+    assert_eq!(state.finder_range(), Some(128));
+    assert!(state.preferences_dirty);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored = State::new(Preferences::from_json(&saved));
+    assert_eq!(restored.preferences.netherite_range, 128);
+    assert_eq!(restored.finder_range(), None);
     assert_eq!(
-        restored.preferences.netherite_range,
-        mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u8
+        Preferences::from_json(r#"{"netherite_range":999}"#).netherite_range,
+        128
     );
-    assert!(restored.block_highlights().is_none());
-    state.finder_dirty = false;
+    assert_eq!(
+        Preferences::from_json(r#"{"netherite_range":0}"#).netherite_range,
+        1
+    );
     controls(&mut state, &[], &[("netherite", 0.0)]);
-    assert!(state.block_highlights().is_none() && state.finder_dirty);
+    assert_eq!(state.finder_range(), None);
 }
 
 #[test]
@@ -928,8 +930,8 @@ fn menu_binding_capture_updates_panel_reservations_and_saved_preferences() {
 }
 
 #[test]
-fn menu_defaults_avoid_zeno_and_restore_invalid_preferences_independently() {
-    assert_ne!(Preferences::default().menu_key, "ShiftRight");
+fn menu_defaults_to_f7_and_restores_invalid_preferences_independently() {
+    assert_eq!(Preferences::default().menu_key, "F7");
     for key in ["Escape", "", "Key:V"] {
         let prefs = Preferences::from_json(&format!(r#"{{"menu_key":"{key}","cps":17}}"#));
         assert_eq!(prefs.menu_key, PANEL_KEY);

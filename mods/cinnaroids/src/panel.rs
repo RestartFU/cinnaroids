@@ -1,9 +1,29 @@
 //! The ClickGUI's retained native surface and small live bindings, without rebuilding geometry.
+//!
+//! Cinnabar routes the panel's value-bearing controls but no longer formats them, so this
+//! module also publishes each control's feedback: `#c<index>_on` toggle progress,
+//! `#c<index>_text` values and `#c<index>_fill` slider fractions. Hover and press tints are
+//! native button states in the document.
 
 use crate::state::{KeybindTarget, State};
 
 /// Logical box the columns may be dragged within; the host fits it to small viewports.
 pub const REFERENCE: [f32; 2] = [760.0, 420.0];
+/// Straight RGBA of Cinnabar's popup widgets, the slider value editor and the dropdown, as
+/// `{background, surface, text, accent, border}`: the dark compact palette Cinnabar drew this
+/// panel's popups with before panels lost `dark` and `style`.
+pub const WIDGET_COLORS: [[f32; 4]; 5] = [
+    [0.075, 0.09, 0.115, 0.96],
+    [0.16, 0.185, 0.22, 0.98],
+    [0.94, 0.95, 0.97, 1.0],
+    [1.0, 0.34, 0.32, 1.0],
+    [0.22, 0.26, 0.31, 0.9],
+];
+/// [`WIDGET_COLORS`] as the shell's static `widget_colors` member.
+const WIDGET_COLORS_JSON: &str = concat!(
+    r#""widget_colors":{"background":[0.075,0.09,0.115,0.96],"surface":[0.16,0.185,0.22,0.98],"#,
+    r#""text":[0.94,0.95,0.97,1],"accent":[1,0.34,0.32,1],"border":[0.22,0.26,0.31,0.9]}"#,
+);
 pub const COLUMN_WIDTH: f32 = 150.0;
 const HEADER: i32 = 22;
 const ROW: i32 = 20;
@@ -21,6 +41,7 @@ pub const DEFAULT_COLUMNS: [[f32; 2]; 4] = [
 const MENU_BODY: i32 = 52;
 
 /// Module binding prefix, owning column and the height of its generated settings region.
+/// A column's first module never moves and so has no `_y` binding.
 const MODULES: [(&str, usize, i32); 8] = [
     ("clicker", 0, 60),
     ("aim", 0, 112),
@@ -52,6 +73,7 @@ pub(super) fn append(json: &mut String, state: &State) -> Result<(), serde_json:
 
 /// Stage a minimal valid surface; the same callback replaces it from the embedded catalog.
 /// Keeping the reference size here preserves native fitting and the current menu shortcut.
+/// Panels require a surface; the native title, theme and layout fields no longer exist.
 pub(crate) fn append_shell(json: &mut String) {
     json.pop();
     json.push_str(r#","surface":{"screen":"cinnaroids.panel","document":"{\"namespace\":\"cinnaroids\",\"panel\":{\"type\":\"panel\"}}"}}"#);
@@ -63,11 +85,13 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     let p = &state.preferences;
     let m = &state.modules;
     let capturing = |target| state.capturing_key == Some(target);
-    json.push_str(r#"{"title":"Cinnaroids","toggle_key":""#);
+    json.push_str(r#"{"toggle_key":""#);
     json.push_str(&p.menu_key);
-    json.push_str(r#"","dark":true,"capture_key":"#);
+    json.push_str(r#"","capture_key":"#);
     flag(json, state.capturing_key.is_some());
-    json.push_str(r#","style":"compact","reference_size":[760,420],"motion":true,"controls":["#);
+    json.push_str(r#","reference_size":[760,420],"motion":true,"#);
+    json.push_str(WIDGET_COLORS_JSON);
+    json.push_str(r#","controls":["#);
     keybind(
         json,
         "menu_key",
@@ -333,45 +357,224 @@ fn text(json: &mut String, value: &str) {
     json.push('"');
 }
 
-/// The muted trailing value of a module row.
-fn value(json: &mut String, state: &State, module: usize) {
+/// Toggle controls by panel index; one eased progress drives each row wash, lift bar and switch.
+fn toggles(state: &State) -> [(usize, bool); 13] {
+    let (m, p) = (&state.modules, &state.preferences);
+    [
+        (1, m.clicker),
+        (4, m.aim),
+        (8, m.reach),
+        (11, m.jump_reset),
+        (14, m.fake_lag),
+        (16, p.show_real_position),
+        (17, m.netherite),
+        (19, m.fullbright),
+        (29, p.aim_horizontal_only),
+        (30, m.player_esp),
+        (33, p.esp_names),
+        (34, p.esp_distance),
+        (35, p.esp_health),
+    ]
+}
+
+/// Visible sliders by panel index with their value and range; the drag pads have no visuals.
+fn sliders(state: &State) -> [(usize, f32, f32, f32); 7] {
     let p = &state.preferences;
+    [
+        (2, f32::from(p.cps), 1.0, 30.0),
+        (5, f32::from(p.aim_strength), 0.0, 100.0),
+        (
+            9,
+            (p.reach_blocks * 10.0).round() / 10.0,
+            3.0,
+            mod_api::MAX_ENTITY_REACH_BLOCKS,
+        ),
+        (12, f32::from(p.jump_reset_window_ticks), 1.0, 10.0),
+        (
+            15,
+            f32::from(p.fake_lag_ms),
+            0.0,
+            mod_api::MAX_PACKET_DELAY_MS as f32,
+        ),
+        (
+            18,
+            f32::from(p.netherite_range),
+            1.0,
+            crate::finder::MAX_RANGE,
+        ),
+        (31, f32::from(p.esp_range), 1.0, crate::esp::MAX_RANGE),
+    ]
+}
+
+/// Keybind controls by panel index.
+const KEYBINDS: [(usize, KeybindTarget); 5] = [
+    (0, KeybindTarget::Menu),
+    (3, KeybindTarget::Clicker),
+    (7, KeybindTarget::Aim),
+    (10, KeybindTarget::Reach),
+    (13, KeybindTarget::JumpReset),
+];
+
+/// The selected option of each choice control, by panel index.
+fn choices(state: &State) -> [(usize, &'static str); 2] {
+    let p = &state.preferences;
+    [
+        (
+            6,
+            if p.aim_mode == crate::state::AimMode::WhileClicking {
+                "While clicking"
+            } else {
+                "Continuous"
+            },
+        ),
+        (
+            32,
+            crate::esp::COLOR_NAMES
+                [usize::from(p.esp_color).min(crate::esp::COLOR_NAMES.len() - 1)],
+        ),
+    ]
+}
+
+/// A slider value as Cinnabar's controls showed it: at most two decimals, trailing zeros dropped.
+fn slider_text(json: &mut String, value: f32) {
+    let hundredths = (value * 100.0).round() as i32;
     json.push('"');
-    match module {
-        0 => {
-            integer(json, p.cps.into());
-            json.push_str(" CPS");
+    if hundredths < 0 {
+        json.push('-');
+    }
+    let magnitude = hundredths.unsigned_abs() as i32;
+    integer(json, magnitude / 100);
+    let fraction = magnitude % 100;
+    if fraction != 0 {
+        json.push('.');
+        json.push(char::from(b'0' + (fraction / 10) as u8));
+        if fraction % 10 != 0 {
+            json.push(char::from(b'0' + (fraction % 10) as u8));
         }
-        1 => {
-            integer(json, p.aim_strength.into());
-            json.push('%');
-        }
-        2 => {
-            let tenths = (p.reach_blocks * 10.0).round() as i32;
-            integer(json, tenths / 10);
-            json.push('.');
-            integer(json, tenths % 10);
-            json.push_str(" blocks");
-        }
-        3 => {
-            integer(json, p.jump_reset_window_ticks.into());
-            json.push_str(" ticks");
-        }
-        4 => {
-            integer(json, p.fake_lag_ms.into());
-            json.push_str(" ms");
-        }
-        5 => {
-            integer(json, p.netherite_range.into());
-            json.push_str(" blocks");
-        }
-        7 => {
-            integer(json, p.esp_range.into());
-            json.push_str(" blocks");
-        }
-        _ => {}
     }
     json.push('"');
+}
+
+/// A bounded 0–1 fraction with four decimals, without general float formatting.
+fn fraction(json: &mut String, value: f32) {
+    let units = (value.clamp(0.0, 1.0) * 10_000.0).round() as i32;
+    integer(json, units / 10_000);
+    let rest = units % 10_000;
+    if rest != 0 {
+        json.push('.');
+        let mut digits = [b'0'; 4];
+        let mut remaining = rest;
+        for digit in digits.iter_mut().rev() {
+            *digit = b'0' + (remaining % 10) as u8;
+            remaining /= 10;
+        }
+        let end = digits.iter().rposition(|digit| *digit != b'0').unwrap() + 1;
+        for digit in &digits[..end] {
+            json.push(char::from(*digit));
+        }
+    }
+}
+
+/// Key names are validated ASCII alphanumerics, so only symbol legends need escaping.
+fn escaped(json: &mut String, value: &str) {
+    json.push('"');
+    for character in value.chars() {
+        if matches!(character, '"' | '\\') {
+            json.push('\\');
+        }
+        json.push(character);
+    }
+    json.push('"');
+}
+
+/// Short keycap label for a physical key, as Cinnabar's native keybind controls showed it.
+pub fn key_label(key: &str) -> &str {
+    let key = key_legend(key);
+    match key {
+        "ControlLeft" => "LCtrl",
+        "ControlRight" => "RCtrl",
+        "ShiftLeft" => "LShift",
+        "ShiftRight" => "RShift",
+        "AltLeft" => "LAlt",
+        "AltRight" => "RAlt",
+        "SuperLeft" | "MetaLeft" => "LWin",
+        "SuperRight" | "MetaRight" => "RWin",
+        "ArrowLeft" => "Left",
+        "ArrowRight" => "Right",
+        "ArrowUp" => "Up",
+        "ArrowDown" => "Down",
+        "Backspace" => "Bksp",
+        "CapsLock" => "Caps",
+        "Escape" => "Esc",
+        "PageUp" => "PgUp",
+        "PageDown" => "PgDn",
+        "PrintScreen" => "PrtSc",
+        "ScrollLock" => "ScrLk",
+        "NumLock" => "NumLk",
+        "ContextMenu" => "Menu",
+        "Delete" => "Del",
+        "Insert" => "Ins",
+        "Backquote" => "`",
+        "Backslash" => "\\",
+        "BracketLeft" => "[",
+        "BracketRight" => "]",
+        "Comma" => ",",
+        "Period" => ".",
+        "Slash" => "/",
+        "Semicolon" => ";",
+        "Quote" => "'",
+        "Minus" => "-",
+        "Equal" => "=",
+        "IntlBackslash" => "Intl\\",
+        "NumpadAdd" => "Num+",
+        "NumpadSubtract" => "Num-",
+        "NumpadMultiply" => "Num*",
+        "NumpadDivide" => "Num/",
+        "NumpadDecimal" => "Num.",
+        "NumpadEnter" => "NumEnt",
+        "NumpadEqual" => "Num=",
+        "NumpadComma" => "Num,",
+        "NumpadHash" => "Num#",
+        "NumpadParenLeft" => "Num(",
+        "NumpadParenRight" => "Num)",
+        "NumpadBackspace" => "NumBk",
+        "NumpadMemoryAdd" => "NumM+",
+        "NumpadMemorySubtract" => "NumM-",
+        "NumpadMemoryStore" => "NumMS",
+        "NumpadMemoryRecall" => "NumMR",
+        "NumpadMemoryClear" => "NumMC",
+        "NumpadClear" => "NumClr",
+        "NumpadClearEntry" => "NumCE",
+        "AudioVolumeMute" => "Mute",
+        "AudioVolumeUp" => "Vol+",
+        "AudioVolumeDown" => "Vol-",
+        "MediaPlayPause" => "Play",
+        "MediaStop" | "BrowserStop" => "Stop",
+        "MediaTrackNext" => "Next",
+        "MediaTrackPrevious" => "Prev",
+        "LaunchMail" => "Mail",
+        "LaunchApp1" => "App1",
+        "LaunchApp2" => "App2",
+        "MediaSelect" => "Media",
+        "BrowserBack" => "Back",
+        "BrowserForward" => "Fwd",
+        "BrowserRefresh" => "Reload",
+        "BrowserSearch" => "Search",
+        "BrowserFavorites" => "Fav",
+        "BrowserHome" => "Home",
+        // Numpad digits read as `Num7`; the static table keeps this allocation-free.
+        "Numpad0" => "Num0",
+        "Numpad1" => "Num1",
+        "Numpad2" => "Num2",
+        "Numpad3" => "Num3",
+        "Numpad4" => "Num4",
+        "Numpad5" => "Num5",
+        "Numpad6" => "Num6",
+        "Numpad7" => "Num7",
+        "Numpad8" => "Num8",
+        "Numpad9" => "Num9",
+        other => other,
+    }
 }
 
 /// Write a small JSON object from trusted names, fixed copy, booleans and bounded numbers.
@@ -388,13 +591,16 @@ fn bindings_json(state: &State) -> String {
 
     // Module rows, stacked per column with eased offsets beneath expanded settings.
     let mut heights = [0, 0, 0, MENU_BODY];
+    let mut placed = [false; 3];
     for (index, (module, column, details)) in MODULES.iter().enumerate() {
         let on = enabled[index];
         let expanded = *details > 0 && state.expanded[index];
-        name_parts(&mut json, &[module, "_y"]);
-        json.push_str("[0,");
-        integer(&mut json, heights[*column]);
-        json.push(']');
+        if std::mem::replace(&mut placed[*column], true) {
+            name_parts(&mut json, &[module, "_y"]);
+            json.push_str("[0,");
+            integer(&mut json, heights[*column]);
+            json.push(']');
+        }
         name_parts(&mut json, &[module, "_bar"]);
         json.push_str(if on { "[1,1]" } else { "[1,0]" });
         name_parts(&mut json, &[module, "_indent"]);
@@ -406,26 +612,25 @@ fn bindings_json(state: &State) -> String {
             integer(&mut json, expanded.into());
             name_parts(&mut json, &[module, "_angle"]);
             integer(&mut json, if expanded { 0 } else { -90 });
-            name_parts(&mut json, &[module, "_value"]);
-            value(&mut json, state, index);
         }
         heights[*column] += ROW + if expanded { *details } else { 0 };
     }
+    // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
+    let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
+    name(&mut json, "#reach_value");
+    json.push('"');
+    integer(&mut json, tenths / 10);
+    json.push('.');
+    integer(&mut json, tenths % 10);
+    json.push_str(" blocks\"");
     for (index, target) in KEYED {
         let module = MODULES[index].0;
-        let key = state.key_for(target);
-        name_parts(&mut json, &[module, "_bind"]);
-        text(&mut json, if key.is_empty() { "" } else { key_legend(key) });
+        let bound = !state.key_for(target).is_empty();
         name_parts(&mut json, &[module, "_keycap"]);
-        integer(&mut json, (!key.is_empty()).into());
+        integer(&mut json, bound.into());
+        // The trailing value slides left to make room for the keycap.
         name_parts(&mut json, &[module, "_value_at"]);
-        json.push_str(if key.is_empty() { "[72,6]" } else { "[50,6]" });
-        name_parts(&mut json, &[module, "_key_color"]);
-        json.push_str(if enabled[index] {
-            "[1,0.5412,0.3961,1]"
-        } else {
-            "[0.902,0.9098,0.9216,1]"
-        });
+        json.push_str(if bound { "[50,6]" } else { "[72,6]" });
         name_parts(&mut json, &[module, "_capture"]);
         integer(&mut json, (state.capturing_key == Some(target)).into());
     }
@@ -436,13 +641,9 @@ fn bindings_json(state: &State) -> String {
         let body = if open { heights[column] } else { 0 };
         name_parts(&mut json, &["col_", id, "_pos"]);
         pair(&mut json, x, y);
+        // The drag pad is centred on the desk origin from inside the moving header.
         name_parts(&mut json, &["col_", id, "_pad"]);
-        pair(&mut json, -x - PAD_HALF, -y - PAD_HALF);
-        name_parts(&mut json, &["col_", id, "_tint_at"]);
-        pair(&mut json, x + PAD_HALF, y + PAD_HALF);
-        // Taller than the header while open, so the clip squares the seam, not the corners.
-        name_parts(&mut json, &["col_", id, "_tint_h"]);
-        integer(&mut json, if open { HEADER + 5 } else { HEADER });
+        pair(&mut json, -x, -y);
         name_parts(&mut json, &["col_", id, "_in"]);
         json.push_str("[0,0]");
         name_parts(&mut json, &["col_", id, "_alpha"]);
@@ -473,6 +674,36 @@ fn bindings_json(state: &State) -> String {
             integer(&mut json, all);
             json.push('"');
         }
+    }
+
+    // Control feedback Cinnabar's native layout used to publish.
+    let mut digits = String::with_capacity(2);
+    let mut control = |json: &mut String, index: usize, suffix: &str| {
+        digits.clear();
+        let tens = index / 10;
+        if tens > 0 {
+            digits.push(char::from(b'0' + tens as u8));
+        }
+        digits.push(char::from(b'0' + (index % 10) as u8));
+        name_parts(json, &["c", &digits, suffix]);
+    };
+    for (index, on) in toggles(state) {
+        control(&mut json, index, "_on");
+        integer(&mut json, on.into());
+    }
+    for (index, value, min, max) in sliders(state) {
+        control(&mut json, index, "_text");
+        slider_text(&mut json, value);
+        control(&mut json, index, "_fill");
+        fraction(&mut json, (value - min) / (max - min));
+    }
+    for (index, target) in KEYBINDS {
+        control(&mut json, index, "_text");
+        escaped(&mut json, key_label(state.key_for(target)));
+    }
+    for (index, option) in choices(state) {
+        control(&mut json, index, "_text");
+        text(&mut json, option);
     }
     json.push('}');
     json

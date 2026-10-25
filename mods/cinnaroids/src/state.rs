@@ -6,7 +6,6 @@ use serde_json::Value;
 use crate::aim::Config;
 use crate::jump_reset::{DEFAULT_WINDOW_TICKS, MAX_WINDOW_TICKS, MIN_WINDOW_TICKS};
 
-pub const PRODUCT_NAME: &str = "Cinnaroids";
 pub const PANEL_KEY: &str = "F7";
 const MIN_REACH: f32 = 3.0;
 const MIN_CPS: u8 = 1;
@@ -129,8 +128,7 @@ impl Preferences {
             preferences.show_real_position = value;
         }
         if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
-            preferences.netherite_range =
-                value.clamp(1, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE as u64) as u8;
+            preferences.netherite_range = value.clamp(1, crate::finder::MAX_RANGE as u64) as u8;
         }
         if let Some(value) = values.get("esp_range").and_then(Value::as_u64) {
             preferences.esp_range = value.clamp(1, crate::esp::MAX_RANGE as u64) as u8;
@@ -309,7 +307,6 @@ pub struct State {
     pointer: [f32; 2],
     pub preferences_dirty: bool,
     pub reservations_dirty: bool,
-    pub finder_dirty: bool,
     pub fullbright_dirty: bool,
     clicker: ClickCadence,
 }
@@ -327,7 +324,6 @@ impl State {
             pointer: [PAD_IDLE; 2],
             preferences_dirty: false,
             reservations_dirty: true,
-            finder_dirty: true,
             fullbright_dirty: true,
             clicker: ClickCadence::default(),
         }
@@ -644,7 +640,7 @@ impl State {
             "fullbright" => replace(&mut self.modules.fullbright, value >= 0.5),
             "netherite_range" => replace(
                 &mut self.preferences.netherite_range,
-                value.round().clamp(1.0, mod_api::MAX_BLOCK_HIGHLIGHT_RANGE) as u8,
+                value.round().clamp(1.0, crate::finder::MAX_RANGE) as u8,
             ),
             _ => false,
         };
@@ -652,9 +648,6 @@ impl State {
             self.panel_dirty = true;
             if event.id == "fullbright" {
                 self.fullbright_dirty = true;
-            }
-            if matches!(event.id.as_str(), "netherite" | "netherite_range") {
-                self.finder_dirty = true;
             }
             if matches!(event.id.as_str(), "clicker" | "cps") {
                 self.clicker.reset();
@@ -692,19 +685,16 @@ impl State {
         }
     }
 
+    /// Whether FakeLag's real-position marker should be drawn: only while packets are delayed.
     pub fn show_real_position(&self) -> bool {
         self.packet_delay_ms() != 0 && self.preferences.show_real_position
     }
 
-    pub fn block_highlights(&self) -> Option<mod_api::BlockHighlightSpec> {
-        self.modules.netherite.then(|| mod_api::BlockHighlightSpec {
-            identifiers: vec![
-                "minecraft:ancient_debris".into(),
-                "minecraft:netherite_block".into(),
-            ],
-            range: f32::from(self.preferences.netherite_range),
-            color: [1.0, 0.12, 0.55, 1.0],
-        })
+    /// The Netherite Finder range in blocks while the module is enabled.
+    pub fn finder_range(&self) -> Option<u8> {
+        self.modules
+            .netherite
+            .then_some(self.preferences.netherite_range)
     }
 
     pub fn attack_reach(&self, gameplay: bool) -> Option<f32> {
@@ -884,7 +874,7 @@ impl State {
                 label: "Finder range",
                 value: f32::from(self.preferences.netherite_range),
                 min: 1.0,
-                max: mod_api::MAX_BLOCK_HIGHLIGHT_RANGE,
+                max: crate::finder::MAX_RANGE,
                 step: 1.0,
             },
             Control::Toggle {
@@ -979,14 +969,19 @@ impl State {
                 label: "Player ESP settings",
             },
         ]);
+        let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
-            title: PRODUCT_NAME,
             toggle_key: &self.preferences.menu_key,
-            dark: true,
             capture_key: self.capturing_key.is_some(),
-            style: "compact",
             reference_size: crate::panel::REFERENCE,
             motion: true,
+            widget_colors: WidgetColors {
+                background,
+                surface,
+                text,
+                accent,
+                border,
+            },
             controls,
         };
         let mut json = serde_json::to_string(&panel)?;
@@ -1093,16 +1088,26 @@ fn legacy_key(key: u64) -> Option<String> {
     })
 }
 
+/// Cinnabar's panel schema: the surface is appended after serialization, and the host draws no
+/// title, theme or native layout of its own.
 #[derive(Serialize)]
 struct Panel<'a> {
-    title: &'a str,
     toggle_key: &'a str,
-    dark: bool,
     capture_key: bool,
-    style: &'a str,
     reference_size: [f32; 2],
     motion: bool,
+    widget_colors: WidgetColors,
     controls: Vec<Control<'a>>,
+}
+
+/// Colours of the host-drawn popup widgets; see [`crate::panel::WIDGET_COLORS`].
+#[derive(Serialize)]
+struct WidgetColors {
+    background: [f32; 4],
+    surface: [f32; 4],
+    text: [f32; 4],
+    accent: [f32; 4],
+    border: [f32; 4],
 }
 
 #[derive(Serialize)]

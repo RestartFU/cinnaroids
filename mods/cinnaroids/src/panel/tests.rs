@@ -1,5 +1,8 @@
 use serde_json::Value;
 
+/// Bindings, and separately transitions, one Cinnabar panel surface retains.
+const MAX_PANEL_BINDINGS: usize = 256;
+
 /// Collect native action routes throughout the authored surface.
 fn actions(node: &Value, result: &mut Vec<String>) {
     if let Some(mappings) = node["button_mappings"].as_array() {
@@ -36,6 +39,11 @@ fn panel(state: &crate::state::State) -> (Value, Value) {
     let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
     let document = serde_json::from_str(panel["surface"]["document"].as_str().unwrap()).unwrap();
     (panel, document)
+}
+
+/// The same as `panel`, for tests whose local `panel` value shadows it.
+fn panel_of(state: &crate::state::State) -> (Value, Value) {
+    panel(state)
 }
 
 fn column<'a>(document: &'a Value, id: &str) -> &'a Value {
@@ -83,7 +91,233 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert!(!routes.iter().any(|route| route == "mod.close"));
     assert_eq!(panel["motion"], true);
-    assert_eq!(panel["dark"], true);
+    for removed in ["title", "dark", "style", "theme", "sections"] {
+        assert!(panel.get(removed).is_none(), "{removed}");
+    }
+    // Host popups keep the dark look the removed `dark` flag used to give them.
+    let colors = &panel["widget_colors"];
+    assert_eq!(colors.as_object().unwrap().len(), 5);
+    for (slot, color) in ["background", "surface", "text", "accent", "border"]
+        .into_iter()
+        .zip(super::WIDGET_COLORS)
+    {
+        let channels: Vec<f32> = colors[slot]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|channel| channel.as_f64().unwrap() as f32)
+            .collect();
+        assert_eq!(channels, color, "{slot}");
+    }
+}
+
+/// Every binding name a document node reads; bound label text must keep its own binding.
+fn bound(node: &Value, result: &mut Vec<String>) {
+    let names: Vec<_> = node["bindings"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|binding| binding["binding_name"].as_str().unwrap().to_owned())
+        .collect();
+    if let Some(text) = node["text"].as_str().filter(|text| text.starts_with('#')) {
+        assert!(
+            names.iter().any(|name| name == text),
+            "{text} label is unbound"
+        );
+    }
+    result.extend(names);
+    for entry in node["controls"].as_array().into_iter().flatten() {
+        for child in entry.as_object().unwrap().values() {
+            bound(child, result);
+        }
+    }
+}
+
+#[test]
+fn the_surface_reads_only_values_this_component_publishes() {
+    use crate::state::{Preferences, State};
+    let mut state = State::new(Preferences::default());
+    state.drag = None;
+    let (panel, document) = panel(&state);
+    let bindings = panel["surface"]["bindings"].as_object().unwrap();
+    let mut names = Vec::new();
+    bound(&document["panel"], &mut names);
+    for definition in document.as_object().unwrap().values() {
+        bound(definition, &mut names);
+    }
+    assert!(!names.is_empty());
+    for name in &names {
+        assert!(
+            !name.starts_with("#row_"),
+            "{name}: Cinnabar no longer publishes native row values"
+        );
+        assert!(bindings.contains_key(name), "{name} is never published");
+    }
+    assert!(
+        bindings.len() <= MAX_PANEL_BINDINGS,
+        "{} bindings",
+        bindings.len()
+    );
+}
+
+#[test]
+fn every_value_control_publishes_its_own_feedback() {
+    use crate::state::{AimMode, KeybindTarget, Preferences, State};
+    let mut state = State::new(Preferences {
+        clicker_key: "ShiftRight".into(),
+        aim_key: "Numpad7".into(),
+        reach_blocks: 4.2,
+        aim_mode: AimMode::Continuous,
+        esp_color: 2,
+        fake_lag_ms: 250,
+        show_real_position: true,
+        ..Preferences::default()
+    });
+    state.modules.aim = true;
+    state.capturing_key = Some(KeybindTarget::Clicker);
+    let (panel, _) = panel(&state);
+    let bindings = &panel["surface"]["bindings"];
+    let mut checked = 0;
+    for (index, control) in panel["controls"].as_array().unwrap().iter().enumerate() {
+        let id = control["id"].as_str().unwrap();
+        let name = |suffix: &str| format!("#c{index}_{suffix}");
+        match control["kind"].as_str().unwrap() {
+            "toggle" => {
+                let on = control["value"].as_bool().unwrap();
+                assert_eq!(bindings[name("on")], u8::from(on), "{id}");
+            }
+            "slider" if !id.starts_with("drag_") => {
+                let value = control["value"].as_f64().unwrap();
+                let (min, max) = (
+                    control["min"].as_f64().unwrap(),
+                    control["max"].as_f64().unwrap(),
+                );
+                let text = format!("{value:.2}");
+                let text = text.trim_end_matches('0').trim_end_matches('.');
+                assert_eq!(bindings[name("text")], text, "{id}");
+                let fill = bindings[name("fill")].as_f64().unwrap();
+                assert!((fill - (value - min) / (max - min)).abs() < 1e-4, "{id}");
+            }
+            "keybind" => {
+                let key = control["key"].as_str().unwrap();
+                assert_eq!(bindings[name("text")], super::key_label(key), "{id}");
+            }
+            "choice" => {
+                let option = &control["options"][control["index"].as_u64().unwrap() as usize];
+                assert_eq!(&bindings[name("text")], option, "{id}");
+            }
+            _ => continue,
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 13 + 7 + 5 + 2);
+    assert_eq!(bindings["#c3_text"], "RShift");
+    assert_eq!(bindings["#c7_text"], "Num7");
+    assert_eq!(bindings["#c9_text"], "4.2");
+    assert_eq!(bindings["#c6_text"], "Continuous");
+    assert_eq!(bindings["#c32_text"], "Cyan");
+    assert_eq!(bindings["#c4_on"], 1);
+    assert_eq!(bindings["#c16_on"], 1);
+}
+
+#[test]
+fn feedback_formatting_matches_the_earlier_native_controls() {
+    let text = |value: f32| {
+        let mut json = String::new();
+        super::slider_text(&mut json, value);
+        serde_json::from_str::<String>(&json).unwrap()
+    };
+    assert_eq!(text(3.0), "3");
+    assert_eq!(text(4.2), "4.2");
+    assert_eq!(text(4.25), "4.25");
+    assert_eq!(text(1000.0), "1000");
+    assert_eq!(text(0.0), "0");
+    let fraction = |value: f32| {
+        let mut json = String::new();
+        super::fraction(&mut json, value);
+        json.parse::<f64>().unwrap()
+    };
+    assert_eq!(fraction(0.0), 0.0);
+    assert_eq!(fraction(1.0), 1.0);
+    assert_eq!(fraction(2.0), 1.0);
+    assert_eq!(fraction(0.5), 0.5);
+    assert_eq!(fraction(1.0 / 29.0), 0.0345);
+    for (key, label) in [
+        ("", "None"),
+        ("KeyR", "R"),
+        ("Digit4", "4"),
+        ("F7", "F7"),
+        ("ShiftRight", "RShift"),
+        ("ArrowLeft", "Left"),
+        ("Numpad0", "Num0"),
+        ("NumpadAdd", "Num+"),
+        ("Backslash", "\\"),
+    ] {
+        assert_eq!(super::key_label(key), label);
+        let mut json = String::new();
+        super::escaped(&mut json, super::key_label(key));
+        assert_eq!(serde_json::from_str::<String>(&json).unwrap(), label);
+    }
+}
+
+/// Finds a named descendant anywhere below a node.
+fn find<'a>(node: &'a Value, name: &str) -> Option<&'a Value> {
+    node["controls"].as_array()?.iter().find_map(|entry| {
+        entry.as_object().unwrap().iter().find_map(|(key, child)| {
+            if key.split('@').next() == Some(name) {
+                Some(child)
+            } else {
+                find(child, name)
+            }
+        })
+    })
+}
+
+#[test]
+fn hover_and_press_are_native_button_states() {
+    let state = crate::state::State::new(Default::default());
+    let (_, document) = panel(&state);
+    fn visit(node: &Value, count: &mut usize) {
+        if node["hover_control"] == "hover" {
+            assert_eq!(node["pressed_control"], "press");
+            for state in ["hover", "press"] {
+                assert_eq!(
+                    child(node, state)["visible"],
+                    false,
+                    "{state} starts hidden"
+                );
+            }
+            *count += 1;
+        }
+        for entry in node["controls"].as_array().into_iter().flatten() {
+            for value in entry.as_object().unwrap().values() {
+                visit(value, count);
+            }
+        }
+    }
+    let mut count = 0;
+    visit(&document["panel"], &mut count);
+    // Eight rows, seven disclosure arrows, five keycaps, two dropdowns and Reset layout.
+    assert_eq!(count, 8 + 7 + 5 + 2 + 1);
+}
+
+#[test]
+fn trailing_values_reuse_slider_text_with_a_fixed_unit() {
+    let state = crate::state::State::new(Default::default());
+    let (panel, document) = panel(&state);
+    let clicker = find(&document["panel"], "clicker").unwrap();
+    let value = find(clicker, "value").unwrap();
+    let number = find(value, "number").unwrap();
+    assert_eq!(number["text"], "#c2_text");
+    assert_eq!(find(value, "unit").unwrap()["text"], " CPS");
+    let aim = find(&document["panel"], "aim").unwrap();
+    assert_eq!(
+        find(find(aim, "value").unwrap(), "unit").unwrap()["text"],
+        "%"
+    );
+    let bindings = &panel["surface"]["bindings"];
+    assert_eq!(bindings["#c2_text"], "20");
+    assert_eq!(bindings["#reach_value"], "3.0 blocks");
 }
 
 #[test]
@@ -128,9 +362,13 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
         transitions.get("#col_combat_pos").is_none(),
         "drags follow the pointer directly"
     );
-    assert!(transitions.as_object().unwrap().len() <= 128);
+    assert!(transitions.as_object().unwrap().len() <= MAX_PANEL_BINDINGS);
     let bindings = surface["bindings"].as_object().unwrap();
-    assert!(bindings.len() <= 128, "{} bindings", bindings.len());
+    assert!(
+        bindings.len() <= MAX_PANEL_BINDINGS,
+        "{} bindings",
+        bindings.len()
+    );
     assert_eq!(bindings["#world_blur"], 4);
     assert_eq!(bindings["#col_menu_alpha"], 1);
     assert_eq!(bindings["#col_menu_h"], 52);
@@ -144,6 +382,17 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
     );
     assert_eq!(bindings["#menu_capture"], 0);
     assert_eq!(transitions["#menu_capture"]["duration"], 0.14);
+    // The header divider fades with the column's open state.
+    let divider = child(child(column(&document, "combat"), "entrance"), "divider");
+    assert_eq!(divider["bindings"][0]["binding_name"], "#col_combat_open");
+    assert_eq!(divider["bindings"][0]["binding_name_override"], "#alpha");
+    assert_eq!(transitions["#col_combat_open"]["duration"], 0.16);
+    assert_eq!(transitions["#col_combat_open"]["easing"], "out_cubic");
+    assert_eq!(bindings["#col_combat_open"], 1);
+    // A row keycap fades quickly while its value slides with the settle curve.
+    assert_eq!(transitions["#clicker_keycap"]["duration"], 0.16);
+    assert_eq!(transitions["#clicker_keycap"]["easing"], "out_cubic");
+    assert_eq!(transitions["#clicker_value_at"]["duration"], 0.22);
 }
 
 #[test]
@@ -182,10 +431,13 @@ fn disclosure_and_toggles_change_only_bindings() {
     assert_eq!(bindings["#reach_angle"], 0);
     assert_eq!(bindings["#aim_h"], 0);
     assert_eq!(bindings["#jump_reset_y"], serde_json::json!([0, 120]));
+    assert!(bindings.get("#clicker_y").is_none(), "first rows stay put");
     assert_eq!(bindings["#col_combat_h"], 140);
     assert_eq!(bindings["#col_combat_bg"], 167);
     assert_eq!(bindings["#reach_value"], "4.2 blocks");
+    assert_eq!(bindings["#c9_text"], "4.2");
     assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
+    assert_eq!(bindings["#c14_on"], 1);
     assert_eq!(bindings["#col_network_count"], "1/1");
 }
 
@@ -201,19 +453,32 @@ fn rows_keep_values_and_show_bound_keys_as_keycaps() {
     state.capturing_key = Some(crate::state::KeybindTarget::Aim);
     let (panel, _) = panel(&state);
     let bindings = &panel["surface"]["bindings"];
-    assert_eq!(bindings["#clicker_bind"], "R");
-    assert_eq!(bindings["#aim_bind"], "4");
-    assert_eq!(bindings["#reach_bind"], "");
+    // Row keycaps and the settings keycaps share one legend.
+    assert_eq!(bindings["#c3_text"], "R");
+    assert_eq!(bindings["#c7_text"], "4");
+    assert_eq!(bindings["#c10_text"], "None");
     assert_eq!(bindings["#reach_keycap"], 0);
     assert_eq!(bindings["#clicker_keycap"], 1);
-    assert_eq!(
-        bindings["#clicker_value"], "20 CPS",
-        "values stay visible when bound"
-    );
+    assert_eq!(bindings["#reach_value_at"], serde_json::json!([72, 6]));
+    assert_eq!(bindings["#clicker_value_at"], serde_json::json!([50, 6]));
+    assert_eq!(bindings["#c2_text"], "20", "values stay visible when bound");
     assert_eq!(bindings["#reach_value"], "3.0 blocks");
-    assert_eq!(bindings["#clicker_key_color"][0], 1);
+    // Enabled rows light the coral legend with the row's own progress.
+    assert_eq!(bindings["#c1_on"], 1);
+    assert_eq!(bindings["#c4_on"], 0);
     assert_eq!(bindings["#aim_capture"], 1);
     assert_eq!(bindings["#clicker_capture"], 0);
+    let (_, document) = panel_of(&state);
+    let clicker = find(&document["panel"], "clicker").unwrap();
+    let value = find(clicker, "value").unwrap();
+    assert_eq!(value["bindings"][0]["binding_name"], "#clicker_value_at");
+    assert_eq!(value["bindings"][0]["binding_name_override"], "#offset");
+    let keycap = find(clicker, "keycap").unwrap();
+    assert_eq!(find(keycap, "legend").unwrap()["text"], "#c3_text");
+    assert_eq!(
+        find(keycap, "lit").unwrap()["bindings"][1]["binding_name"],
+        "#c1_on"
+    );
     assert_eq!(super::key_legend(""), "None");
     assert_eq!(super::key_legend("F7"), "F7");
     assert_eq!(super::key_legend("Key"), "Key");
@@ -231,21 +496,23 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
     let bindings = &panel["surface"]["bindings"];
     assert_eq!(bindings["#col_render_h"], 0);
     assert_eq!(bindings["#col_render_bg"], 22);
+    assert_eq!(bindings["#col_render_open"], 0);
     assert_eq!(bindings["#col_render_angle"], -90);
     assert_eq!(bindings["#col_render_pos"], serde_json::json!([12.5, -40]));
+    // The pad's centre cancels the column offset; its tints sit back at the column.
+    assert_eq!(bindings["#col_render_pad"], serde_json::json!([-12.5, 40]));
+    let (_, document) = panel_of(&state);
+    let grip = child(child(column(&document, "render"), "entrance"), "grip");
+    let pad = child(grip, "grip");
+    assert_eq!(pad["anchor_to"], "center");
+    let over = child(pad, "over");
+    assert_eq!(over["anchor_from"], "center");
+    assert_eq!(over["bindings"][0]["binding_name"], "#col_render_pos");
+    // Tints share the plate height: exactly the header while collapsed keeps corners round.
     assert_eq!(
-        bindings["#col_render_pad"],
-        serde_json::json!([-2060.5, -2008])
+        child(over, "tint")["bindings"][0]["binding_name"],
+        "#col_render_bg"
     );
-    assert_eq!(
-        bindings["#col_render_tint_at"],
-        serde_json::json!([2060.5, 2008])
-    );
-    assert_eq!(
-        bindings["#col_render_tint_h"], 22,
-        "collapsed headers keep rounded corners"
-    );
-    assert_eq!(bindings["#col_combat_tint_h"], 27);
     assert_eq!(bindings["#col_menu_h"], 0);
     assert_eq!(bindings["#col_menu_bg"], 22);
     assert_eq!(bindings["#col_menu_alpha"], 1);

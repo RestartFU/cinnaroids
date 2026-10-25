@@ -1,7 +1,9 @@
-//! Personal Cinnaroids modules managed by the host-rendered in-game panel.
+//! Personal Cinnaroids modules, controlled from the component's own in-game panel surface.
 
 pub mod aim;
 pub mod esp;
+pub mod finder;
+pub mod ghost;
 #[cfg(target_arch = "wasm32")]
 mod guest;
 pub mod jump_reset;
