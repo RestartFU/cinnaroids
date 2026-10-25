@@ -10,17 +10,23 @@ use mod_api::bindings::{
 };
 
 use mod_api::bindings::cinnabar::world_draw::{
-    drawing::{self, DrawError, ErrorCode, Handle, Permissions},
+    drawing::{self, DrawError, ErrorCode, Handle, Instance, Permissions},
     masks,
 };
 
 use crate::{
     aim::{AimAssist, Frame, Player, Vec3},
-    finder::{self, Finder},
+    finder::{self, Change},
     ghost::{self, Marker},
     jump_reset::{Frame as JumpFrame, JumpReset},
     state::{Controls, Event, Preferences, State},
 };
+
+// Drawing calls one callback may make, which Cinnabar enforces by trapping: capability checks
+// for the finder, marker and ESP, the finder's cube geometry and placements, and the marker's
+// geometry and placements.
+const _: () =
+    assert!(3 + 1 + finder::SYNC_CALLS + 2 * crate::ghost::INSTANCES <= mod_api::MAX_RENDER_CALLS);
 
 thread_local! {
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
@@ -29,7 +35,7 @@ thread_local! {
     /// The ESP label slots while their HUD surface is set.
     static ESP_LABELS: RefCell<Option<crate::esp::Labels>> = const { RefCell::new(None) };
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
-    static FINDER: RefCell<Finder> = RefCell::new(Finder::default());
+    static FINDER: RefCell<finder::Finder> = RefCell::new(finder::Finder::default());
     static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
     static MARKER: RefCell<Marker> = RefCell::new(Marker::default());
 }
@@ -60,7 +66,7 @@ impl Guest for Cinnaroids {
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
             clear_esp();
-            netherite(None, None);
+            netherite(None, None, false);
             real_position(false, None);
             return;
         };
@@ -92,8 +98,9 @@ impl Guest for Cinnaroids {
             };
             // These draw only over focused gameplay, as the host-drawn versions did.
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
-            player_esp(&modules, drawn);
-            netherite(modules.finder_range(), drawn);
+            let labelled = player_esp(&modules, drawn);
+            // A frame that names new labels leaves no fuel for comparing the finder's answer.
+            netherite(modules.finder_range(), drawn, labelled);
             real_position(modules.show_real_position(), drawn);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
             let cadence = snapshot.as_ref().map(|frame| {
@@ -285,86 +292,95 @@ fn stale(error: &DrawError) -> bool {
     error.code == ErrorCode::StaleHandle
 }
 
-/// Searches for the finder's blocks on its cadence and replaces the retained cubes when the
-/// selection changes. `range` is set while the module is enabled.
-fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>) {
+/// Renews the finder's block search every frame and, on its cadence, takes a changed answer as
+/// the selection; then moves the retained cubes a bounded step toward it. `range` is set while
+/// the module is enabled. Outside focused gameplay the cubes stay as they are. A `busy` frame
+/// only renews the search.
+fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool) {
     FINDER.with(|finder| {
         let mut finder = finder.borrow_mut();
-        if range.is_none() {
-            finder.clear_notice();
-        }
-        let (Some(range), Some(frame)) = (range, frame) else {
-            clear_cubes(&mut finder);
-            return;
-        };
         let capabilities = drawing::capabilities();
         if !capabilities.contains(Permissions::WORLD_DRAW) {
-            finder.hide();
+            // Drawing authority changes reload the component; nothing was drawn.
+            finder.reset();
             return;
         }
-        let through_walls = capabilities.contains(Permissions::RENDER_THROUGH_WALLS);
-        if !finder.due(
-            frame.session,
-            frame.dimension,
-            range,
-            through_walls,
-            frame.frame_seconds,
-        ) {
-            return;
-        }
-        let found = FINDER_BLOCKS
-            .with(|blocks| terrain::find_blocks(blocks, f32::from(range), finder::LIMIT as u32));
-        let positions = match found {
-            Ok(positions) => positions,
-            Err(error) => {
-                clear_cubes(&mut finder);
-                if error == terrain::ReadError::Denied && finder.notify_denied() {
-                    let _ = hud::set_label("Netherite Finder: terrain permission denied");
-                }
-                return;
+        match (range, frame) {
+            (None, _) => {
+                finder.clear_notice();
+                finder.clear();
             }
-        };
-        if !finder.changed(&positions) {
+            (Some(_), None) => finder.pause(),
+            (Some(range), Some(frame)) => {
+                let through_walls = capabilities.contains(Permissions::RENDER_THROUGH_WALLS);
+                // A search left out of a callback is unsubscribed and the client stops scanning.
+                let found = FINDER_BLOCKS.with(|blocks| {
+                    terrain::find_blocks(blocks, f32::from(range), finder::LIMIT as u32)
+                });
+                let due = finder.due(
+                    frame.session,
+                    frame.dimension,
+                    range,
+                    through_walls,
+                    frame.frame_seconds,
+                );
+                match found {
+                    Ok(_) if due && busy => finder.postpone(),
+                    Ok(positions) if due => {
+                        finder.apply(frame.dimension, through_walls, &positions);
+                    }
+                    Ok(_) => {}
+                    Err(terrain::ReadError::Denied) => {
+                        finder.clear();
+                        if finder.notify_denied() {
+                            let _ = hud::set_label("Netherite Finder: terrain permission denied");
+                        }
+                    }
+                    // Other failures keep the cubes until a later answer.
+                    Err(_) => {}
+                }
+            }
+        }
+        if busy {
+            return;
+        }
+        if finder.comparing() {
+            finder.compare(finder::COMPARE_BLOCKS);
+            return;
+        }
+        if finder.synced() {
             return;
         }
         let geometry = match finder.geometry {
             Some(geometry) => geometry,
+            None if !finder.places() => return,
             None => match drawing::create_geometry(&finder::cube()) {
                 Ok(geometry) => *finder.geometry.insert(geometry),
-                Err(_) => {
-                    finder.hide();
-                    return;
-                }
+                Err(_) => return,
             },
         };
-        let mut instances = std::mem::take(&mut finder.instances);
-        finder::place(
-            &mut instances,
-            geometry,
-            frame.dimension,
-            &positions,
-            through_walls,
-        );
-        let replaced = drawing::replace_frame_group(finder::GROUP, &instances);
-        finder.instances = instances;
-        if let Err(error) = replaced {
-            if stale(&error) {
-                finder.reset();
-            } else {
-                finder.hide();
+        let (dimension, through_walls) = finder.placement();
+        // One placement is reused for every call; only its anchor changes.
+        let mut placement: Option<Instance> = None;
+        let synced = finder.sync(finder::SYNC_CALLS, |change| match change {
+            Change::Create(position) | Change::Move(_, position) => {
+                let instance = placement.get_or_insert_with(|| {
+                    finder::cube_instance(geometry, dimension, position, through_walls)
+                });
+                instance.anchor = finder::anchor(dimension, position);
+                match change {
+                    Change::Move(handle, _) => drawing::update(handle, instance).map(|()| None),
+                    _ => drawing::create(instance).map(Some),
+                }
             }
+            Change::Remove(handle) => drawing::remove(handle).map(|()| None),
+        });
+        if let Err(error) = synced
+            && stale(&error)
+        {
+            finder.reset();
         }
     });
-}
-
-/// Empties a shown finder group; a lost geometry token restarts the finder.
-fn clear_cubes(finder: &mut Finder) {
-    if finder.hide()
-        && let Err(error) = drawing::replace_frame_group(finder::GROUP, &[])
-        && stale(&error)
-    {
-        finder.reset();
-    }
 }
 
 /// Draws FakeLag's last relayed position while the option is on and packets are delayed.
