@@ -2,7 +2,8 @@
 //! translucent coral player box with thin edges.
 //!
 //! Cinnabar reports the relayed position through `gameplay.read-relayed-position`; this
-//! module smooths it for display and supplies the geometry the host previously drew.
+//! module smooths it for display and supplies the geometry the host previously drew, placed as
+//! retained `world-draw` instances that move with the smoothed position.
 
 use mod_api::bindings::cinnabar::world_draw::drawing::{
     Anchor, GeometrySpec, Handle, Instance, Mesh, Polyline, Vertex, WidthMode, WorldAnchor,
@@ -21,8 +22,6 @@ pub const EDGE_WIDTH: f32 = 0.012;
 const RATE: f32 = 40.0;
 /// Squared distance beyond which a new sample is a teleport and snaps.
 const SNAP_SQUARED: f32 = 64.0;
-/// Retained drawing group holding the marker.
-pub const GROUP: &str = "real_position";
 /// Retained instances: the face mesh and four edge paths.
 pub const INSTANCES: usize = 5;
 
@@ -69,12 +68,12 @@ fn distance_squared(a: [f32; 3], b: [f32; 3]) -> f32 {
     (0..3).map(|axis| (a[axis] - b[axis]).powi(2)).sum()
 }
 
-/// Standing bounds at the feet, or none when the eye is inside them so a first-person view
+/// Standing bounds at the feet, or none when the camera is inside them so a first-person view
 /// is not tinted entirely.
-pub fn bounds(feet: [f32; 3], eye: [f32; 3]) -> Option<[[f32; 3]; 2]> {
+pub fn bounds(feet: [f32; 3], camera: [f32; 3]) -> Option<[[f32; 3]; 2]> {
     let min = [feet[0] - HALF_WIDTH, feet[1], feet[2] - HALF_WIDTH];
     let max = [feet[0] + HALF_WIDTH, feet[1] + HEIGHT, feet[2] + HALF_WIDTH];
-    let inside = (0..3).all(|axis| eye[axis] >= min[axis] && eye[axis] <= max[axis]);
+    let inside = (0..3).all(|axis| camera[axis] >= min[axis] && camera[axis] <= max[axis]);
     (!inside).then_some([min, max])
 }
 
@@ -168,25 +167,34 @@ pub fn instances(
         .collect()
 }
 
-/// Marker drawing state: uploaded geometry, smoothing and whether the group is shown.
+/// The marker's retained instances and where they stand.
+#[derive(Clone, Copy)]
+pub struct Placed {
+    pub handles: [Handle; INSTANCES],
+    pub dimension: i32,
+    pub feet: [f32; 3],
+}
+
+/// Marker drawing state: uploaded geometry, smoothing and the placed instances.
 #[derive(Default)]
 pub struct Marker {
     pub geometries: Option<[Handle; INSTANCES]>,
     pub smoothed: Smoothed,
-    pub shown: bool,
+    /// The retained instances while shown.
+    pub placed: Option<Placed>,
 }
 
 impl Marker {
     /// The bounds' feet origin to draw this frame, if any. `sample` is the session and the
-    /// relayed feet position; `eye` is the current camera eye.
+    /// relayed feet position; `camera` is the presented camera position.
     pub fn update(
         &mut self,
         sample: Option<(u64, [f32; 3])>,
-        eye: [f32; 3],
+        camera: [f32; 3],
         seconds: f32,
     ) -> Option<[f32; 3]> {
         let feet = self.smoothed.update(sample, seconds)?;
-        bounds(feet, eye).map(|_| feet)
+        bounds(feet, camera).map(|_| feet)
     }
 
     /// Drops all retained state after a failed drawing call so the next frame starts over.

@@ -37,14 +37,16 @@ fn new_sessions_teleports_and_reenabled_tracking_snap() {
 }
 
 #[test]
-fn marker_uses_standing_bounds_and_hides_around_the_eye() {
+fn marker_uses_standing_bounds_and_hides_around_the_camera() {
     let feet = [10., 64., -3.];
     let [min, max] = bounds(feet, [0., 66., 0.]).unwrap();
     let near = |a: [f32; 3], b: [f32; 3]| (0..3).all(|axis| (a[axis] - b[axis]).abs() < 1e-5);
     assert!(near(min, [9.7, 64., -3.3]), "{min:?}");
     assert!(near(max, [10.3, 65.8, -2.7]), "{max:?}");
-    // A first-person eye inside the box would otherwise tint the whole view.
+    // A first-person camera inside the box would otherwise tint the whole view; a
+    // third-person camera behind the same eye sees it.
     assert!(bounds(feet, [10., 65.62, -3.]).is_none());
+    assert!(bounds(feet, [10., 66.5, 1.]).is_some());
     let mut marker = Marker::default();
     assert_eq!(marker.update(Some((1, feet)), [10., 65.62, -3.], 0.), None);
     assert_eq!(
@@ -115,5 +117,4 @@ fn instances_follow_the_feet_with_world_width_edges_and_depth() {
             assert_eq!(instance.width_mode, WidthMode::World);
         }
     }
-    assert!(GROUP.len() <= mod_api::MAX_DRAW_GROUP_NAME_BYTES);
 }

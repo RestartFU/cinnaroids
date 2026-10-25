@@ -67,7 +67,7 @@ impl Guest for Cinnaroids {
             let _ = gameplay::cancel_jump();
             clear_esp();
             netherite(None, None, false);
-            real_position(false, None);
+            real_position(false, None, false);
             return;
         };
         MODULES.with(|modules| {
@@ -101,7 +101,7 @@ impl Guest for Cinnaroids {
             let labelled = player_esp(&modules, drawn);
             // A frame that names new labels leaves no fuel for comparing the finder's answer.
             netherite(modules.finder_range(), drawn, labelled);
-            real_position(modules.show_real_position(), drawn);
+            real_position(modules.show_real_position(), drawn, labelled);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
             let cadence = snapshot.as_ref().map(|frame| {
                 (
@@ -383,8 +383,9 @@ fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool) 
     });
 }
 
-/// Draws FakeLag's last relayed position while the option is on and packets are delayed.
-fn real_position(show: bool, frame: Option<&gameplay::Snapshot>) {
+/// Draws FakeLag's last relayed position while the option is on and packets are delayed. A
+/// `busy` frame does not place a hidden marker.
+fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool) {
     MARKER.with(|marker| {
         let mut marker = marker.borrow_mut();
         let frame =
@@ -393,45 +394,98 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>) {
             let position = gameplay::read_relayed_position().ok().flatten()?;
             Some((frame.session, [position.x, position.y, position.z]))
         });
-        let eye = frame.map_or([0.; 3], |frame| [frame.eye.x, frame.eye.y, frame.eye.z]);
+        // The presented camera, including third person, decides whether it is inside the box;
+        // the eye stands in when the host has no pose.
+        let camera = sample.and(frame).map_or([0.; 3], |frame| {
+            let camera = gameplay::read_camera()
+                .ok()
+                .flatten()
+                .map_or(frame.eye, |pose| pose.position);
+            [camera.x, camera.y, camera.z]
+        });
         let seconds = frame.map_or(0., |frame| frame.frame_seconds);
-        let (Some(feet), Some(frame)) = (marker.update(sample, eye, seconds), frame) else {
-            if std::mem::take(&mut marker.shown)
-                && let Err(error) = drawing::replace_frame_group(ghost::GROUP, &[])
-                && stale(&error)
-            {
-                marker.reset();
-            }
-            return;
-        };
-        let geometries = match marker.geometries {
-            Some(geometries) => geometries,
-            None => {
-                let mut created = Vec::with_capacity(ghost::INSTANCES);
-                for spec in &ghost::geometries() {
-                    match drawing::create_geometry(spec) {
-                        Ok(handle) => created.push(handle),
-                        Err(_) => {
-                            for handle in created {
-                                let _ = drawing::remove(handle);
-                            }
-                            return;
-                        }
-                    }
-                }
-                let Ok(geometries) = <[Handle; ghost::INSTANCES]>::try_from(created) else {
-                    return;
-                };
-                *marker.geometries.insert(geometries)
-            }
-        };
-        let instances = ghost::instances(&geometries, frame.dimension, feet);
-        match drawing::replace_frame_group(ghost::GROUP, &instances) {
-            Ok(()) => marker.shown = true,
-            Err(error) if stale(&error) => marker.reset(),
-            Err(_) => marker.shown = false,
+        let target = marker
+            .update(sample, camera, seconds)
+            .zip(frame)
+            .map(|(feet, frame)| (frame.dimension, feet));
+        if let Err(error) = place_marker(&mut marker, target, busy)
+            && stale(&error)
+        {
+            marker.reset();
         }
     });
+}
+
+/// Places, moves or removes the marker's retained instances to stand at `target`, a dimension
+/// and feet position; at most one drawing call per instance, plus the geometry once. Placing a
+/// hidden marker waits for a frame that is not `busy`.
+fn place_marker(
+    marker: &mut Marker,
+    target: Option<(i32, [f32; 3])>,
+    busy: bool,
+) -> Result<(), DrawError> {
+    let Some((dimension, feet)) = target else {
+        if let Some(placed) = marker.placed.take() {
+            for handle in placed.handles {
+                drawing::remove(handle)?;
+            }
+        }
+        return Ok(());
+    };
+    if marker
+        .placed
+        .is_some_and(|placed| (placed.dimension, placed.feet) == (dimension, feet))
+        || (busy && marker.placed.is_none())
+    {
+        return Ok(());
+    }
+    let geometries = match marker.geometries {
+        Some(geometries) => geometries,
+        None => {
+            let mut created = Vec::with_capacity(ghost::INSTANCES);
+            for spec in &ghost::geometries() {
+                match drawing::create_geometry(spec) {
+                    Ok(handle) => created.push(handle),
+                    Err(error) => {
+                        for handle in created {
+                            let _ = drawing::remove(handle);
+                        }
+                        return Err(error);
+                    }
+                }
+            }
+            let geometries =
+                <[Handle; ghost::INSTANCES]>::try_from(created).expect("one geometry per instance");
+            *marker.geometries.insert(geometries)
+        }
+    };
+    let instances = ghost::instances(&geometries, dimension, feet);
+    if let Some(placed) = &mut marker.placed {
+        for (handle, instance) in placed.handles.iter().zip(&instances) {
+            drawing::update(*handle, instance)?;
+        }
+        placed.dimension = dimension;
+        placed.feet = feet;
+        return Ok(());
+    }
+    let mut created = Vec::with_capacity(ghost::INSTANCES);
+    for instance in &instances {
+        match drawing::create(instance) {
+            Ok(handle) => created.push(handle),
+            Err(error) => {
+                for handle in created {
+                    let _ = drawing::remove(handle);
+                }
+                return Err(error);
+            }
+        }
+    }
+    marker.placed = Some(ghost::Placed {
+        handles: <[Handle; ghost::INSTANCES]>::try_from(created).expect("one handle per instance"),
+        dimension,
+        feet,
+    });
+    Ok(())
 }
 
 /// Refreshes a bounded union of admitted actor meshes with host-owned outline and glow.
