@@ -120,7 +120,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mod-api"
 version = "0.1.28"
-source = "git+https://github.com/cinnabar-mc/cinnabar?rev=9ef2b4c28d904a351aaf5cd7a4a5f16902d55d34#9ef2b4c28d904a351aaf5cd7a4a5f16902d55d34"
+source = "git+https://github.com/cinnabar-mc/cinnabar?rev=ee9dc8fb6d493a050bed21f650d84f731fc69789#ee9dc8fb6d493a050bed21f650d84f731fc69789"
 dependencies = [
  "serde",
  "wit-bindgen",
