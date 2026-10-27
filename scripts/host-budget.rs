@@ -1463,7 +1463,7 @@ fn combined_workload(
             render_through_walls: true,
             ..Default::default()
         },
-        &maximum_settings(stress == Stress::Maximum),
+        &stress.settings(),
     );
     let mut events = vec![("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)];
     if esp {
@@ -1506,11 +1506,15 @@ fn combined_workload(
         let j = keys.iter().position(|key| key == "NumpadMultiply").unwrap();
         keys.swap(j, 109);
     }
-    let held: Vec<_> = keys
+    let mut held: Vec<_> = keys
         .iter()
         .take(mod_api::MAX_CONTROL_KEYS)
         .cloned()
         .collect();
+    if stress.recurring() {
+        held.retain(|key| key != "KeyJ");
+        held.push("KeyL".into());
+    }
     assert_eq!(held.len(), 64);
     assert!(!held.iter().any(|key| key == "NumpadMultiply"));
     let mut entries: Vec<_> = keys
@@ -1536,7 +1540,7 @@ fn combined_workload(
         entries.push(entries[0].clone());
     }
     assert_eq!(entries.len(), 128);
-    if stress == Stress::Maximum {
+    if stress == Stress::Maximum || matches!(stress, Stress::Fair(_, _) | Stress::MissingMesh) {
         for (index, entry) in entries.iter_mut().enumerate().take(126) {
             entry.key = format!("K{index:031}");
             entry.action = "x".repeat(mod_api::MAX_INPUT_ACTION_BYTES);
@@ -1561,7 +1565,7 @@ fn combined_workload(
     host.observe_input_bindings(std::sync::Arc::new(InputBindings {
         revision: 9,
         total: entries.len() as u32,
-        entries,
+        entries: entries.clone(),
     }))
     .unwrap();
     let mut debris = StressTerrain {
@@ -1577,10 +1581,29 @@ fn combined_workload(
     let mut collecting = 0;
     let mut steady = 0;
     let completed = (mod_api::MAX_INPUT_BINDINGS as u64).div_ceil(4) - 1;
-    let frames = if stress == Stress::Maximum { 1000 } else { 160 };
+    let frames = if stress == Stress::Maximum || stress.recurring() {
+        1000
+    } else {
+        160
+    };
     let mut updates = [0; 6];
     let mut previous: [String; 6] = Default::default();
     for frame in 0..frames {
+        if let Stress::Fair(victim, _) = stress {
+            // A changing catalog cannot become ready. The stable catalog still must finish
+            // while every other eligible producer changes on every callback.
+            host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+                revision: 10
+                    + if victim == Queue::Bindings {
+                        frame.min(stress.settled())
+                    } else {
+                        frame
+                    },
+                total: entries.len() as u32,
+                entries: entries.clone(),
+            }))
+            .unwrap();
+        }
         if esp {
             use mod_host::{
                 ActorObservation, ActorObservationBounds, ObservedActor,
@@ -1588,13 +1611,17 @@ fn combined_workload(
             };
             let generation = frame.min(99) / 20;
             host.publish_mask_targets(
-                &(0..mod_api::MAX_OBSERVED_ACTORS)
+                &(0..if stress == Stress::MissingMesh {
+                    0
+                } else {
+                    mod_api::MAX_OBSERVED_ACTORS
+                })
                     .map(|index| {
                         (
                             mod_api::drawing::MaskEntity {
                                 connection: 1,
                                 dimension: 0,
-                                runtime_id: if stress == Stress::Maximum {
+                                runtime_id: if stress.rich() {
                                     u64::MAX - index as u64
                                 } else {
                                     index as u64 + 1
@@ -1612,7 +1639,7 @@ fn combined_workload(
                         actor: ActorObservation {
                             session: 2,
                             dimension: 0,
-                            runtime_id: if stress == Stress::Maximum {
+                            runtime_id: if stress.rich() {
                                 u64::MAX - index as u64
                             } else {
                                 index as u64 + 1
@@ -1622,12 +1649,16 @@ fn combined_workload(
                             boxes: vec![
                                 ActorObservationBounds {
                                     min: (index as f32 - 0.3, 0., -4.3),
-                                    max: (index as f32 + 0.3, 1.8, -3.7)
+                                    max: (
+                                        index as f32 + 0.3,
+                                        if stress == Stress::Tall { 256. } else { 1.8 },
+                                        -3.7
+                                    )
                                 };
                                 mod_api::MAX_OBSERVED_ACTOR_BOXES
                             ],
                             name: stress.name(frame),
-                            identifier: if stress == Stress::Maximum {
+                            identifier: if stress.rich() {
                                 "x".repeat(128)
                             } else {
                                 "minecraft:player".into()
@@ -1635,23 +1666,19 @@ fn combined_workload(
                             yaw: 0.,
                             pitch: 0.,
                             pickable: true,
-                            hittable: None,
-                            look_origin: None,
-                            look_direction: None,
+                            hittable: Some(true),
+                            look_origin: Some((0., 0., 0.)),
+                            look_direction: Some((0., 0., -1.)),
                             invisible: false,
                             sneaking: false,
                             hurt: false,
-                            health: Some(if stress == Stress::Maximum {
+                            health: Some(if stress.rich() {
                                 f32::MAX
                             } else {
                                 10. + generation as f32
                             }),
                         },
-                        max_health: Some(if stress == Stress::Maximum {
-                            f32::MAX
-                        } else {
-                            40.
-                        }),
+                        max_health: Some(if stress.rich() { f32::MAX } else { 40. }),
                     })
                     .collect(),
                 ..Default::default()
@@ -1659,11 +1686,21 @@ fn combined_workload(
             .unwrap();
         }
         if maximum {
-            debris.base.shift = (if stress == Stress::Maximum {
-                frame.min(100)
+            debris.base.shift = if let Stress::Fair(victim, _) = stress {
+                if victim == Queue::Terrain && frame >= stress.settled() {
+                    16
+                } else {
+                    (frame % 32) as i32
+                }
             } else {
-                frame
-            } / 20) as i32;
+                (if stress == Stress::Maximum {
+                    frame.min(100)
+                } else if stress.recurring() {
+                    frame.min(stress.settled())
+                } else {
+                    frame
+                } / 20) as i32
+            };
         }
         host.observe_presentation(
             Some(mod_host::WorldObservation {
@@ -1690,7 +1727,12 @@ fn combined_workload(
                 pitch: 0.,
             }),
             relayed_position: Some(GameplayVector3 {
-                x: 2. + frame as f32,
+                x: if matches!(stress, Stress::Fair(Queue::Marker, _)) && frame >= stress.settled()
+                {
+                    2. + stress.settled() as f32
+                } else {
+                    2. + frame as f32
+                },
                 y: 0.,
                 z: 0.,
             }),
@@ -1704,7 +1746,72 @@ fn combined_workload(
         controls.gameplay = true;
         controls.keys_held = held.clone();
         controls.keys_admitted = held.clone();
-        controls.keys_pressed = held.clone();
+        controls.keys_pressed = if stress.recurring() {
+            match stress {
+                Stress::Shortcut(period) if period != 0 && (frame < 200 || frame % period != 0) => {
+                    Vec::new()
+                }
+                _ => vec!["KeyJ".into()],
+            }
+        } else {
+            held.clone()
+        };
+        if let Stress::Fair(victim, _) = stress {
+            if victim.panel() {
+                controls.panel_open = true;
+                controls.keys_admitted.clear();
+                // Capture an ordinary module key on every callback, dirtying reservations,
+                // settings and the panel. The bounded event batch is full as well.
+                controls.keys_pressed = vec![if frame % 2 == 0 { "KeyJ" } else { "KeyM" }.into()];
+                controls.events = vec![
+                    ControlEvent {
+                        id: "reach_key".into(),
+                        value: 1.,
+                    },
+                    ControlEvent {
+                        id: "fullbright".into(),
+                        value: (frame % 2) as f32,
+                    },
+                    ControlEvent {
+                        id: "cps".into(),
+                        value: if frame % 2 == 0 { 29. } else { 30. },
+                    },
+                ];
+                if frame == stress.settled() {
+                    controls.events.push(ControlEvent {
+                        id: "aim_strength".into(),
+                        value: 77.,
+                    });
+                    if victim == Queue::Reservations {
+                        controls.events.push(ControlEvent {
+                            id: "aim_key".into(),
+                            value: 1.,
+                        });
+                        controls.keys_pressed = vec!["F6".into()];
+                    }
+                }
+                while controls.events.len() < ui::mod_panel::MAX_PANEL_EVENTS {
+                    controls.events.push(ControlEvent {
+                        id: "x".repeat(ui::mod_panel::MAX_PANEL_ID_BYTES),
+                        value: 1.,
+                    });
+                }
+            } else if frame == stress.settled()
+                && matches!(victim, Queue::PanelGameplay | Queue::Fullbright)
+            {
+                controls.panel_open = true;
+                controls.events.push(ControlEvent {
+                    id: "aim_strength".into(),
+                    value: 77.,
+                });
+                if victim == Queue::Fullbright {
+                    controls.events.push(ControlEvent {
+                        id: "fullbright".into(),
+                        value: 0.,
+                    });
+                }
+            }
+        }
         let toggles = stress.toggles(frame);
         if !toggles.is_empty() {
             controls.panel_open = true;
@@ -1789,7 +1896,11 @@ fn combined_workload(
                 }
             }
         }
-        if esp && frame == frames - 1 && stress != Stress::Churn {
+        if esp
+            && frame == frames - 1
+            && stress != Stress::Churn
+            && !matches!(stress, Stress::Fair(_, _) | Stress::MissingMesh)
+        {
             assert_eq!(shown_labels(&host), 6, "deferred ESP must catch up");
             let expected = stress.name(frame);
             let surface = host.hud_surface().unwrap().0;
@@ -1798,6 +1909,91 @@ fn combined_workload(
                     surface.bindings[&format!("#esp_{slot}_line1")],
                     ui::mod_panel::SurfaceValue::Text(expected.clone()),
                     "name update must progress"
+                );
+            }
+        }
+        if matches!(stress, Stress::Shortcut(_)) {
+            if frame == 64 {
+                assert_eq!(
+                    drawn_origins(&host)
+                        .iter()
+                        .filter(|origin| origin[2] == 0)
+                        .count(),
+                    5,
+                    "64-callback marker startup deadline under recurring shortcuts"
+                );
+            }
+            if frame == 428 {
+                assert_current_names(&host, &stress.name(frame));
+            }
+            if frame == 812 {
+                let origins = drawn_origins(&host);
+                for point in debris.blocks(256) {
+                    assert!(
+                        origins.contains(&[point.x as i64, point.y as i64, point.z as i64]),
+                        "terrain deadline under recurring shortcuts"
+                    );
+                }
+            }
+        }
+        if let Stress::Fair(victim, _) = stress {
+            if frame == stress.settled() + victim.bound() {
+                match victim {
+                    Queue::Names => assert_current_names(&host, &stress.name(frame)),
+                    Queue::Terrain => {
+                        let origins = drawn_origins(&host);
+                        for point in debris.blocks(256) {
+                            assert!(
+                                origins.contains(&[point.x as i64, point.y as i64, point.z as i64]),
+                                "terrain deadline under continuous churn"
+                            );
+                        }
+                    }
+                    Queue::Marker => {
+                        let origins = drawn_origins(&host);
+                        assert_eq!(
+                            origins
+                                .iter()
+                                .filter(|origin| **origin == [2 + stress.settled() as i64, 0, 0])
+                                .count(),
+                            5,
+                            "marker deadline"
+                        );
+                    }
+                    Queue::Panel | Queue::PanelGameplay => {
+                        let control = host
+                            .panel()
+                            .unwrap()
+                            .controls
+                            .iter()
+                            .find(|c| c.id() == "aim_strength")
+                            .unwrap();
+                        let ui::mod_panel::Control::Slider { value, .. } = control else {
+                            panic!("slider")
+                        };
+                        assert_eq!(*value, 77., "panel deadline under continuous churn");
+                    }
+                    Queue::Settings => {
+                        let saved: serde_json::Value =
+                            serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+                        assert_eq!(
+                            saved["aim_strength"], 77,
+                            "settings deadline under continuous churn"
+                        );
+                    }
+                    Queue::Reservations => assert!(
+                        host.reserved_keys().contains(&"F6".into()),
+                        "reservation deadline"
+                    ),
+                    Queue::Fullbright => assert!(
+                        !host.fullbright(),
+                        "Fullbright deadline under continuous churn"
+                    ),
+                    Queue::Bindings => {} // Asserted using the observable attack policy below.
+                }
+                println!(
+                    "convergence {victim:?}: <= {} callbacks with other eligible producers changing every callback",
+                    victim.bound()
                 );
             }
         }
@@ -1899,16 +2095,29 @@ fn combined_workload(
         let camera = host.take_camera_delta().is_some();
         let jump = host.take_jump_pulse();
         let cancel = host.take_jump_cancel();
-        if stress != Stress::Maximum {
+        if let Stress::Fair(victim, _) = stress {
+            if !victim.panel() {
+                assert!(camera, "current aim sample runs even during catalog churn");
+                if victim == Queue::Bindings && frame >= stress.settled() + victim.bound() {
+                    assert!(attack, "stable bindings deadline under continuous churn");
+                }
+            }
+        } else if !matches!(stress, Stress::Maximum | Stress::Shortcut(_)) {
             assert_eq!(attack, frame > completed);
-            assert_eq!(camera, aim && frame >= completed);
+            assert_eq!(
+                camera,
+                aim && (frame >= completed || matches!(stress, Stress::Tall | Stress::MissingMesh))
+            );
             assert_eq!(jump, jump_reset && frame >= completed + 2 && frame % 2 == 1);
             assert_eq!(cancel, !jump_reset || frame < completed);
         } else if (100..190).contains(&frame) {
             assert!(attack && camera, "mandatory work continues");
         }
         let origins = drawn_origins(&host);
-        if (!esp || frame >= completed) && !stress.collisions() {
+        if (!esp || frame >= completed)
+            && !stress.collisions()
+            && !matches!(stress, Stress::Fair(_, _) | Stress::Shortcut(_))
+        {
             assert_eq!(
                 origins.iter().filter(|origin| origin[2] == 0).count(),
                 5,
@@ -1923,7 +2132,7 @@ fn combined_workload(
         if frame == 0 {
             first_marker = marker.clone();
         }
-        if frame == completed {
+        if frame == completed && !matches!(stress, Stress::Fair(_, _)) {
             assert_ne!(
                 marker, first_marker,
                 "marker moved before collection completed"
@@ -1936,7 +2145,9 @@ fn combined_workload(
             }
         }
     }
-    assert_eq!(drawn_instances(&host), 256 + 5);
+    if !matches!(stress, Stress::Fair(_, _)) {
+        assert_eq!(drawn_instances(&host), 256 + 5);
+    }
     if stress == Stress::Churn {
         assert!(
             updates.iter().all(|n| *n >= 10),
@@ -1944,14 +2155,14 @@ fn combined_workload(
         );
     }
     println!("stress {stress:?}: name updates {updates:?}");
-    if maximum {
+    if maximum && !matches!(stress, Stress::Fair(victim, _) if victim.panel()) {
         let last: Vec<_> = drawn_origins(&host)
             .into_iter()
             .filter(|origin| origin[2] < 0)
             .collect();
         assert_ne!(middle_cubes, last, "deferred terrain updates must progress");
     }
-    if esp {
+    if esp && !matches!(stress, Stress::Fair(_, _) | Stress::MissingMesh) {
         assert_eq!(shown_labels(&host), 6);
         assert_eq!(host.render().0.masks.len(), 1);
         assert!(host.fullbright());
@@ -1979,14 +2190,72 @@ enum Stress {
     Churn,
     Collision,
     Maximum,
+    Tall,
+    MissingMesh,
+    Shortcut(u64),
+    Fair(Queue, u64),
 }
 impl Stress {
+    /// Shift the stable input across every phase of the eight-callback schedule.
+    fn settled(self) -> u64 {
+        if let Self::Fair(_, phase) = self {
+            300 + phase
+        } else {
+            300
+        }
+    }
+    /// Whether continuously dirty producers share this workload.
+    fn recurring(self) -> bool {
+        matches!(self, Self::Shortcut(_) | Self::Fair(_, _))
+    }
+    /// Maximum nested actor observations on error and fairness paths.
+    fn rich(self) -> bool {
+        matches!(
+            self,
+            Self::Maximum | Self::Tall | Self::MissingMesh | Self::Fair(_, _)
+        )
+    }
+    /// Settings retain the byte cap when adding the reserved shortcut used by churn cases.
+    fn settings(self) -> String {
+        if !self.recurring() {
+            return maximum_settings(matches!(
+                self,
+                Self::Maximum | Self::Tall | Self::MissingMesh
+            ));
+        }
+        let mut settings: serde_json::Value =
+            serde_json::from_str(&maximum_settings(true)).unwrap();
+        settings["reach_key"] = "KeyJ".into();
+        settings["padding"] = "".into();
+        let mut json = serde_json::to_string(&settings).unwrap();
+        let needed = mod_api::MAX_SETTINGS_BYTES - json.len();
+        settings["padding"] = "x".repeat(needed).into();
+        json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(json.len(), mod_api::MAX_SETTINGS_BYTES);
+        json
+    }
     /// Whether to use 256 nearby positions that cluster a multiplicative lookup index.
     fn collisions(self) -> bool {
-        matches!(self, Self::Collision | Self::Maximum)
+        matches!(self, Self::Collision | Self::Maximum | Self::Fair(_, _))
     }
     /// Maximum-byte legal names, including their serialized quote/backslash expansion.
     fn name(self, frame: u64) -> String {
+        if self.recurring() {
+            let generation = match self {
+                Self::Fair(Queue::Names, _) | Self::Shortcut(_) => frame.min(self.settled()),
+                _ => frame,
+            };
+            return format!(
+                "g{:03}{}",
+                generation
+                    / if matches!(self, Self::Shortcut(_)) {
+                        20
+                    } else {
+                        1
+                    },
+                "\"".repeat(124)
+            );
+        }
         let generation = if self == Self::Churn {
             frame
         } else {
@@ -1994,7 +2263,7 @@ impl Stress {
         };
         match self {
             Self::Quotes => format!("{generation:03}{}", "\"".repeat(125)),
-            Self::Escaped | Self::Maximum => {
+            Self::Escaped | Self::Maximum | Self::Tall | Self::MissingMesh => {
                 (if generation % 2 == 0 { "\"" } else { "\\" }).repeat(128)
             }
             Self::Control => format!("{generation:03}{}\u{00a0}", "x".repeat(123)),
@@ -2131,4 +2400,89 @@ fn colliding_terrain_positions_fit_with_every_module() {
 #[test]
 fn continuously_changed_names_keep_progressing() {
     combined_workload(true, true, true, true, true, Stress::Churn);
+}
+
+/// Each stable producer must finish despite continuous work in every other eligible queue.
+/// Panel ownership intentionally hides ESP; panel-only producers are tested in that context.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Queue {
+    Bindings,
+    Names,
+    Terrain,
+    Marker,
+    PanelGameplay,
+    Panel,
+    Settings,
+    Reservations,
+    Fullbright,
+}
+impl Queue {
+    /// An upper bound in focused callbacks after this producer's input becomes stable.
+    fn bound(self) -> u64 {
+        match self {
+            Self::Bindings => 33,
+            Self::Names => 128,
+            Self::Terrain => 512,
+            Self::Marker => 16,
+            Self::PanelGameplay | Self::Panel => 96,
+            Self::Settings => 24,
+            Self::Reservations | Self::Fullbright => 8,
+        }
+    }
+    /// Preference edits and key capture are eligible only while the panel owns input.
+    fn panel(self) -> bool {
+        matches!(self, Self::Panel | Self::Settings | Self::Reservations)
+    }
+}
+
+/// Checks all exact current labels, rather than accepting activity on stale slots.
+fn assert_current_names(host: &ModHost, expected: &str) {
+    assert_eq!(shown_labels(host), 6);
+    let surface = host.hud_surface().unwrap().0;
+    for slot in 0..6 {
+        assert_eq!(
+            surface.bindings[&format!("#esp_{slot}_line1")],
+            ui::mod_panel::SurfaceValue::Text(expected.into()),
+            "name deadline under continuous churn"
+        );
+    }
+}
+
+#[test]
+fn oversized_actor_labels_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Tall);
+}
+
+#[test]
+fn unavailable_actor_meshes_retire_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::MissingMesh);
+}
+
+#[test]
+fn recurring_shortcuts_cannot_starve_settled_drawings() {
+    combined_workload(true, true, true, true, true, Stress::Shortcut(4));
+}
+
+#[test]
+fn shortcuts_every_callback_allow_drawing_startup() {
+    combined_workload(true, true, true, true, true, Stress::Shortcut(0));
+}
+
+#[test]
+fn every_stable_queue_converges_while_other_producers_change_every_callback() {
+    for victim in [
+        Queue::Bindings,
+        Queue::Names,
+        Queue::Terrain,
+        Queue::Marker,
+        Queue::PanelGameplay,
+        Queue::Panel,
+        Queue::Settings,
+        Queue::Reservations,
+        Queue::Fullbright,
+    ] {
+        for phase in 0..8 {
+            combined_workload(true, true, true, true, true, Stress::Fair(victim, phase));
+        }
+    }
 }
