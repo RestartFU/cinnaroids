@@ -306,7 +306,7 @@ fn the_cube_table_tracks_every_answer_through_collisions_and_removals() {
         blocks.sort_unstable_by_key(|block| (block.x, block.y, block.z));
         blocks.dedup_by_key(|block| (block.x, block.y, block.z));
         finder.apply(0, true, &blocks);
-        assert!(compare(&mut finder) <= LIMIT / COMPARE_BLOCKS);
+        assert!(compare(&mut finder) <= (2 * LIMIT + 1).div_ceil(COMPARE_BLOCKS));
         settle(&mut finder, &mut drawn);
         let mut expected: Vec<_> = blocks[..blocks.len().min(LIMIT)]
             .iter()
@@ -371,4 +371,53 @@ fn a_denied_search_is_reported_once_until_disabled() {
     );
     finder.clear_notice();
     assert!(finder.notify_denied());
+}
+
+/// The complete coordinate domain round-trips, and repeated answers take bounded sync units.
+#[test]
+fn full_coordinate_keys_and_duplicate_work_are_bounded() {
+    for p in [
+        position(i32::MIN, i32::MAX, 0),
+        position(0, i32::MIN, i32::MAX),
+    ] {
+        let round = super::position(key(&p));
+        assert_eq!((round.x, round.y, round.z), (p.x, p.y, p.z));
+    }
+    let mut finder = Finder::default();
+    let mut drawn = Drawn::default();
+    finder.apply(0, true, &vec![position(1, 2, 3); LIMIT]);
+    compare(&mut finder);
+    finder.sync(1, |c| drawn.draw(c)).unwrap();
+    let left = finder.needed.len();
+    finder
+        .sync(1, |_| panic!("duplicate needs no drawing call"))
+        .unwrap();
+    assert_eq!(finder.needed.len(), left - 1);
+    settle(&mut finder, &mut drawn);
+    assert_eq!(finder.cubes(), 1);
+    finder.clear();
+    finder.sync(1, |c| drawn.draw(c)).unwrap();
+    assert!(finder.synced());
+}
+
+/// Non-drawable s32 coordinates cannot block valid nearby selection or teardown.
+#[test]
+fn positions_outside_drawing_bounds_do_not_stall_the_queue() {
+    let mut finder = Finder::default();
+    let mut drawn = Drawn::default();
+    finder.apply(
+        0,
+        true,
+        &[
+            position(i32::MAX, 0, 0),
+            position(1, 2, 3),
+            position(0, i32::MIN, 0),
+        ],
+    );
+    settle(&mut finder, &mut drawn);
+    assert_eq!(drawn.blocks(), vec![(1, 2, 3)]);
+    finder.apply(0, true, &[position(i32::MIN, 0, 0)]);
+    settle(&mut finder, &mut drawn);
+    assert!(finder.synced());
+    assert!(drawn.blocks().is_empty());
 }

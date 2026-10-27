@@ -350,3 +350,146 @@ fn host_style_has_a_crisp_edge_and_bounded_matching_halo() {
         assert!(style.glow.a > 0. && style.glow.a < style.outline.a);
     }
 }
+
+/// Deferred label writes rotate fairly and never publish an old actor's text for a new actor.
+#[test]
+fn budgeted_labels_make_progress_and_hide_reassigned_slots() {
+    let actors: Vec<_> = (0..MAX_PLAYERS)
+        .map(|i| {
+            let mut actor = actor();
+            actor.actor.runtime_id += i as u64;
+            actor.actor.name = format!("Player {i}");
+            actor
+        })
+        .collect();
+    let mut labels = Labels::default();
+    for _ in 0..MAX_PLAYERS {
+        let mut remaining = 1usize;
+        labels.update_budgeted(
+            &Preferences::default(),
+            3,
+            0,
+            [0., 1.6, 0.],
+            &actors,
+            |actor| {
+                if matches!(actor, Work::Actor) {
+                    return true;
+                }
+                let allowed = remaining != 0;
+                remaining = remaining.saturating_sub(1);
+                allowed
+            },
+        );
+    }
+    assert!(labels.slots.iter().all(|slot| slot.shown));
+    for (i, slot) in labels.slots.iter().enumerate() {
+        assert_eq!(slot.name, format!("Player {i}"));
+    }
+    let mut replacement = actors;
+    for actor in &mut replacement {
+        actor.actor.runtime_id += 100;
+    }
+    labels.update_budgeted(
+        &Preferences::default(),
+        3,
+        0,
+        [0., 1.6, 0.],
+        &replacement,
+        |actor| matches!(actor, Work::Actor),
+    );
+    assert!(labels.slots.iter().all(|slot| !slot.shown));
+}
+
+/// Actor turns must wait for publication when alternate callbacks cannot write labels.
+#[test]
+fn periodic_label_pressure_cannot_skip_the_same_actors_forever() {
+    let actors: Vec<_> = (0..MAX_PLAYERS)
+        .map(|i| {
+            let mut actor = actor();
+            actor.actor.runtime_id += i as u64;
+            actor.actor.name = format!("Player {i}");
+            actor
+        })
+        .collect();
+    let mut labels = Labels::default();
+    labels.stage_writes(true);
+    for frame in 0..24 {
+        let mut checked = false;
+        let mut written = false;
+        labels.update_budgeted(
+            &Preferences::default(),
+            3,
+            0,
+            [0., 1.6, 0.],
+            &actors,
+            |work| match work {
+                Work::Actor => {
+                    let allowed = !checked;
+                    checked = true;
+                    allowed
+                }
+                Work::Label(_) => {
+                    let allowed = frame % 2 == 1 && !written;
+                    written = true;
+                    allowed
+                }
+            },
+        );
+    }
+    assert!(labels.slots.iter().all(|slot| slot.shown));
+    let mut names: Vec<_> = labels.slots.iter().map(|slot| slot.name.clone()).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        (0..MAX_PLAYERS)
+            .map(|i| format!("Player {i}"))
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Admission counts serialized bytes exactly across word boundaries and UTF-8 names.
+#[test]
+fn escaped_size_matches_json_for_every_host_text_byte() {
+    for byte in 0x20u8..0x7f {
+        for length in 0..=32 {
+            let value = format!(
+                "§{}\\\"{}",
+                char::from(byte).to_string().repeat(length),
+                char::from(byte)
+            );
+            assert_eq!(
+                escaped_len(&value),
+                serde_json::to_string(&value).unwrap().len() - 2
+            );
+        }
+    }
+}
+
+#[test]
+fn oversized_actor_offsets_stay_inside_the_hud_contract() {
+    let mut observed = actor();
+    observed.actor.boxes[0].max.1 = 256.;
+    let result = output(&[observed], &Preferences::default());
+    assert_eq!(result.players, [8]);
+    assert_eq!(
+        labels(&result)[0]["at"]["project"]["offset"],
+        serde_json::json!([0., 256., 0.])
+    );
+}
+
+#[test]
+fn label_offsets_clamp_both_signs_on_every_axis() {
+    for (min, max, expected) in [(1000., 2000., 256.), (-2000., -1000., -256.)] {
+        let mut observed = actor();
+        observed.actor.boxes[0] = Bounds {
+            min: (min, min, min),
+            max: (max, max, max),
+        };
+        let result = output(&[observed], &Preferences::default());
+        assert_eq!(result.players, [8]);
+        assert_eq!(
+            labels(&result)[0]["at"]["project"]["offset"],
+            serde_json::json!([expected, expected, expected])
+        );
+    }
+}

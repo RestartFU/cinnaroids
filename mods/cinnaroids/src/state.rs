@@ -273,7 +273,7 @@ pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
     ]
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Modules {
     pub clicker: bool,
     pub aim: bool,
@@ -294,7 +294,7 @@ pub enum KeybindTarget {
     JumpReset,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct State {
     pub preferences: Preferences,
     pub modules: Modules,
@@ -706,6 +706,12 @@ impl State {
             .update(self.modules.clicker, self.preferences.cps, frame)
     }
 
+    /// Stops repeats after refusal until the admitted attack hold is observed to end.
+    pub fn attack_refused(&mut self) {
+        self.clicker.reset();
+        self.clicker.refused = true;
+    }
+
     pub fn reserved_keys(&self) -> Vec<String> {
         let mut keys = vec![self.preferences.menu_key.clone()];
         for key in [
@@ -1004,24 +1010,32 @@ fn replace<T: PartialEq>(target: &mut T, value: T) -> bool {
 }
 
 /// A held attack begins with the physical press, followed by bounded repeat edges.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct ClickCadence {
     context: Option<(u64, i32)>,
     held: bool,
+    refused: bool,
     elapsed: f32,
 }
 
 impl ClickCadence {
+    /// Clears timing while preserving refusal until an admitted release is observed.
     fn reset(&mut self) {
-        *self = Self::default();
+        self.context = None;
+        self.held = false;
+        self.elapsed = 0.0;
     }
 
+    /// Consumes the mod's admitted chord result with session, dimension and frame time.
     fn update(&mut self, enabled: bool, cps: u8, frame: Option<(u64, i32, bool, f32)>) -> bool {
         let Some((session, dimension, attack_held, seconds)) = frame else {
             self.reset();
             return false;
         };
-        if !enabled || !attack_held || !seconds.is_finite() || seconds < 0.0 {
+        if !attack_held {
+            self.refused = false;
+        }
+        if self.refused || !enabled || !attack_held || !seconds.is_finite() || seconds < 0.0 {
             self.reset();
             return false;
         }

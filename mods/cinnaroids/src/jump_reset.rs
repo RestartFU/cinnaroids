@@ -11,6 +11,7 @@ pub struct Frame {
     pub tick: u64,
     pub knockback_sequence: u64,
     pub on_ground: bool,
+    /// This mod's own resolution of the player's physical jump chord.
     pub jump_held: bool,
     pub eligible: bool,
     pub velocity: [f32; 3],

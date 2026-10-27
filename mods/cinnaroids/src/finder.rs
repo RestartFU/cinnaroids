@@ -25,7 +25,7 @@ const _: () = assert!(LIMIT <= mod_api::MAX_FOUND_BLOCKS);
 const _: () = assert!(LIMIT + crate::ghost::INSTANCES <= mod_api::MAX_DRAW_INSTANCES);
 /// Cube placements added, moved or removed per callback; each is one drawing call.
 pub const SYNC_CALLS: usize = 16;
-/// Answer blocks compared with the cubes per callback; a full answer takes four frames.
+/// Maximum comparison units per callback; fuel is checked before every position.
 pub const COMPARE_BLOCKS: usize = 64;
 /// Seconds between applying search answers; a changed search applies its first answer at once.
 pub const REFRESH_SECONDS: f32 = 0.25;
@@ -59,27 +59,19 @@ pub fn cube() -> GeometrySpec {
     GeometrySpec::Triangles(Mesh { vertices, indices })
 }
 
-/// Packs a block position into one sortable word: x and z in 26 bits each, y in 12, each
-/// offset to be non-negative. Single-word compares keep sorting within callback fuel.
-pub fn key(position: &Position) -> u64 {
-    (((position.x as i64 + HORIZONTAL_OFFSET) as u64) << 38)
-        | (((position.z as i64 + HORIZONTAL_OFFSET) as u64 & HORIZONTAL_MASK) << 12)
-        | ((position.y as i64 + VERTICAL_OFFSET) as u64 & VERTICAL_MASK)
+/// Lossless ordered identity for all host position coordinates, sorted by x, z, then y.
+pub fn key(position: &Position) -> [i32; 3] {
+    [position.x, position.z, position.y]
 }
 
-/// The block a [`key`] packs.
-pub fn position(key: u64) -> Position {
+/// The block an ordered key identifies.
+pub fn position(key: [i32; 3]) -> Position {
     Position {
-        x: ((key >> 38) as i64 - HORIZONTAL_OFFSET) as i32,
-        y: ((key & VERTICAL_MASK) as i64 - VERTICAL_OFFSET) as i32,
-        z: (((key >> 12) & HORIZONTAL_MASK) as i64 - HORIZONTAL_OFFSET) as i32,
+        x: key[0],
+        y: key[2],
+        z: key[1],
     }
 }
-
-const HORIZONTAL_OFFSET: i64 = 1 << 25;
-const HORIZONTAL_MASK: u64 = (1 << 26) - 1;
-const VERTICAL_OFFSET: i64 = 1 << 11;
-const VERTICAL_MASK: u64 = (1 << 12) - 1;
 
 /// A pink cube at a block, through walls when that authority is granted.
 pub fn cube_instance(
@@ -120,86 +112,36 @@ pub enum Change {
     Remove(Handle),
 }
 
-/// Retained cubes by block [`key`]: open addressing with linear probing, at most half full, so
-/// finding, adding and removing a cube take a few probes. The table is allocated with the first
-/// cube.
-#[derive(Default)]
-struct Cubes {
-    keys: Vec<u64>,
-    handles: Vec<Handle>,
-    len: usize,
+/// Sorted retained cubes: at most nine key comparisons per lookup, with no hash buckets.
+/// Insert/remove shifts at most LIMIT fixed-size entries, inside one fuel-gated sync unit.
+struct Cubes(Vec<([i32; 3], Handle, bool)>);
+impl Default for Cubes {
+    /// Allocates the bounded index during initialization, avoiding growth during sync.
+    fn default() -> Self {
+        Self(Vec::with_capacity(LIMIT))
+    }
 }
-
-/// Table slots; twice the most cubes.
-const SLOTS: usize = 2 * LIMIT;
-const _: () = assert!(SLOTS.is_power_of_two());
-/// A free slot; no reachable block packs to it.
-const EMPTY: u64 = u64::MAX;
-
 impl Cubes {
-    /// The slot a key's probe starts at.
-    fn home(key: u64) -> usize {
-        (key.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> (64 - SLOTS.trailing_zeros())) as usize
+    /// Searches a fixed-size ordered index independently of coordinate distribution.
+    fn find(&self, key: [i32; 3]) -> Result<usize, usize> {
+        self.0.binary_search_by_key(&key, |entry| entry.0)
     }
-
-    /// The slot holding `key`.
-    fn find(&self, key: u64) -> Option<usize> {
-        if self.keys.is_empty() {
-            return None;
-        }
-        let mut slot = Self::home(key);
-        loop {
-            match self.keys[slot] {
-                found if found == key => return Some(slot),
-                EMPTY => return None,
-                _ => slot = (slot + 1) % SLOTS,
-            }
-        }
+    /// Inserts at the binary-search position; capacity never exceeds LIMIT.
+    fn insert(&mut self, key: [i32; 3], handle: Handle) {
+        let index = self.find(key).unwrap_err();
+        self.0.insert(index, (key, handle, false));
     }
-
-    fn insert(&mut self, key: u64, handle: Handle) {
-        if self.keys.is_empty() {
-            self.keys = vec![EMPTY; SLOTS];
-            self.handles = vec![handle; SLOTS];
-        }
-        let mut slot = Self::home(key);
-        while self.keys[slot] != EMPTY {
-            slot = (slot + 1) % SLOTS;
-        }
-        self.keys[slot] = key;
-        self.handles[slot] = handle;
-        self.len += 1;
+    /// Removes one known key, shifting at most LIMIT entries.
+    fn remove(&mut self, key: [i32; 3]) {
+        self.0.remove(self.find(key).expect("retained cube"));
     }
-
-    /// Frees `slot`, shifting later entries of its probe run back so lookups still find them.
-    fn remove(&mut self, mut slot: usize) {
-        let mut next = slot;
-        loop {
-            next = (next + 1) % SLOTS;
-            let key = self.keys[next];
-            if key == EMPTY {
-                break;
-            }
-            // Move the entry back unless its home lies cyclically within (slot, next].
-            let home = Self::home(key);
-            let stays = if slot <= next {
-                slot < home && home <= next
-            } else {
-                slot < home || home <= next
-            };
-            if !stays {
-                self.keys[slot] = key;
-                self.handles[slot] = self.handles[next];
-                slot = next;
-            }
-        }
-        self.keys[slot] = EMPTY;
-        self.len -= 1;
+    /// The retained handle for one known key.
+    fn handle(&self, key: [i32; 3]) -> Handle {
+        self.0[self.find(key).expect("retained cube")].1
     }
 }
 
 /// Search cadence, the selection to show and the retained cubes showing it.
-#[derive(Default)]
 pub struct Finder {
     /// The uploaded cube; dropped after a drawing error so it is recreated.
     pub geometry: Option<Handle>,
@@ -209,20 +151,43 @@ pub struct Finder {
     /// The dimension and depth authority the selection was found with.
     placement: (i32, bool),
     cubes: Cubes,
+    clearing: bool,
     /// Selected blocks without a cube, nearest last, and cubes on blocks no longer selected,
     /// by key.
-    needed: Vec<u64>,
-    spare: Vec<u64>,
+    needed: Vec<[i32; 3]>,
+    spare: Vec<[i32; 3]>,
     /// The answer being compared with the cubes and how far, with the blocks it needs so far
     /// and the table slots it keeps.
     answer: Vec<Position>,
     compared: Option<usize>,
-    found: Vec<u64>,
-    kept: Vec<bool>,
+    partition: usize,
+    found: Vec<[i32; 3]>,
     /// The last answer compared in full; an identical answer needs nothing.
     last: Vec<Position>,
     /// Whether a denied search was reported since the module was last disabled.
     notified: bool,
+}
+
+impl Default for Finder {
+    /// Allocates every bounded queue before frame callbacks begin.
+    fn default() -> Self {
+        Self {
+            geometry: None,
+            elapsed: 0.,
+            context: None,
+            placement: (0, false),
+            cubes: Cubes::default(),
+            clearing: false,
+            needed: Vec::with_capacity(LIMIT),
+            spare: Vec::with_capacity(LIMIT),
+            answer: Vec::with_capacity(LIMIT),
+            compared: None,
+            partition: 0,
+            found: Vec::with_capacity(LIMIT),
+            last: Vec::with_capacity(LIMIT),
+            notified: false,
+        }
+    }
 }
 
 impl Finder {
@@ -255,6 +220,7 @@ impl Finder {
     }
 
     /// Keeps a due answer for the next frame, for a frame with too little fuel left.
+    #[cfg(test)]
     pub fn postpone(&mut self) {
         self.elapsed = self.elapsed.max(REFRESH_SECONDS);
     }
@@ -271,13 +237,17 @@ impl Finder {
         } {
             return false;
         }
+        self.clearing = false;
         self.placement = (dimension, through_walls);
         self.answer.clear();
         self.answer.extend_from_slice(positions);
         self.compared = Some(0);
+        self.partition = 0;
+        self.spare.clear();
         self.found.clear();
-        self.kept.clear();
-        self.kept.resize(SLOTS, false);
+        for (_, _, kept) in &mut self.cubes.0 {
+            *kept = false;
+        }
         true
     }
 
@@ -286,36 +256,50 @@ impl Finder {
         self.compared.is_some()
     }
 
-    /// Compares up to `blocks` more answer blocks with the cubes. After the last, cubes on
-    /// blocks the answer left out become spare, and syncing can start. The table does not
-    /// change meanwhile, because syncing waits for the comparison.
+    /// Advances up to `blocks` bounded units: an answer lookup or one retained-index slot.
+    /// Partitioning also resumes across calls; syncing waits until both phases finish.
     pub fn compare(&mut self, blocks: usize) {
         let Some(start) = self.compared else {
             return;
         };
-        let end = self.answer.len().min(start + blocks);
-        for position in &self.answer[start..end] {
-            let key = key(position);
-            match self.cubes.find(key) {
-                Some(slot) => self.kept[slot] = true,
-                None => self.found.push(key),
+        let mut cursor = start;
+        for _ in 0..blocks {
+            if cursor < self.answer.len() {
+                let position = &self.answer[cursor];
+                let limit = mod_api::MAX_PRIMITIVE_COORDINATE as i64;
+                if [position.x, position.y, position.z]
+                    .iter()
+                    .any(|coordinate| i64::from(*coordinate).abs() > limit)
+                {
+                    // Terrain coordinates span s32; drawing anchors have a narrower contract.
+                    cursor += 1;
+                    continue;
+                }
+                let key = key(position);
+                match self.cubes.find(key) {
+                    Ok(slot) => self.cubes.0[slot].2 = true,
+                    Err(_) => self.found.push(key),
+                }
+                cursor += 1;
+                continue;
+            }
+            // The index stays fixed while comparing; partition one retained slot per unit.
+            if let Some((key, _, kept)) = self.cubes.0.get(self.partition) {
+                self.partition += 1;
+                if !kept {
+                    self.spare.push(*key);
+                }
+            } else {
+                self.compared = None;
+                // Pop nearest first; this copy is bounded by LIMIT, independent of lookups.
+                self.needed.clear();
+                std::mem::swap(&mut self.needed, &mut self.found);
+                self.needed.reverse();
+                std::mem::swap(&mut self.last, &mut self.answer);
+                return;
             }
         }
-        if end < self.answer.len() {
-            self.compared = Some(end);
-            return;
-        }
-        self.compared = None;
-        // Pop the nearest needed block first.
-        self.needed.clear();
-        self.needed.extend(self.found.drain(..).rev());
-        self.spare.clear();
-        for (key, kept) in self.cubes.keys.iter().zip(&self.kept) {
-            if *key != EMPTY && !kept {
-                self.spare.push(*key);
-            }
-        }
-        std::mem::swap(&mut self.last, &mut self.answer);
+        self.compared = Some(cursor);
     }
 
     /// Stops searching and keeps the cubes, as while a menu owns input; the next search starts
@@ -331,22 +315,18 @@ impl Finder {
         self.compared = None;
         self.last.clear();
         self.needed.clear();
-        // Once every cube is spare, removing one also takes it off the list.
-        if self.spare.len() != self.cubes.len {
-            self.spare.clear();
-            self.spare
-                .extend(self.cubes.keys.iter().copied().filter(|key| *key != EMPTY));
-        }
+        self.spare.clear();
+        self.clearing = !self.cubes.0.is_empty();
     }
 
     /// Whether the retained cubes show the selection.
     pub fn synced(&self) -> bool {
-        self.compared.is_none() && self.needed.is_empty() && self.spare.is_empty()
+        self.compared.is_none() && self.needed.is_empty() && self.spare.is_empty() && !self.clearing
     }
 
     /// The number of retained cubes.
     pub fn cubes(&self) -> usize {
-        self.cubes.len
+        self.cubes.0.len()
     }
 
     /// Whether syncing will draw a cube, which needs the uploaded geometry.
@@ -373,17 +353,28 @@ impl Finder {
         }
         let mut made = 0;
         while made < calls {
+            if self.clearing {
+                if let Some((_, handle, _)) = self.cubes.0.last() {
+                    draw(Change::Remove(*handle))?;
+                    self.cubes.0.pop();
+                    made += 1;
+                }
+                self.clearing = !self.cubes.0.is_empty();
+                if self.clearing {
+                    continue;
+                }
+            }
             match (self.needed.last().copied(), self.spare.last().copied()) {
-                (Some(wanted), _) if self.cubes.find(wanted).is_some() => {
-                    // Answers list each block once; never draw one twice.
+                (Some(wanted), _) if self.cubes.find(wanted).is_ok() => {
+                    // A duplicate answer consumes a bounded unit, too.
                     self.needed.pop();
+                    made += 1;
                 }
                 (Some(wanted), Some(unused)) => {
-                    let slot = self.cubes.find(unused).expect("spare cubes are retained");
-                    let handle = self.cubes.handles[slot];
+                    let handle = self.cubes.handle(unused);
                     draw(Change::Move(handle, position(wanted)))?;
                     made += 1;
-                    self.cubes.remove(slot);
+                    self.cubes.remove(unused);
                     self.cubes.insert(wanted, handle);
                     self.needed.pop();
                     self.spare.pop();
@@ -397,10 +388,9 @@ impl Finder {
                     self.needed.pop();
                 }
                 (None, Some(unused)) => {
-                    let slot = self.cubes.find(unused).expect("spare cubes are retained");
-                    draw(Change::Remove(self.cubes.handles[slot]))?;
+                    draw(Change::Remove(self.cubes.handle(unused)))?;
                     made += 1;
-                    self.cubes.remove(slot);
+                    self.cubes.remove(unused);
                     self.spare.pop();
                 }
                 (None, None) => break,
@@ -411,11 +401,19 @@ impl Finder {
 
     /// Drops all retained state after a lost drawing token so the next search starts over.
     pub fn reset(&mut self) {
-        let notified = self.notified;
-        *self = Self {
-            notified,
-            ..Self::default()
-        };
+        self.geometry = None;
+        self.elapsed = 0.;
+        self.context = None;
+        self.placement = (0, false);
+        self.cubes.0.clear();
+        self.clearing = false;
+        self.needed.clear();
+        self.spare.clear();
+        self.answer.clear();
+        self.compared = None;
+        self.partition = 0;
+        self.found.clear();
+        self.last.clear();
     }
 
     /// Whether to report a denied search: once until the module is disabled again.

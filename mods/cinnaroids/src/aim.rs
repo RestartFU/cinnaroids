@@ -54,6 +54,7 @@ pub struct Frame<'a> {
     pub eye: Vec3,
     pub yaw: f32,
     pub pitch: f32,
+    /// This mod's own resolution of the player's physical attack chord.
     pub attack_held: bool,
     pub seconds: f32,
     pub players: &'a [Player],
@@ -87,6 +88,20 @@ impl AimAssist {
     /// Selects a visible-direction player and returns one bounded camera change.
     /// The API exposes positions, so this makes no claim about block occlusion.
     pub fn update(&mut self, config: Config, frame: Option<&Frame<'_>>) -> Option<Rotation> {
+        let players = frame
+            .map_or(&[] as &[Player], |frame| frame.players)
+            .iter()
+            .copied();
+        self.update_players(config, frame, players)
+    }
+
+    /// Consumes current observations directly, avoiding a copied maximum-size player vector.
+    pub fn update_players(
+        &mut self,
+        config: Config,
+        frame: Option<&Frame<'_>>,
+        players: impl Iterator<Item = Player>,
+    ) -> Option<Rotation> {
         let Some(frame) = frame else {
             self.reset();
             return None;
@@ -111,8 +126,8 @@ impl AimAssist {
         let mut best: Option<Candidate> = None;
         let mut previous: Option<Candidate> = None;
         let direction = view_direction(frame);
-        for player in frame.players.iter().take(mod_api::MAX_GAMEPLAY_PLAYERS) {
-            let Some(candidate) = candidate_with_direction(frame, *player, direction) else {
+        for player in players.take(mod_api::MAX_GAMEPLAY_PLAYERS) {
+            let Some(candidate) = candidate_with_direction(frame, player, direction) else {
                 continue;
             };
             if self.target == Some(candidate.id) {

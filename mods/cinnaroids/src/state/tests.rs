@@ -1274,3 +1274,24 @@ fn esp_preferences_round_trip_clamp_and_do_not_restore_enablement() {
     assert!(!s.preferences.esp_health);
     assert!(s.preferences_dirty);
 }
+
+/// A refusal latches repeats off across time, settings and authority gaps until admission ends.
+#[test]
+fn refused_attack_waits_for_an_admitted_release_and_a_fresh_cadence() {
+    let mut state = state();
+    state.modules.clicker = true;
+    assert!(!state.attack_pulse(Some((1, 0, true, 0.05))));
+    assert!(state.attack_pulse(Some((1, 0, true, 0.05))));
+    state.attack_refused();
+    for _ in 0..5 {
+        assert!(!state.attack_pulse(Some((1, 0, true, 1.0))));
+    }
+    assert!(!state.attack_pulse(None));
+    state.modules.clicker = false;
+    assert!(!state.attack_pulse(Some((2, 1, true, 1.0))));
+    state.modules.clicker = true;
+    assert!(!state.attack_pulse(Some((2, 1, true, 1.0))));
+    assert!(!state.attack_pulse(Some((2, 1, false, 0.05))));
+    assert!(!state.attack_pulse(Some((2, 1, true, 0.05))));
+    assert!(state.attack_pulse(Some((2, 1, true, 0.05))));
+}
