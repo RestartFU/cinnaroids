@@ -1344,7 +1344,11 @@ fn refused_attack_stays_latched_while_bindings_refresh() {
         controls.focused = true;
         controls.gameplay = true;
         controls.keys_held = vec!["KeyK".into()];
-        controls.keys_admitted = if admitted { vec!["KeyK".into()] } else { vec![] };
+        controls.keys_admitted = if admitted {
+            vec!["KeyK".into()]
+        } else {
+            vec![]
+        };
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, Some(snapshot(gate)), controls)
                 .unwrap();
