@@ -706,6 +706,12 @@ impl State {
             .update(self.modules.clicker, self.preferences.cps, frame)
     }
 
+    /// Stops repeats after refusal until the admitted attack hold is observed to end.
+    pub fn attack_refused(&mut self) {
+        self.clicker.reset();
+        self.clicker.refused = true;
+    }
+
     pub fn reserved_keys(&self) -> Vec<String> {
         let mut keys = vec![self.preferences.menu_key.clone()];
         for key in [
@@ -1008,21 +1014,28 @@ fn replace<T: PartialEq>(target: &mut T, value: T) -> bool {
 struct ClickCadence {
     context: Option<(u64, i32)>,
     held: bool,
+    refused: bool,
     elapsed: f32,
 }
 
 impl ClickCadence {
+    /// Clears timing while preserving refusal until an admitted release is observed.
     fn reset(&mut self) {
-        *self = Self::default();
+        self.context = None;
+        self.held = false;
+        self.elapsed = 0.0;
     }
 
-    /// Consumes the mod's physical chord result with session, dimension and frame time.
+    /// Consumes the mod's admitted chord result with session, dimension and frame time.
     fn update(&mut self, enabled: bool, cps: u8, frame: Option<(u64, i32, bool, f32)>) -> bool {
         let Some((session, dimension, attack_held, seconds)) = frame else {
             self.reset();
             return false;
         };
-        if !enabled || !attack_held || !seconds.is_finite() || seconds < 0.0 {
+        if !attack_held {
+            self.refused = false;
+        }
+        if self.refused || !enabled || !attack_held || !seconds.is_finite() || seconds < 0.0 {
             self.reset();
             return false;
         }

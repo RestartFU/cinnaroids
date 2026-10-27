@@ -157,19 +157,19 @@ impl Cache {
         self.complete
     }
 
-    /// Resolves both policies once from raw held keys and complete player assignments.
-    pub fn resolve(&self, controls: &Controls, reserved: &[String]) -> Holds {
+    /// Resolves both policies once from admitted held keys and complete player assignments.
+    pub fn resolve(&self, controls: &Controls) -> Holds {
         let mut result = Holds::default();
         if !(self.complete && controls.focused && controls.gameplay && !controls.panel_open)
             || !(self.has_attack || self.has_jump)
         {
             return result;
         }
-        let actual = physical_modifiers(&controls.keys_held, reserved);
+        let actual = physical_modifiers(&controls.keys_admitted);
         let satisfied = (0u8..16)
             .filter(|mask| mask & actual == *mask)
             .fold(0u16, |bits, mask| bits | (1 << mask));
-        for name in &controls.keys_held {
+        for name in &controls.keys_admitted {
             let Some(id) = KeyName::new(name) else {
                 continue;
             };
@@ -177,9 +177,7 @@ impl Cache {
                 continue;
             };
             let key = &self.keys[index].1;
-            if (key.attack == 0 || result.attack) && (key.jump == 0 || result.jump)
-                || reserved.contains(name)
-            {
+            if (key.attack == 0 || result.attack) && (key.jump == 0 || result.jump) {
                 continue;
             }
             let mut active = key.all & satisfied;
@@ -211,8 +209,8 @@ impl Cache {
 
     /// Selects one guest-owned policy result for focused unit coverage.
     #[cfg(test)]
-    fn held(&self, action: &str, controls: &Controls, reserved: &[String]) -> bool {
-        let holds = self.resolve(controls, reserved);
+    fn held(&self, action: &str, controls: &Controls) -> bool {
+        let holds = self.resolve(controls);
         match action {
             "attack" => holds.attack,
             "jump" => holds.jump,
@@ -234,8 +232,8 @@ fn modifier_mask(required: &BindingModifiers) -> u8 {
         | (u8::from(required.super_key) << 3)
 }
 
-/// Either physical side satisfies a modifier group; reserved keys cannot satisfy gameplay.
-fn physical_modifiers(held: &[String], reserved: &[String]) -> u8 {
+/// Either admitted physical side satisfies a modifier group.
+fn physical_modifiers(held: &[String]) -> u8 {
     held.iter().fold(0, |mask, key| {
         let bit = match key.as_str() {
             "ShiftLeft" | "ShiftRight" => 1,
@@ -244,11 +242,7 @@ fn physical_modifiers(held: &[String], reserved: &[String]) -> u8 {
             "SuperLeft" | "SuperRight" => 8,
             _ => return mask,
         };
-        if reserved.contains(key) {
-            mask
-        } else {
-            mask | bit
-        }
+        mask | bit
     })
 }
 

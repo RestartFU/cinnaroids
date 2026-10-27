@@ -14,7 +14,7 @@ Press **F7** to open or close the module interface. Modules sit in Combat, Netwo
 - **Auto Jump Reset:** jump once on the first eligible ground contact after new server knockback. Its toggle key starts unbound. The hit window is 1–10 simulation ticks (default 4); it starts off.
 - **Layout:** drag a column by its header to move it, or click the header to collapse it. Positions and collapsed columns are saved; **Reset layout** in the Settings column restores them.
 
-Attack and jump checks follow your current keyboard and supported mouse bindings. Clicker, While clicking aim assist and Auto Jump Reset pause while changed bindings refresh. Built-in touch and gamepad holds are unavailable through the current input API.
+Attack and jump checks follow your current keyboard and supported mouse bindings using the keys Cinnabar admits to gameplay. Keys consumed by shortcuts, held across a rebind, reserved, or blocked by menus, focus or the selected input device do not count. After a refused attack request, Clicker waits for the admitted attack hold to end before starting a new cadence. Clicker, While clicking aim assist and Auto Jump Reset pause while changed bindings refresh. Built-in touch and gamepad holds are unavailable through the current input API.
 
 Slider values can also be typed: click the current number, enter a value, and press **Enter**. **Escape** cancels the edit. The host applies the slider's range and step. **Mode** opens a dropdown with explicit options instead of cycling when clicked. Click outside or press Escape to dismiss it. Editing consumes typing so module shortcuts do not toggle accidentally; the configured menu key retains its reserved action.
 

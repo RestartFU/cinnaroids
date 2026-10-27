@@ -1115,6 +1115,7 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
             controls: true,
             players: true,
             interaction: true,
+            camera: true,
             ..Default::default()
         },
         r#"{"clicker":true,"cps":20}"#,
@@ -1124,7 +1125,7 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         &mut host,
         &budget,
         false,
-        &[("clicker", 1.)],
+        &[("clicker", 1.), ("aim", 1.)],
         GameplayFacts::default(),
     ));
     let snapshot = |gate| GameplaySnapshot {
@@ -1138,7 +1139,14 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         yaw: 0.,
         pitch: 0.,
         frame_seconds: 0.05,
-        players: Vec::new(),
+        players: vec![mod_host::GameplayPlayer {
+            runtime_id: 2,
+            position: GameplayVector3 {
+                x: -0.5,
+                y: 0.,
+                z: -3.,
+            },
+        }],
         attack_held: gate,
     };
     for (key, panel, gate, expected) in [
@@ -1155,12 +1163,71 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         controls.gameplay = true;
         controls.panel_open = panel;
         controls.keys_held = vec![key.into()];
+        controls.keys_admitted = if panel { vec![] } else { vec![key.into()] };
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, Some(snapshot(gate)), controls)
                 .unwrap();
         }));
         assert!(host.is_active());
         assert_eq!(host.take_interaction().attack_pulse, expected);
+        assert_eq!(host.take_camera_delta().is_some(), key == "KeyK" && !panel);
+    }
+    // Both keys are already held when Attack changes. The router removes admission
+    // until release, even though focused gameplay and raw key capture continue.
+    observe_bindings(&mut host, "MouseLeft", 3);
+    for (revision, admitted, gate, pulse, aim) in [
+        (3, vec![], false, false, false),
+        (3, vec!["MouseLeft", "KeyK"], true, false, true),
+        (3, vec!["MouseLeft", "KeyK"], true, true, true),
+        (4, vec![], false, false, false),
+        (4, vec![], false, false, false),
+        (4, vec!["MouseLeft"], false, false, false),
+        (4, vec!["MouseLeft", "KeyK"], true, false, true),
+        (4, vec!["MouseLeft", "KeyK"], true, true, true),
+        // A later request can be refused despite an admitted chord. Do not retry
+        // that hold even if the host gate recovers; wait for admission to end.
+        (4, vec!["KeyK"], false, false, true),
+        (4, vec!["KeyK"], true, false, true),
+        (4, vec!["KeyK"], true, false, true),
+        (4, vec![], false, false, false),
+        (4, vec!["KeyK"], true, false, true),
+        (4, vec!["KeyK"], true, true, true),
+    ] {
+        if revision == 4 {
+            observe_bindings(&mut host, "KeyK", revision);
+        }
+        let mut controls = empty_controls();
+        controls.seconds = 0.05;
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.keys_held = vec!["MouseLeft".into(), "KeyK".into()];
+        controls.keys_admitted = admitted.into_iter().map(String::from).collect();
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, Some(snapshot(gate)), controls)
+                .unwrap();
+        }));
+        assert_eq!(host.take_interaction().attack_pulse, pulse);
+        assert_eq!(host.take_camera_delta().is_some(), aim);
+    }
+    // These are finalized host observations. Raw keys alone must never drive
+    // either Clicker or While clicking aim under any admission interruption.
+    for reason in [
+        "chat macro",
+        "UI barrier",
+        "controller selected",
+        "reserved key",
+        "focus loss",
+    ] {
+        let mut controls = empty_controls();
+        controls.focused = reason != "focus loss";
+        controls.gameplay = true;
+        controls.keys_held = vec!["KeyK".into()];
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, Some(snapshot(false)), controls)
+                .unwrap();
+        }));
+        assert!(!host.take_interaction().attack_pulse, "{reason}");
+        assert!(host.take_camera_delta().is_none(), "{reason}");
     }
     println!(
         "rebound_attack_resolves_in_the_guest_within_the_callback_budget: peak {most} fuel (target {FRAME_FUEL})"
@@ -1230,8 +1297,12 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
     let keys: Vec<String> = (b'A'..=b'Z')
         .map(|key| format!("Key{}", char::from(key)))
         .chain((0..10).map(|key| format!("Digit{key}")))
-        .chain((1..=24).map(|key| format!("F{key}")))
-        .chain(["Space", "Tab", "Enter", "Backspace"].map(String::from))
+        .chain(
+            (1..=24)
+                .filter(|key| *key != 7)
+                .map(|key| format!("F{key}")),
+        )
+        .chain(["Space", "Tab", "Enter", "Backspace", "Delete"].map(String::from))
         .collect();
     assert_eq!(keys.len(), mod_api::MAX_CONTROL_KEYS);
     let entries: Vec<_> = keys
@@ -1273,6 +1344,7 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
             .cloned()
             .chain(["ShiftLeft".into()])
             .collect();
+        controls.keys_admitted = controls.keys_held.clone();
         let snapshot = GameplaySnapshot {
             session: 1,
             dimension: 0,
@@ -1427,6 +1499,7 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
         controls.focused = true;
         controls.gameplay = true;
         controls.keys_held = held.clone();
+        controls.keys_admitted = held.clone();
         let used = metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(
                 false,

@@ -63,7 +63,15 @@ impl Guest for Cinnaroids {
     }
 
     fn frame() {
-        let Ok(controls) = input::read_controls() else {
+        let Ok(controls) = input::read_selected_controls(&input::Selection {
+            keys_pressed: None,
+            keys_held: Some(vec!["MouseLeft".into()]),
+            keys_admitted: None,
+            events: true,
+        }) else {
+            MODULES.with(|modules| {
+                modules.borrow_mut().attack_pulse(None);
+            });
             AIM.with(|aim| aim.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
@@ -77,8 +85,7 @@ impl Guest for Cinnaroids {
             let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
                 let mut bindings = bindings.borrow_mut();
                 bindings.read();
-                let reserved = modules.reserved_keys();
-                let holds = bindings.resolve(&controls, &reserved);
+                let holds = bindings.resolve(&controls);
                 (holds.attack, holds.jump, bindings.ready())
             });
             let events: Vec<_> = controls
@@ -120,8 +127,8 @@ impl Guest for Cinnaroids {
                     frame.frame_seconds,
                 )
             });
-            if modules.attack_pulse(cadence) {
-                let _ = gameplay::pulse_attack();
+            if modules.attack_pulse(cadence) && gameplay::pulse_attack().is_err() {
+                modules.attack_refused();
             }
 
             let movement = if bindings_ready
