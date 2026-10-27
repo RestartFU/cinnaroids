@@ -446,14 +446,11 @@ fn requested_policies_share_precedence_without_resolving_unused_holds() {
     }
 }
 
-/// Filter collisions only add exact lookups; they cannot invent or suppress action holds.
+/// Similar names cannot invent or suppress holds across revisions.
 #[test]
-fn action_key_filters_preserve_exact_names_across_collisions_and_revisions() {
+fn selected_action_keys_preserve_exact_names_across_revisions() {
     let first = "Key000K";
-    let other = (0..1000)
-        .map(|i| format!("Key{i}K"))
-        .find(|name| KeyFilter::bit(name) == KeyFilter::bit(first))
-        .unwrap();
+    let other = "Key001K".to_owned();
     let mut cache = Cache::default();
     cache.refresh(|_, _, _| Ok(Some(full(1, vec![chord("jump", first)]))));
     assert!(!cache.held("jump", &controls(&[&other])));
@@ -462,4 +459,87 @@ fn action_key_filters_preserve_exact_names_across_collisions_and_revisions() {
     assert!(!cache.held("attack", &controls(&[first])));
     assert!(cache.held("attack", &controls(&[&other])));
     assert!(!cache.held("jump", &controls(&[first])));
+}
+
+/// Compiled arbitration agrees with an independent specificity oracle for every mask triple.
+#[test]
+fn compiled_winners_cover_every_modifier_and_action_mask() {
+    for actual in 0u8..16 {
+        for attack in 0u8..16 {
+            for jump in 0u8..16 {
+                for other in 0u8..16 {
+                    let mut key = Key {
+                        all: (1 << attack) | (1 << jump) | (1 << other),
+                        attack: 1 << attack,
+                        jump: 1 << jump,
+                        ..Default::default()
+                    };
+                    key.compile();
+                    let maximum = [attack, jump, other]
+                        .into_iter()
+                        .filter(|mask| mask & actual == *mask)
+                        .map(u8::count_ones)
+                        .max();
+                    for (required, winners) in
+                        [(attack, key.winning_attack), (jump, key.winning_jump)]
+                    {
+                        assert_eq!(
+                            winners & (1 << actual) != 0,
+                            required & actual == required && maximum == Some(required.count_ones())
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Future names retain every prefix and length through the full API byte limit.
+#[test]
+fn future_names_keep_every_prefix_and_length_distinct() {
+    let names: Vec<_> = (1..=mod_api::MAX_CONTROL_KEY_BYTES)
+        .map(|length| "K".repeat(length))
+        .collect();
+    let mut cache = Cache::default();
+    for names in names.chunks(BINDINGS_PER_FRAME as usize) {
+        cache.refresh(|_, _, _| {
+            Ok(Some(Bindings {
+                revision: 1,
+                total: mod_api::MAX_CONTROL_KEY_BYTES as u32,
+                entries: names.iter().map(|name| chord("attack", name)).collect(),
+            }))
+        });
+    }
+    assert_eq!(cache.keys.len(), mod_api::MAX_CONTROL_KEY_BYTES);
+    for name in &names {
+        assert!(cache.held("attack", &controls(&[name])));
+    }
+    assert!(!cache.held("attack", &controls(&["J"])));
+}
+
+/// Every desktop name has a unique dense identity; similar unknown names never alias it.
+#[test]
+fn native_key_identities_are_unique_and_exact() {
+    let names = super::NATIVE_NAMES;
+    let ids: std::collections::HashSet<_> =
+        names.iter().map(|name| native_key(name).unwrap()).collect();
+    assert_eq!(ids.len(), names.len());
+    assert!(ids.iter().all(|id| *id < 128));
+    for known in names.iter().filter(|name| name.len() > 4) {
+        let mut alias = known.as_bytes().to_vec();
+        alias[2] = b'?';
+        assert_eq!(native_key(std::str::from_utf8(&alias).unwrap()), None);
+    }
+    for name in [
+        "KeyAA",
+        "Keya",
+        "Digit01",
+        "F01",
+        "F0",
+        "F25",
+        "Numpad00",
+        "ShiftLeftx",
+    ] {
+        assert_eq!(native_key(name), None);
+    }
 }

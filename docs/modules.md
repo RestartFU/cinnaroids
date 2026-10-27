@@ -32,6 +32,8 @@ Auto Jump Reset observes server motion and requests an ordinary ground jump thro
 
 Player ESP outlines the host's actual animated player and equipment meshes, with a matching soft halo. Native bounds place the labels, which Cinnaroids draws on its own HUD layer and Cinnabar keeps above each player as it moves; no box geometry is drawn. A player keeps the same label while in view, and up to three new names appear per frame. It draws at most six observed players per callback and cannot reveal actors the server has not sent. The host's observation budget also includes non-player actors, so crowded scenes may expose fewer players. Missing bounds are skipped. Health displays rounded-up current/maximum HP in the label; when maximum health is unknown, only reported HP is shown. Missing health is omitted entirely. Names and distance can be hidden independently. Opening the panel, losing focus, disconnecting or disabling ESP clears the overlay and retained labels.
 
+Terrain and ESP updates spread across additional frames when other enabled modules use the callback budget. Combat input checks and aim assistance continue on every frame.
+
 Player ESP requires a Cinnabar build containing actor mask outline/glow composition and the updated actor observation record. Entity highlighting, protected observation and through-wall permissions must be granted in Mods, and Cinnabar's session policy must allow protected observations and through-wall rendering. Current Cinnabar requires an authenticated server grant for elevated drawing on remote servers; local-world policy is handled by the host. ESP does not bypass that policy.
 
 ## Runtime and settings

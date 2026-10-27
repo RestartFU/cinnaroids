@@ -70,6 +70,8 @@ pub struct Labels {
     json: String,
     /// New names taken this callback.
     named: usize,
+    next_slot: usize,
+    next_actor: usize,
 }
 
 /// A selected player's label inputs.
@@ -89,6 +91,7 @@ impl Labels {
 
     /// Selects current-session remote players and returns the bindings that changed since the
     /// last update; absent bounds and health stay unknown.
+    #[cfg(test)]
     pub fn update(
         &mut self,
         p: &Preferences,
@@ -97,10 +100,29 @@ impl Labels {
         eye: [f32; 3],
         actors: &[ObservedActor],
     ) -> Output {
+        self.update_budgeted(p, session, dimension, eye, actors, |_| true)
+    }
+
+    /// Rotates deferred actor checks and label writes. `allows(true)` budgets actor work;
+    /// `allows(false)` budgets one label write.
+    pub fn update_budgeted(
+        &mut self,
+        p: &Preferences,
+        session: u64,
+        dimension: i32,
+        eye: [f32; 3],
+        actors: &[ObservedActor],
+        mut allows: impl FnMut(bool) -> bool,
+    ) -> Output {
         let mut players = Vec::with_capacity(MAX_PLAYERS);
         let mut labels: [Option<Label>; MAX_PLAYERS] = Default::default();
         let mut shown = 0;
-        for observed in actors.iter().take(mod_api::MAX_OBSERVED_ACTORS) {
+        let count = actors.len().min(MAX_PLAYERS);
+        let mut deferred = Vec::new();
+        let first = self.next_actor;
+        for offset in 0..count {
+            let index = (first + offset) % count;
+            let observed = &actors[index];
             let actor = &observed.actor;
             if !actor.player
                 || actor.session != session
@@ -125,6 +147,20 @@ impl Labels {
             if distance > f32::from(p.esp_range) {
                 continue;
             }
+            if !allows(true) {
+                if !actor.boxes.is_empty() {
+                    deferred.push(actor.runtime_id);
+                    if self
+                        .slots
+                        .iter()
+                        .any(|slot| slot.shown && slot.actor == actor.runtime_id)
+                    {
+                        players.push(actor.runtime_id);
+                    }
+                }
+                continue;
+            }
+            self.next_actor = (index + 1) % count;
             let Some((min, max)) = bounds(actor) else {
                 continue;
             };
@@ -161,12 +197,15 @@ impl Labels {
             shown += 1;
         }
         // A player keeps its slot while shown, so moving players change no names.
+        let preserved: [bool; MAX_PLAYERS] =
+            std::array::from_fn(|slot| deferred.contains(&self.slots[slot].actor));
         let mut assigned: [Option<usize>; MAX_PLAYERS] = [None; MAX_PLAYERS];
         let mut placed = [false; MAX_PLAYERS];
         for (index, label) in labels.iter().enumerate() {
             let Some(label) = label else { break };
             if let Some(slot) = (0..MAX_PLAYERS).find(|&slot| {
                 assigned[slot].is_none()
+                    && !preserved[slot]
                     && self.slots[slot].shown
                     && self.slots[slot].actor == label.actor
             }) {
@@ -179,7 +218,7 @@ impl Labels {
                 continue;
             };
             // Prefer a slot that last showed this actor, then a hidden one.
-            let free = |slot: &usize| assigned[*slot].is_none();
+            let free = |slot: &usize| assigned[*slot].is_none() && !preserved[*slot];
             let slot = (0..MAX_PLAYERS)
                 .filter(free)
                 .find(|&slot| self.slots[slot].actor == label.actor)
@@ -194,8 +233,19 @@ impl Labels {
         }
         self.json.clear();
         self.named = 0;
-        for (slot, index) in assigned.into_iter().enumerate() {
-            self.write(slot, index.and_then(|index| labels[index].as_ref()));
+        let first = self.next_slot;
+        for offset in 0..MAX_PLAYERS {
+            let slot = (first + offset) % MAX_PLAYERS;
+            if preserved[slot] {
+                continue;
+            }
+            let label = assigned[slot].and_then(|index| labels[index].as_ref());
+            if label.is_none() || allows(false) {
+                self.write(slot, label);
+                self.next_slot = (slot + 1) % MAX_PLAYERS;
+            } else if label.is_some_and(|label| self.slots[slot].actor != label.actor) {
+                self.write(slot, None);
+            }
         }
         let labels = (!self.json.is_empty()).then(|| {
             let mut update = String::with_capacity(self.json.len() + 24);
@@ -218,6 +268,7 @@ impl Labels {
             detail,
             json,
             named,
+            ..
         } = self;
         let slot = &mut slots[index];
         let digit = char::from(b'0' + index as u8);

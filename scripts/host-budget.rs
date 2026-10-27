@@ -1384,26 +1384,56 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
 /// Completing a full catalog cannot multiply held-key scans while drawing modules update.
 #[test]
 fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget() {
-    combined_binding_completion(false, false);
+    combined_binding_completion(false, false, false, false, false);
 }
 
 /// Full aim observation and drawing work must not resolve an unused Jump policy.
 #[test]
 fn binding_completion_with_128_aim_targets_and_unused_jump_fits_the_frame_budget() {
-    combined_binding_completion(true, false);
+    combined_binding_completion(true, false, false, false, false);
 }
 
 /// Both hold policies, full aim work and moving drawings must fit together.
 #[test]
 fn binding_completion_with_all_input_modules_and_drawings_fits_the_frame_budget() {
-    combined_binding_completion(true, true);
+    combined_binding_completion(true, true, false, false, false);
+}
+
+/// Modifier-ineligible alternatives cannot make the last admitted match expensive.
+#[test]
+fn late_attack_with_maximum_aim_targets_fits_the_frame_budget() {
+    combined_binding_completion(true, true, true, false, false);
+}
+
+/// ESP observations, labels and masks share the callback with combat and retained drawings.
+#[test]
+fn fast_attack_with_player_esp_fits_the_frame_budget() {
+    combined_binding_completion(true, true, false, true, false);
+}
+
+/// The last-match input case includes every drawing module, not just world instances.
+#[test]
+fn late_attack_with_all_drawings_fits_the_frame_budget() {
+    combined_binding_completion(true, true, true, true, false);
+}
+
+/// Every module is enabled with maximum observations, changing names and moving terrain.
+#[test]
+fn all_modules_with_maximum_observations_fit_the_frame_budget() {
+    combined_binding_completion(true, true, true, true, true);
 }
 
 /// Exercises collection, completion and steady state with a full catalog and admission sample.
-fn combined_binding_completion(aim: bool, jump_reset: bool) {
+fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: bool, maximum: bool) {
     use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
+            hud: true,
+            player_state: true,
+            render: true,
+            entity_observe: true,
+            entity_highlight: true,
+            fullbright: true,
             controls: true,
             camera: true,
             movement: true,
@@ -1419,6 +1449,12 @@ fn combined_binding_completion(aim: bool, jump_reset: bool) {
         r#"{"netherite_range":128,"show_real_position":true,"cps":20}"#,
     );
     let mut events = vec![("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)];
+    if esp {
+        events.extend([("player_esp", 1.), ("fullbright", 1.)]);
+    }
+    if maximum {
+        events.push(("reach", 1.));
+    }
     if aim {
         events.push(("aim", 1.));
     }
@@ -1462,10 +1498,10 @@ fn combined_binding_completion(aim: bool, jump_reset: bool) {
                 "attack"
             }
             .into(),
-            key,
+            key: key.clone(),
             context: BindingContext::Gameplay,
             modifiers: BindingModifiers {
-                shift: false,
+                shift: late && key != "KeyK",
                 control: false,
                 alt: false,
                 super_key: false,
@@ -1487,10 +1523,73 @@ fn combined_binding_completion(aim: bool, jump_reset: bool) {
         shift: 0,
     };
     let mut first_marker = Vec::new();
+    let mut middle_cubes = Vec::new();
     let mut completion = 0;
     let mut collecting = 0;
     let mut steady = 0;
-    for frame in 0..40 {
+    let completed = (mod_api::MAX_INPUT_BINDINGS as u64).div_ceil(4) - 1;
+    for frame in 0..160 {
+        if esp {
+            use mod_host::{
+                ActorObservation, ActorObservationBounds, ObservedActor,
+                module_observations::ModuleObservations,
+            };
+            let generation = frame.min(99) / 20;
+            host.publish_mask_targets(
+                &(0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| {
+                        (
+                            mod_api::drawing::MaskEntity {
+                                connection: 1,
+                                dimension: 0,
+                                runtime_id: index as u64 + 1,
+                                spawn_revision: 1,
+                            },
+                            72,
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            );
+            host.observe_modules(ModuleObservations {
+                actors: (0..mod_api::MAX_OBSERVED_ACTORS)
+                    .map(|index| ObservedActor {
+                        actor: ActorObservation {
+                            session: 2,
+                            dimension: 0,
+                            runtime_id: index as u64 + 1,
+                            player: true,
+                            position: (index as f32 + frame as f32 * 0.05, 0., -4.),
+                            boxes: vec![
+                                ActorObservationBounds {
+                                    min: (index as f32 - 0.3, 0., -4.3),
+                                    max: (index as f32 + 0.3, 1.8, -3.7)
+                                };
+                                mod_api::MAX_OBSERVED_ACTOR_BOXES
+                            ],
+                            name: format!("§{generation}")
+                                .repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES / 3),
+                            identifier: "minecraft:player".into(),
+                            yaw: 0.,
+                            pitch: 0.,
+                            pickable: true,
+                            hittable: None,
+                            look_origin: None,
+                            look_direction: None,
+                            invisible: false,
+                            sneaking: false,
+                            hurt: false,
+                            health: Some(10. + generation as f32),
+                        },
+                        max_health: Some(40.),
+                    })
+                    .collect(),
+                ..Default::default()
+            })
+            .unwrap();
+        }
+        if maximum {
+            debris.shift = (frame / 20) as i32;
+        }
         host.observe_presentation(
             Some(mod_host::WorldObservation {
                 session: 2,
@@ -1583,25 +1682,51 @@ fn combined_binding_completion(aim: bool, jump_reset: bool) {
             .unwrap_or_else(|error| panic!("binding/drawing frame {frame}: {error:#}"));
         });
         most = most.max(used);
-        // Eight binding rows per callback: frame 15 completes collection and resolves holds.
-        match frame {
-            0..15 => collecting = collecting.max(used),
-            15 => completion = used,
-            _ => steady = steady.max(used),
+        if esp && frame == 159 {
+            assert_eq!(shown_labels(&host), 6, "deferred ESP must catch up");
+            let expected = format!("§{}", frame.min(99) / 20)
+                .repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES / 3);
+            let surface = host.hud_surface().unwrap().0;
+            for slot in 0..6 {
+                assert_eq!(
+                    surface.bindings[&format!("#esp_{slot}_line1")],
+                    ui::mod_panel::SurfaceValue::Text(expected.clone()),
+                    "name update must progress"
+                );
+            }
         }
-        assert_eq!(host.take_interaction().attack_pulse, frame >= 16);
-        assert_eq!(host.take_camera_delta().is_some(), aim && frame >= 15);
+        if frame == 80 {
+            middle_cubes = drawn_origins(&host)
+                .into_iter()
+                .filter(|origin| origin[2] < 0)
+                .collect();
+        }
+        // Four binding rows per callback; completion must stay silent until the full revision.
+        if frame < completed {
+            collecting = collecting.max(used);
+        } else if frame == completed {
+            completion = used;
+        } else {
+            steady = steady.max(used);
+        }
+        assert_eq!(host.take_interaction().attack_pulse, frame > completed);
+        assert_eq!(
+            host.take_camera_delta().is_some(),
+            aim && frame >= completed
+        );
         assert_eq!(
             host.take_jump_pulse(),
-            jump_reset && frame >= 17 && frame % 2 == 1
+            jump_reset && frame >= completed + 2 && frame % 2 == 1
         );
-        assert_eq!(host.take_jump_cancel(), !jump_reset || frame < 15);
+        assert_eq!(host.take_jump_cancel(), !jump_reset || frame < completed);
         let origins = drawn_origins(&host);
-        assert_eq!(
-            origins.iter().filter(|origin| origin[2] == 0).count(),
-            5,
-            "moving FakeLag marker on frame {frame}"
-        );
+        if !esp || frame >= completed {
+            assert_eq!(
+                origins.iter().filter(|origin| origin[2] == 0).count(),
+                5,
+                "moving FakeLag marker on frame {frame}"
+            );
+        }
         let marker: Vec<_> = origins
             .iter()
             .copied()
@@ -1610,25 +1735,39 @@ fn combined_binding_completion(aim: bool, jump_reset: bool) {
         if frame == 0 {
             first_marker = marker.clone();
         }
-        if frame == 15 {
+        if frame == completed {
             assert_ne!(
                 marker, first_marker,
                 "marker moved before collection completed"
             );
-            assert!(
-                origins.iter().any(|origin| origin[2] < 0),
-                "Finder active at completion"
-            );
+            if !esp {
+                assert!(
+                    origins.iter().any(|origin| origin[2] < 0),
+                    "Finder active at completion"
+                );
+            }
         }
     }
     assert_eq!(drawn_instances(&host), 256 + 5);
+    if maximum {
+        let last: Vec<_> = drawn_origins(&host)
+            .into_iter()
+            .filter(|origin| origin[2] < 0)
+            .collect();
+        assert_ne!(middle_cubes, last, "deferred terrain updates must progress");
+    }
+    if esp {
+        assert_eq!(shown_labels(&host), 6);
+        assert_eq!(host.render().0.masks.len(), 1);
+        assert!(host.fullbright());
+    }
     assert!(
-        most <= 90_000,
-        "combined workload needs 10% headroom: {most}"
+        most <= 95_000,
+        "combined workload needs 5% headroom: {most}"
     );
     println!(
         "128 binding rows, 110 keys, 64 held, unheld jump + Finder + moving FakeLag \
-        (aim={aim}, jump_reset={jump_reset}): \
+        (aim={aim}, jump_reset={jump_reset}, late={late}, esp={esp}, maximum={maximum}): \
         peak {most}, collecting {collecting}, completion {completion}, steady {steady} fuel \
         (target {FRAME_FUEL})"
     );

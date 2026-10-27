@@ -350,3 +350,52 @@ fn host_style_has_a_crisp_edge_and_bounded_matching_halo() {
         assert!(style.glow.a > 0. && style.glow.a < style.outline.a);
     }
 }
+
+/// Deferred label writes rotate fairly and never publish an old actor's text for a new actor.
+#[test]
+fn budgeted_labels_make_progress_and_hide_reassigned_slots() {
+    let actors: Vec<_> = (0..MAX_PLAYERS)
+        .map(|i| {
+            let mut actor = actor();
+            actor.actor.runtime_id += i as u64;
+            actor.actor.name = format!("Player {i}");
+            actor
+        })
+        .collect();
+    let mut labels = Labels::default();
+    for _ in 0..MAX_PLAYERS {
+        let mut remaining = 1usize;
+        labels.update_budgeted(
+            &Preferences::default(),
+            3,
+            0,
+            [0., 1.6, 0.],
+            &actors,
+            |actor| {
+                if actor {
+                    return true;
+                }
+                let allowed = remaining != 0;
+                remaining = remaining.saturating_sub(1);
+                allowed
+            },
+        );
+    }
+    assert!(labels.slots.iter().all(|slot| slot.shown));
+    for (i, slot) in labels.slots.iter().enumerate() {
+        assert_eq!(slot.name, format!("Player {i}"));
+    }
+    let mut replacement = actors;
+    for actor in &mut replacement {
+        actor.actor.runtime_id += 100;
+    }
+    labels.update_budgeted(
+        &Preferences::default(),
+        3,
+        0,
+        [0., 1.6, 0.],
+        &replacement,
+        |actor| actor,
+    );
+    assert!(labels.slots.iter().all(|slot| !slot.shown));
+}
