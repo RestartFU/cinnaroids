@@ -1,5 +1,10 @@
 use super::*;
 
+const BOTH: Holds = Holds {
+    attack: true,
+    jump: true,
+};
+
 /// A complete small settings page.
 fn full(revision: u64, entries: Vec<ActionBinding>) -> Bindings {
     Bindings {
@@ -196,16 +201,16 @@ fn held_key_rebind_waits_for_admission() {
     let mut cache = Cache::default();
     cache.refresh(|_, _, _| Ok(Some(full(1, vec![chord("attack", "MouseLeft")]))));
     let mut input = controls(&["MouseLeft", "KeyK"]);
-    assert!(cache.resolve(&input).attack);
+    assert!(cache.resolve(&input, BOTH).attack);
     cache.refresh(|_, _, _| Ok(Some(full(2, vec![chord("attack", "KeyK")]))));
     input.keys_admitted.clear();
     for _ in 0..4 {
-        assert!(!cache.resolve(&input).attack);
+        assert!(!cache.resolve(&input, BOTH).attack);
     }
     input = controls(&["MouseLeft"]);
-    assert!(!cache.resolve(&input).attack);
+    assert!(!cache.resolve(&input, BOTH).attack);
     input = controls(&["MouseLeft", "KeyK"]);
-    assert!(cache.resolve(&input).attack);
+    assert!(cache.resolve(&input, BOTH).attack);
 }
 
 /// Raw holds never bypass consumed keys, UI barriers, device selection or reservations.
@@ -261,7 +266,7 @@ fn unadmitted_raw_holds_gate_attack_jump_and_click_only_aim() {
         if reason == "focus loss" {
             input.focused = false;
         }
-        let holds = cache.resolve(&input);
+        let holds = cache.resolve(&input, BOTH);
         assert_eq!(holds, Holds::default(), "{reason}");
         frame.attack_held = holds.attack;
         assert!(aim.update(config, Some(&frame)).is_none(), "{reason}");
@@ -291,14 +296,14 @@ fn chords_use_only_admitted_modifiers_and_keep_equal_specificity_alternatives() 
         for side in sides {
             let mut input = controls(&["KeyK", side]);
             assert_eq!(
-                cache.resolve(&input),
+                cache.resolve(&input, BOTH),
                 Holds {
                     attack: true,
                     jump: true
                 }
             );
             input.keys_admitted.retain(|key| key != side);
-            assert_eq!(cache.resolve(&input), Holds::default());
+            assert_eq!(cache.resolve(&input, BOTH), Holds::default());
         }
     }
 }
@@ -345,7 +350,7 @@ fn startup_paging_waits_for_complete_bindings_and_starts_a_fresh_hold() {
         },
         yaw: 0.,
         pitch: 0.,
-        attack_held: cache.resolve(&input).attack,
+        attack_held: cache.resolve(&input, BOTH).attack,
         seconds: 0.05,
         players: &players,
     };
@@ -381,7 +386,7 @@ fn startup_paging_waits_for_complete_bindings_and_starts_a_fresh_hold() {
         }))
     });
     assert!(cache.ready());
-    frame.attack_held = cache.resolve(&input).attack;
+    frame.attack_held = cache.resolve(&input, BOTH).attack;
     assert!(frame.attack_held);
     assert!(!state.attack_pulse(Some((1, 0, frame.attack_held, 0.05))));
     assert!(state.attack_pulse(Some((1, 0, frame.attack_held, 0.05))));
@@ -394,4 +399,67 @@ fn startup_paging_waits_for_complete_bindings_and_starts_a_fresh_hold() {
             ..jump_frame(4, 2)
         })
     ));
+}
+
+/// Unrequested policies stay false, including a stronger chord belonging to an unused action.
+#[test]
+fn requested_policies_share_precedence_without_resolving_unused_holds() {
+    let mut cache = Cache::default();
+    let mut shifted = chord("jump", "KeyK");
+    shifted.modifiers.shift = true;
+    cache.refresh(|_, _, _| {
+        Ok(Some(full(
+            1,
+            vec![chord("attack", "KeyK"), chord("jump", "Space"), shifted],
+        )))
+    });
+    for (input, expected) in [
+        (controls(&["KeyK", "Space"]), BOTH),
+        (
+            controls(&["KeyK", "ShiftLeft"]),
+            Holds {
+                attack: false,
+                jump: true,
+            },
+        ),
+    ] {
+        for needed in [
+            Holds::default(),
+            Holds {
+                attack: true,
+                jump: false,
+            },
+            Holds {
+                attack: false,
+                jump: true,
+            },
+            BOTH,
+        ] {
+            assert_eq!(
+                cache.resolve(&input, needed),
+                Holds {
+                    attack: needed.attack && expected.attack,
+                    jump: needed.jump && expected.jump,
+                }
+            );
+        }
+    }
+}
+
+/// Filter collisions only add exact lookups; they cannot invent or suppress action holds.
+#[test]
+fn action_key_filters_preserve_exact_names_across_collisions_and_revisions() {
+    let first = "Key000K";
+    let other = (0..1000)
+        .map(|i| format!("Key{i}K"))
+        .find(|name| KeyFilter::bit(name) == KeyFilter::bit(first))
+        .unwrap();
+    let mut cache = Cache::default();
+    cache.refresh(|_, _, _| Ok(Some(full(1, vec![chord("jump", first)]))));
+    assert!(!cache.held("jump", &controls(&[&other])));
+    assert!(cache.held("jump", &controls(&[first])));
+    cache.refresh(|_, _, _| Ok(Some(full(2, vec![chord("attack", &other)]))));
+    assert!(!cache.held("attack", &controls(&[first])));
+    assert!(cache.held("attack", &controls(&[&other])));
+    assert!(!cache.held("jump", &controls(&[first])));
 }

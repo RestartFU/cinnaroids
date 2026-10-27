@@ -35,6 +35,32 @@ impl KeyName {
     }
 }
 
+/// Rejects unrelated names cheaply; collisions still require the exact indexed lookup.
+#[derive(Default)]
+struct KeyFilter([u64; 4]);
+
+impl KeyFilter {
+    /// Samples bounded name bytes without allocating or packing the full name.
+    fn bit(name: &str) -> (usize, u64) {
+        let bytes = name.as_bytes();
+        let first = bytes.first().copied().unwrap_or(0);
+        let last = bytes.last().copied().unwrap_or(0);
+        let hash = first.wrapping_mul(31) ^ last.wrapping_mul(7) ^ bytes.len() as u8;
+        (usize::from(hash / 64), 1 << (hash % 64))
+    }
+
+    /// Adds a key for one action, irrespective of its required modifiers.
+    fn insert(&mut self, name: &str) {
+        let (word, bit) = Self::bit(name);
+        self.0[word] |= bit;
+    }
+
+    /// A missing bit proves the action has no chord for this key.
+    fn contains(&self, (word, bit): (usize, u64)) -> bool {
+        self.0[word] & bit != 0
+    }
+}
+
 /// Chords sharing a physical key, compressed into the sixteen possible modifier masks.
 #[derive(Default)]
 struct Key {
@@ -51,6 +77,8 @@ pub struct Cache {
     complete: bool,
     has_attack: bool,
     has_jump: bool,
+    attack_keys: KeyFilter,
+    jump_keys: KeyFilter,
     // Sorted for binary lookup; insertion moves at most MAX_INPUT_BINDINGS bounded rows.
     keys: Vec<(KeyName, Key)>,
     retired: VecDeque<Vec<(KeyName, Key)>>,
@@ -68,6 +96,8 @@ impl Cache {
         self.complete = false;
         self.has_attack = false;
         self.has_jump = false;
+        self.attack_keys = KeyFilter::default();
+        self.jump_keys = KeyFilter::default();
     }
 
     /// Retires no more rows than a read can add, keeping memory and cleanup work bounded.
@@ -137,10 +167,12 @@ impl Cache {
                         "attack" => {
                             key.attack |= bit;
                             self.has_attack = true;
+                            self.attack_keys.insert(&binding.key);
                         }
                         "jump" => {
                             key.jump |= bit;
                             self.has_jump = true;
+                            self.jump_keys.insert(&binding.key);
                         }
                         _ => {}
                     }
@@ -157,11 +189,15 @@ impl Cache {
         self.complete
     }
 
-    /// Resolves both policies once from admitted held keys and complete player assignments.
-    pub fn resolve(&self, controls: &Controls) -> Holds {
+    /// Resolves requested policies in one pass over admitted keys and complete assignments.
+    pub fn resolve(&self, controls: &Controls, needed: Holds) -> Holds {
+        let mut needed = Holds {
+            attack: needed.attack && self.has_attack,
+            jump: needed.jump && self.has_jump,
+        };
         let mut result = Holds::default();
         if !(self.complete && controls.focused && controls.gameplay && !controls.panel_open)
-            || !(self.has_attack || self.has_jump)
+            || !(needed.attack || needed.jump)
         {
             return result;
         }
@@ -169,7 +205,11 @@ impl Cache {
         let satisfied = (0u8..16)
             .filter(|mask| mask & actual == *mask)
             .fold(0u16, |bits, mask| bits | (1 << mask));
+        let mut candidates = self.keys_for(needed);
         for name in &controls.keys_admitted {
+            if !candidates.contains(KeyFilter::bit(name)) {
+                continue;
+            }
             let Some(id) = KeyName::new(name) else {
                 continue;
             };
@@ -177,7 +217,7 @@ impl Cache {
                 continue;
             };
             let key = &self.keys[index].1;
-            if (key.attack == 0 || result.attack) && (key.jump == 0 || result.jump) {
+            if (key.attack == 0 || !needed.attack) && (key.jump == 0 || !needed.jump) {
                 continue;
             }
             let mut active = key.all & satisfied;
@@ -196,21 +236,47 @@ impl Cache {
                     winning |= bit;
                 }
             }
-            let attack = winning & key.attack != 0;
-            let jump = winning & key.jump != 0;
+            let attack = needed.attack && winning & key.attack != 0;
+            let jump = needed.jump && winning & key.jump != 0;
             result.attack |= attack;
             result.jump |= jump;
-            if (result.attack || !self.has_attack) && (result.jump || !self.has_jump) {
+            needed.attack &= !attack;
+            needed.jump &= !jump;
+            if !(needed.attack || needed.jump) {
                 break;
+            }
+            if attack || jump {
+                candidates = self.keys_for(needed);
             }
         }
         result
     }
 
+    /// Combines only unresolved actions so later keys need one cheap filter check.
+    fn keys_for(&self, needed: Holds) -> KeyFilter {
+        KeyFilter(std::array::from_fn(|index| {
+            (if needed.attack {
+                self.attack_keys.0[index]
+            } else {
+                0
+            }) | (if needed.jump {
+                self.jump_keys.0[index]
+            } else {
+                0
+            })
+        }))
+    }
+
     /// Selects one guest-owned policy result for focused unit coverage.
     #[cfg(test)]
     fn held(&self, action: &str, controls: &Controls) -> bool {
-        let holds = self.resolve(controls);
+        let holds = self.resolve(
+            controls,
+            Holds {
+                attack: action == "attack",
+                jump: action == "jump",
+            },
+        );
         match action {
             "attack" => holds.attack,
             "jump" => holds.jump,

@@ -435,15 +435,24 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
             z: 0.0,
         },
     };
-    for (tick, sequence, grounded, expected) in [
-        (10, 0, true, false),
-        (11, 1, false, false),
-        (12, 1, true, true),
-        (12, 1, true, false),
+    assert!(host.take_jump_cancel());
+    for (tick, sequence, grounded, held, expected) in [
+        (10, 0, true, false, false),
+        (11, 1, false, false, false),
+        (12, 1, true, false, true),
+        (12, 1, true, false, false),
+        (13, 2, false, false, false),
+        (14, 2, true, true, false),
+        (15, 2, true, false, false),
+        (16, 3, true, false, true),
     ] {
         let mut controls = empty_controls();
         controls.focused = true;
         controls.gameplay = true;
+        if held {
+            controls.keys_held.push("Space".into());
+            controls.keys_admitted.push("Space".into());
+        }
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_movement(
                 false,
@@ -457,6 +466,7 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         }));
         assert_eq!(host.take_jump_pulse(), expected);
         assert!(!host.take_jump_pulse(), "pulse is consumed once");
+        assert_eq!(host.take_jump_cancel(), held);
     }
     let mut controls = empty_controls();
     controls.focused = true;
@@ -472,7 +482,7 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
             Some(frame()),
             Vec::new(),
             None,
-            Some(movement(13, 2, true)),
+            Some(movement(17, 4, true)),
             controls,
         )
         .unwrap();
@@ -1374,10 +1384,29 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
 /// Completing a full catalog cannot multiply held-key scans while drawing modules update.
 #[test]
 fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget() {
+    combined_binding_completion(false, false);
+}
+
+/// Full aim observation and drawing work must not resolve an unused Jump policy.
+#[test]
+fn binding_completion_with_128_aim_targets_and_unused_jump_fits_the_frame_budget() {
+    combined_binding_completion(true, false);
+}
+
+/// Both hold policies, full aim work and moving drawings must fit together.
+#[test]
+fn binding_completion_with_all_input_modules_and_drawings_fits_the_frame_budget() {
+    combined_binding_completion(true, true);
+}
+
+/// Exercises collection, completion and steady state with a full catalog and admission sample.
+fn combined_binding_completion(aim: bool, jump_reset: bool) {
     use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
             controls: true,
+            camera: true,
+            movement: true,
             settings: true,
             players: true,
             interaction: true,
@@ -1389,13 +1418,14 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
         },
         r#"{"netherite_range":128,"show_real_position":true,"cps":20}"#,
     );
-    let mut most = metered_frame(
-        &mut host,
-        &budget,
-        false,
-        &[("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)],
-        GameplayFacts::default(),
-    );
+    let mut events = vec![("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)];
+    if aim {
+        events.push(("aim", 1.));
+    }
+    if jump_reset {
+        events.push(("jump_reset", 1.));
+    }
+    let mut most = metered_frame(&mut host, &budget, false, &events, GameplayFacts::default());
     // Supported non-modifier desktop keys, excluding the reserved menu key F7.
     let keys: Vec<String> =
         "ArrowDown ArrowLeft ArrowRight ArrowUp Backquote Backslash Backspace BracketLeft
@@ -1501,7 +1531,7 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
         controls.keys_held = held.clone();
         controls.keys_admitted = held.clone();
         let used = metered_callback(&mut host, &budget, |host| {
-            host.frame_with_controls(
+            host.frame_with_movement(
                 false,
                 Some(GameplaySnapshot {
                     session: 2,
@@ -1514,8 +1544,39 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
                     yaw: 0.,
                     pitch: 0.,
                     frame_seconds: 0.05,
-                    players: Vec::new(),
+                    players: if aim {
+                        (0..mod_api::MAX_GAMEPLAY_PLAYERS)
+                            .map(|index| mod_host::GameplayPlayer {
+                                runtime_id: index as u64 + 200,
+                                position: GameplayVector3 {
+                                    x: -0.5 + index as f32 * 0.001,
+                                    y: 0.,
+                                    z: -3.,
+                                },
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
                     attack_held: true,
+                }),
+                Vec::new(),
+                None,
+                Some(mod_host::GameplayMovementSnapshot {
+                    session: 2,
+                    dimension: 0,
+                    tick: frame,
+                    knockback_sequence: frame / 2,
+                    on_ground: frame % 2 == 1,
+                    jump_held: false,
+                    sprint_held: false,
+                    sneak_held: false,
+                    eligible: true,
+                    velocity: GameplayVector3 {
+                        x: 0.2,
+                        y: -0.08,
+                        z: 0.,
+                    },
                 }),
                 controls,
             )
@@ -1529,6 +1590,12 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
             _ => steady = steady.max(used),
         }
         assert_eq!(host.take_interaction().attack_pulse, frame >= 16);
+        assert_eq!(host.take_camera_delta().is_some(), aim && frame >= 15);
+        assert_eq!(
+            host.take_jump_pulse(),
+            jump_reset && frame >= 17 && frame % 2 == 1
+        );
+        assert_eq!(host.take_jump_cancel(), !jump_reset || frame < 15);
         let origins = drawn_origins(&host);
         assert_eq!(
             origins.iter().filter(|origin| origin[2] == 0).count(),
@@ -1555,8 +1622,13 @@ fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget
         }
     }
     assert_eq!(drawn_instances(&host), 256 + 5);
+    assert!(
+        most <= 90_000,
+        "combined workload needs 10% headroom: {most}"
+    );
     println!(
-        "128 binding rows, 110 keys, 64 held, unheld jump + Finder + moving FakeLag: \
+        "128 binding rows, 110 keys, 64 held, unheld jump + Finder + moving FakeLag \
+        (aim={aim}, jump_reset={jump_reset}): \
         peak {most}, collecting {collecting}, completion {completion}, steady {steady} fuel \
         (target {FRAME_FUEL})"
     );

@@ -63,7 +63,7 @@ impl Guest for Cinnaroids {
     }
 
     fn frame() {
-        let Ok(controls) = input::read_selected_controls(&input::Selection {
+        let Ok(mut controls) = input::read_selected_controls(&input::Selection {
             keys_pressed: None,
             keys_held: Some(vec!["MouseLeft".into()]),
             keys_admitted: None,
@@ -82,14 +82,7 @@ impl Guest for Cinnaroids {
         };
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
-            let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
-                let mut bindings = bindings.borrow_mut();
-                bindings.read();
-                let holds = bindings.resolve(&controls);
-                (holds.attack, holds.jump, bindings.ready())
-            });
-            let events: Vec<_> = controls
-                .events
+            let events: Vec<_> = std::mem::take(&mut controls.events)
                 .into_iter()
                 .map(|event| Event {
                     id: event.id,
@@ -103,6 +96,21 @@ impl Guest for Cinnaroids {
                 held: &controls.keys_held,
                 seconds: controls.seconds,
                 events: &events,
+            });
+            let config = modules.aim_config();
+            let attack_needed =
+                modules.modules.clicker || (config.enabled && config.only_when_clicking);
+            let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
+                let mut bindings = bindings.borrow_mut();
+                bindings.read();
+                let holds = bindings.resolve(
+                    &controls,
+                    crate::bindings::Holds {
+                        attack: attack_needed,
+                        jump: modules.modules.jump_reset,
+                    },
+                );
+                (holds.attack, holds.jump, bindings.ready())
             });
             publish(&mut modules);
             let _ = gameplay::set_packet_delay(modules.packet_delay_ms());
@@ -119,7 +127,8 @@ impl Guest for Cinnaroids {
             netherite(modules.finder_range(), drawn, labelled);
             real_position(modules.show_real_position(), drawn, labelled);
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
-            let cadence = snapshot.as_ref().map(|frame| {
+            // An unobserved hold must not clear Clicker's refusal latch while disabled.
+            let cadence = snapshot.as_ref().filter(|_| attack_needed).map(|frame| {
                 (
                     frame.session,
                     frame.dimension,
@@ -131,7 +140,8 @@ impl Guest for Cinnaroids {
                 modules.attack_refused();
             }
 
-            let movement = if bindings_ready
+            let movement = if modules.modules.jump_reset
+                && bindings_ready
                 && controls.focused
                 && controls.gameplay
                 && !controls.panel_open
@@ -173,7 +183,6 @@ impl Guest for Cinnaroids {
                 AIM.with(|aim| aim.borrow_mut().reset());
                 return;
             };
-            let config = modules.aim_config();
             if !config.enabled || config.strength == 0 {
                 AIM.with(|aim| aim.borrow_mut().reset());
                 return;
