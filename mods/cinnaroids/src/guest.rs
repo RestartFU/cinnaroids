@@ -43,10 +43,12 @@ type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
+    static SETTINGS_PENDING: RefCell<Option<String>> = const { RefCell::new(None) };
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
-    static DRAW_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
+    static ESP_CLEARING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static ESP_PENDING: RefCell<Option<EspSample>> = const { RefCell::new(None) };
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
     /// The ESP label slots while their HUD surface is set.
@@ -71,8 +73,10 @@ impl Guest for Cinnaroids {
             *modules = State::new(preferences);
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
+        ESP_CLEARING.with(|clearing| clearing.set(false));
         ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
-        DRAW_TURN.with(|first| first.set(0));
+        WORK_TURN.with(|first| first.set(0));
+        SETTINGS_PENDING.with(|pending| *pending.borrow_mut() = None);
         PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
@@ -114,7 +118,7 @@ impl Guest for Cinnaroids {
             AIM.with(|aim| aim.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
-            clear_esp();
+            clear_esp(&fuel);
             netherite(None, None, false, &fuel);
             real_position(false, None, false, &fuel);
             return;
@@ -245,17 +249,22 @@ impl Guest for Cinnaroids {
                 real_position(false, None, false, &fuel);
             }
             if !modules.modules.player_esp || drawn.is_none() {
-                clear_esp();
+                clear_esp(&fuel);
             }
-            publish(&mut modules, &fuel);
-            // Labels get every other first turn; terrain and marker also have reserved turns.
-            let turn = DRAW_TURN.with(|next| {
+            // With the panel owning input, drawings are ineligible and settings can save
+            // immediately. During gameplay they compete on the same schedule as drawings.
+            if controls.panel_open && fuel.publishes(35_000) {
+                publish_preferences(&mut modules, &fuel);
+            }
+            // Every optional producer gets a first turn, independent of other dirty queues.
+            // Bindings and gameplay policies above have bounded mandatory work every callback.
+            let turn = WORK_TURN.with(|next| {
                 let turn = next.get();
-                next.set((turn + 1) % 6);
-                [1, 0, 1, 2, 1, 0][turn as usize]
+                next.set((turn + 1) % 8);
+                [1, 0, 1, 2, 1, 0, 3, 4][turn as usize]
             });
-            for offset in 0..3 {
-                match (turn + offset) % 3 {
+            for offset in 0..5 {
+                match (turn + offset) % 5 {
                     0 if modules.finder_range().is_some() => {
                         prepare_netherite(modules.finder_range(), drawn);
                         netherite(modules.finder_range(), drawn, false, &fuel);
@@ -264,6 +273,8 @@ impl Guest for Cinnaroids {
                         player_esp(&modules, drawn, &fuel);
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
+                    3 => publish_panel(&mut modules, &fuel),
+                    4 => publish_preferences(&mut modules, &fuel),
                     _ => {}
                 }
             }
@@ -341,8 +352,8 @@ fn assist_aim(
     });
 }
 
-/// Publishes fixed-size control and preference steps before optional drawing producers.
-fn publish(modules: &mut State, fuel: &FrameFuel) {
+/// Publishes bounded settings and authority changes in their own scheduled turn.
+fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
     if modules.fullbright_dirty {
         match environment::set_fullbright(modules.modules.fullbright) {
             Ok(()) => modules.fullbright_dirty = false,
@@ -354,16 +365,35 @@ fn publish(modules: &mut State, fuel: &FrameFuel) {
     if modules.reservations_dirty && input::reserve_keys(&modules.reserved_keys()).is_ok() {
         modules.reservations_dirty = false;
     }
-    if modules.preferences_dirty && fuel.publishes(15_000) {
-        let saved = serde_json::to_string(&modules.preferences)
-            .ok()
-            .is_some_and(|json| settings::save(&json).is_ok());
-        if saved {
-            modules.preferences_dirty = false;
-        } else {
-            let _ = hud::set_label("Cinnaroids: preferences could not be saved");
+    SETTINGS_PENDING.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        for _ in 0..2 {
+            // Small preference units may use the publication reserve. A full event and
+            // binding batch can leave too little for the ordinary drawing ceiling.
+            if !fuel.allows_until(8_000, 85_000) {
+                break;
+            }
+            if let Some(json) = &*pending {
+                if settings::save(json).is_err() {
+                    let _ = hud::set_label("Cinnaroids: preferences could not be saved");
+                    break;
+                }
+                *pending = None;
+            } else if modules.preferences_dirty {
+                let Ok(json) = serde_json::to_string(&modules.preferences) else {
+                    break;
+                };
+                modules.preferences_dirty = false;
+                *pending = Some(json);
+            } else {
+                break;
+            }
         }
-    }
+    });
+}
+
+/// Completes a coherent panel snapshot even if controls change again during serialization.
+fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
         for _ in 0..48 {
@@ -438,7 +468,23 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
                 })
         });
         if context_changed {
-            clear_esp();
+            clear_esp(fuel);
+        }
+        // Context changes and every failure share the normal incremental retirement path.
+        let obsolete = ESP_PENDING.with(|pending| {
+            pending
+                .borrow()
+                .as_ref()
+                .is_some_and(|(session, dimension, _, _)| {
+                    (*session, *dimension) != (world.session, world.dimension)
+                })
+        });
+        if obsolete {
+            clear_esp(fuel);
+        }
+        retire_esp(fuel);
+        if ESP_CLEARING.with(|clearing| clearing.get()) {
+            return false;
         }
         if ESP_LABELS.with(|labels| labels.borrow().is_none()) {
             // Initial surface publication is independent of actor import and label writes.
@@ -453,24 +499,21 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
                 if (session, dimension) == (world.session, world.dimension) =>
             {
                 if turns == 0 {
-                    if fuel.publishes(16_000) {
-                        drop(actors);
-                    } else {
-                        ESP_PENDING.with(|pending| {
-                            *pending.borrow_mut() = Some((session, dimension, actors, 0))
-                        });
-                    }
+                    ESP_PENDING.with(|pending| {
+                        *pending.borrow_mut() = Some((session, dimension, actors, 0));
+                    });
                     return false;
                 }
                 (actors, turns)
             }
-            _ => {
+            Some(_) => unreachable!("obsolete samples retire before import"),
+            None => {
                 if !fuel.allows(8_000) {
                     return true;
                 }
                 let Ok(actors) = player_state::read_actors_limited(crate::esp::MAX_PLAYERS as u32)
                 else {
-                    clear_esp();
+                    clear_esp(fuel);
                     return false;
                 };
 
@@ -544,20 +587,50 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
             return named;
         }
     }
-    clear_esp();
+    clear_esp(fuel);
     false
 }
 
-/// Releases the retained selection and labels when the overlay cannot be presented.
-fn clear_esp() {
-    ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
-    ESP_MASK.with(|cached| {
-        if let Some((_, _, mask)) = cached.borrow_mut().take() {
-            let _ = masks::remove(mask);
+/// Removes visible output immediately; backing allocations retire only in admitted units.
+fn clear_esp(fuel: &FrameFuel) {
+    ESP_CLEARING.with(|clearing| {
+        if !clearing.replace(true) {
+            ESP_MASK.with(|cached| {
+                if let Some((_, _, mask)) = cached.borrow_mut().take() {
+                    let _ = masks::remove(mask);
+                }
+            });
+            if ESP_LABELS.with(|labels| labels.borrow().is_some()) {
+                let _ = hud::set_surface("");
+            }
         }
     });
-    if ESP_LABELS.with(|labels| labels.borrow_mut().take().is_some()) {
-        let _ = hud::set_surface("");
+    ESP_PENDING.with(|pending| {
+        if let Some((_, _, _, turns)) = &mut *pending.borrow_mut() {
+            *turns = 0;
+        }
+    });
+    retire_esp(fuel);
+}
+
+/// Frees one bounded actor at a time, including after read, mask and HUD failures.
+fn retire_esp(fuel: &FrameFuel) {
+    ESP_PENDING.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        if let Some((_, _, actors, 0)) = &mut *pending {
+            while !actors.is_empty() && fuel.publishes(4_000) {
+                actors.pop();
+            }
+            if actors.is_empty() {
+                *pending = None;
+            }
+        }
+    });
+    if ESP_CLEARING.with(|clearing| clearing.get()) && fuel.publishes(6_000) {
+        ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
+        if ESP_PENDING.with(|pending| pending.borrow().is_none()) {
+            ESP_CLEARING.with(|clearing| clearing.set(false));
+        }
     }
 }
 
@@ -714,6 +787,10 @@ fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool, 
 fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fuel: &FrameFuel) {
     MARKER.with(|marker| {
         let mut marker = marker.borrow_mut();
+        retire_marker(&mut marker, fuel);
+        if !marker.retiring.is_empty() {
+            return;
+        }
         let frame =
             frame.filter(|_| show && drawing::capabilities().contains(Permissions::WORLD_DRAW));
         let sample = frame.and_then(|frame| {
@@ -758,7 +835,7 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
         if !fuel.allows(7_000) {
             return;
         }
-        if let Err(error) = place_marker(&mut marker, target, busy)
+        if let Err(error) = place_marker(&mut marker, target, busy, fuel)
             && stale(&error)
         {
             marker.reset();
@@ -773,12 +850,12 @@ fn place_marker(
     marker: &mut Marker,
     target: Option<(i32, [f32; 3])>,
     busy: bool,
+    fuel: &FrameFuel,
 ) -> Result<(), DrawError> {
     let Some((dimension, feet)) = target else {
         if let Some(placed) = marker.placed.take() {
-            for handle in placed.handles {
-                drawing::remove(handle)?;
-            }
+            marker.retiring.extend(placed.handles);
+            retire_marker(marker, fuel);
         }
         return Ok(());
     };
@@ -791,23 +868,8 @@ fn place_marker(
     }
     let geometries = match marker.geometries {
         Some(geometries) => geometries,
-        None => {
-            let mut created = Vec::with_capacity(ghost::INSTANCES);
-            for spec in &ghost::geometries() {
-                match drawing::create_geometry(spec) {
-                    Ok(handle) => created.push(handle),
-                    Err(error) => {
-                        for handle in created {
-                            let _ = drawing::remove(handle);
-                        }
-                        return Err(error);
-                    }
-                }
-            }
-            let geometries =
-                <[Handle; ghost::INSTANCES]>::try_from(created).expect("one geometry per instance");
-            *marker.geometries.insert(geometries)
-        }
+        // Geometry uploads already have individually admitted turns in real_position.
+        None => return Ok(()),
     };
     let instances = ghost::instances(&geometries, dimension, feet);
     if let Some(placed) = &mut marker.placed {
@@ -823,9 +885,7 @@ fn place_marker(
         match drawing::create(instance) {
             Ok(handle) => created.push(handle),
             Err(error) => {
-                for handle in created {
-                    let _ = drawing::remove(handle);
-                }
+                marker.retiring.extend(created);
                 return Err(error);
             }
         }
@@ -836,6 +896,21 @@ fn place_marker(
         feet,
     });
     Ok(())
+}
+
+/// Uses the same bounded removal path for hiding the marker and rolling back a failed batch.
+fn retire_marker(marker: &mut Marker, fuel: &FrameFuel) {
+    while let Some(&handle) = marker.retiring.last() {
+        if !fuel.allows(3_000) {
+            break;
+        }
+        if let Err(error) = drawing::remove(handle)
+            && !stale(&error)
+        {
+            break;
+        }
+        marker.retiring.pop();
+    }
 }
 
 /// Refreshes a bounded union of admitted actor meshes with host-owned outline and glow.

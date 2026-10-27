@@ -464,3 +464,32 @@ fn escaped_size_matches_json_for_every_host_text_byte() {
         }
     }
 }
+
+#[test]
+fn oversized_actor_offsets_stay_inside_the_hud_contract() {
+    let mut observed = actor();
+    observed.actor.boxes[0].max.1 = 256.;
+    let result = output(&[observed], &Preferences::default());
+    assert_eq!(result.players, [8]);
+    assert_eq!(
+        labels(&result)[0]["at"]["project"]["offset"],
+        serde_json::json!([0., 256., 0.])
+    );
+}
+
+#[test]
+fn label_offsets_clamp_both_signs_on_every_axis() {
+    for (min, max, expected) in [(1000., 2000., 256.), (-2000., -1000., -256.)] {
+        let mut observed = actor();
+        observed.actor.boxes[0] = Bounds {
+            min: (min, min, min),
+            max: (max, max, max),
+        };
+        let result = output(&[observed], &Preferences::default());
+        assert_eq!(result.players, [8]);
+        assert_eq!(
+            labels(&result)[0]["at"]["project"]["offset"],
+            serde_json::json!([expected, expected, expected])
+        );
+    }
+}

@@ -254,7 +254,8 @@ impl Labels {
             labels[shown] = Some(Label {
                 actor: actor.runtime_id,
                 observation: index,
-                offset: std::array::from_fn(|i| milli(point[i] - position[i])),
+                // The HUD accepts at most 256 blocks on each actor-relative axis.
+                offset: std::array::from_fn(|i| milli((point[i] - position[i]).clamp(-256., 256.))),
                 name,
                 distance: p.esp_distance.then(|| distance.round() as i32),
                 health,

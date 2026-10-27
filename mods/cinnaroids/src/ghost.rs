@@ -181,6 +181,8 @@ pub struct Marker {
     pub geometries: Option<[Handle; INSTANCES]>,
     /// Geometry uploads advance individually before the first placement batch.
     pub uploading: Vec<Handle>,
+    /// Partial placements and hidden instances retire one handle at a time.
+    pub retiring: Vec<Handle>,
     pub smoothed: Smoothed,
     /// The retained instances while shown.
     pub placed: Option<Placed>,
