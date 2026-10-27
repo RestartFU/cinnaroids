@@ -3,11 +3,37 @@
 use mod_api::bindings::cinnabar::extension::input::{
     self, BindingContext, BindingModifiers, Bindings, Controls,
 };
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 
 /// Binding decoding, indexing and retirement each advance by at most this many rows per frame.
 pub const BINDINGS_PER_FRAME: u32 = 8;
 const _: () = assert!(BINDINGS_PER_FRAME as usize <= mod_api::MAX_INPUT_BINDINGS_PER_READ);
+
+/// Lossless bounded key names make ordered lookups compare words instead of scanning strings.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct KeyName {
+    words: [u64; mod_api::MAX_CONTROL_KEY_BYTES.div_ceil(8)],
+    length: usize,
+}
+
+impl KeyName {
+    /// Packs every byte and the length, bounded by the input name limit.
+    fn new(name: &str) -> Option<Self> {
+        if name.is_empty() || name.len() > mod_api::MAX_CONTROL_KEY_BYTES {
+            return None;
+        }
+        let mut result = Self {
+            words: [0; mod_api::MAX_CONTROL_KEY_BYTES.div_ceil(8)],
+            length: name.len(),
+        };
+        for (word, bytes) in result.words.iter_mut().zip(name.as_bytes().chunks(8)) {
+            let mut padded = [0; 8];
+            padded[..bytes.len()].copy_from_slice(bytes);
+            *word = u64::from_le_bytes(padded);
+        }
+        Some(result)
+    }
+}
 
 /// Chords sharing a physical key, compressed into the sixteen possible modifier masks.
 #[derive(Default)]
@@ -25,8 +51,9 @@ pub struct Cache {
     complete: bool,
     has_attack: bool,
     has_jump: bool,
-    keys: BTreeMap<String, Key>,
-    retired: VecDeque<BTreeMap<String, Key>>,
+    // Sorted for binary lookup; insertion moves at most MAX_INPUT_BINDINGS bounded rows.
+    keys: Vec<(KeyName, Key)>,
+    retired: VecDeque<Vec<(KeyName, Key)>>,
 }
 
 impl Cache {
@@ -49,7 +76,7 @@ impl Cache {
             let Some(old) = self.retired.front_mut() else {
                 break;
             };
-            old.pop_first();
+            old.pop();
             if old.is_empty() {
                 self.retired.pop_front();
             }
@@ -93,8 +120,18 @@ impl Cache {
                     if binding.context != BindingContext::Gameplay {
                         continue;
                     }
+                    let Some(name) = KeyName::new(&binding.key) else {
+                        continue;
+                    };
                     let bit = 1 << modifier_mask(&binding.modifiers);
-                    let key = self.keys.entry(binding.key).or_default();
+                    let index = match self.keys.binary_search_by(|(stored, _)| stored.cmp(&name)) {
+                        Ok(index) => index,
+                        Err(index) => {
+                            self.keys.insert(index, (name, Key::default()));
+                            index
+                        }
+                    };
+                    let key = &mut self.keys[index].1;
                     key.all |= bit;
                     match binding.action.as_str() {
                         "attack" => {
@@ -132,8 +169,17 @@ impl Cache {
         let satisfied = (0u8..16)
             .filter(|mask| mask & actual == *mask)
             .fold(0u16, |bits, mask| bits | (1 << mask));
-        for (name, key) in &self.keys {
-            if key.attack | key.jump == 0 {
+        for name in &controls.keys_held {
+            let Some(id) = KeyName::new(name) else {
+                continue;
+            };
+            let Ok(index) = self.keys.binary_search_by(|(stored, _)| stored.cmp(&id)) else {
+                continue;
+            };
+            let key = &self.keys[index].1;
+            if (key.attack == 0 || result.attack) && (key.jump == 0 || result.jump)
+                || reserved.contains(name)
+            {
                 continue;
             }
             let mut active = key.all & satisfied;
@@ -154,9 +200,6 @@ impl Cache {
             }
             let attack = winning & key.attack != 0;
             let jump = winning & key.jump != 0;
-            if !(attack || jump) || reserved.contains(name) || !controls.keys_held.contains(name) {
-                continue;
-            }
             result.attack |= attack;
             result.jump |= jump;
             if (result.attack || !self.has_attack) && (result.jump || !self.has_jump) {
@@ -193,19 +236,19 @@ fn modifier_mask(required: &BindingModifiers) -> u8 {
 
 /// Either physical side satisfies a modifier group; reserved keys cannot satisfy gameplay.
 fn physical_modifiers(held: &[String], reserved: &[String]) -> u8 {
-    [
-        ("ShiftLeft", "ShiftRight"),
-        ("ControlLeft", "ControlRight"),
-        ("AltLeft", "AltRight"),
-        ("SuperLeft", "SuperRight"),
-    ]
-    .into_iter()
-    .enumerate()
-    .fold(0, |mask, (index, (left, right))| {
-        mask | (u8::from(
-            held.iter()
-                .any(|key| (key == left || key == right) && !reserved.contains(key)),
-        ) << index)
+    held.iter().fold(0, |mask, key| {
+        let bit = match key.as_str() {
+            "ShiftLeft" | "ShiftRight" => 1,
+            "ControlLeft" | "ControlRight" => 2,
+            "AltLeft" | "AltRight" => 4,
+            "SuperLeft" | "SuperRight" => 8,
+            _ => return mask,
+        };
+        if reserved.contains(key) {
+            mask
+        } else {
+            mask | bit
+        }
     })
 }
 

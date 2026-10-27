@@ -11,6 +11,21 @@ fn full(revision: u64, entries: Vec<ActionBinding>) -> Bindings {
 
 use mod_api::bindings::cinnabar::extension::input::ActionBinding;
 
+/// Packed names preserve suffixes and lengths through the full input byte limit.
+#[test]
+fn key_names_are_lossless_at_the_input_boundaries() {
+    let longest = "K".repeat(mod_api::MAX_CONTROL_KEY_BYTES);
+    let mut different = longest.clone();
+    different.pop();
+    different.push('L');
+    assert_ne!(KeyName::new(&longest), KeyName::new(&different));
+    assert_ne!(KeyName::new("KeyK"), KeyName::new("KeyK\0"));
+    assert_ne!(KeyName::new("KeyK"), KeyName::new("KeyL"));
+    assert!(KeyName::new(&longest).is_some());
+    assert!(KeyName::new("").is_none());
+    assert!(KeyName::new(&(longest + "K")).is_none());
+}
+
 /// Builds an actual player-assigned chord, without assuming a default attack key.
 fn chord(action: &str, key: &str) -> ActionBinding {
     ActionBinding {

@@ -4,8 +4,30 @@ use mod_host::{
     TerrainReadError, empty_controls,
 };
 
-/// Fuel of one mod frame callback in `mod-host`; a callback that needs more traps.
+/// Regression target for a mod frame, leaving room below the host's callback limit.
 const FRAME_FUEL: u64 = 100_000;
+
+/// Attaches shared accounting so every tested callback can be measured independently.
+fn frame_budget(host: &mut ModHost) -> CallbackBudget {
+    let budget = CallbackBudget::new(mod_api::TOTAL_MOD_FRAME_FUEL);
+    host.set_frame_authority(budget.clone(), false, false, 0);
+    budget
+}
+
+/// Runs one callback, rejecting both target overruns and recovered execution traps.
+fn metered_callback(
+    host: &mut ModHost,
+    budget: &CallbackBudget,
+    callback: impl FnOnce(&mut ModHost),
+) -> u64 {
+    budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
+    callback(host);
+    assert!(host.is_active());
+    assert!(!host.is_recovering(), "callback trapped");
+    let used = mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining();
+    assert!(used <= FRAME_FUEL, "{used} fuel (target {FRAME_FUEL})");
+    used
+}
 
 /// Shown Player ESP label slots in the HUD layer Cinnabar retained for this component.
 /// This is the one place that reads the host's HUD surface accessor.
@@ -68,8 +90,7 @@ fn drawing_host(grants: ModGrants, settings: &str) -> (tempfile::TempDir, ModHos
     });
     assert!(host.reload_if_changed().unwrap());
     observe_bindings(&mut host, "MouseLeft", 1);
-    let budget = CallbackBudget::new(mod_api::TOTAL_MOD_FRAME_FUEL);
-    host.set_frame_authority(budget.clone(), false, false, 0);
+    let budget = frame_budget(&mut host);
     (directory, host, budget)
 }
 
@@ -83,7 +104,6 @@ fn metered_frame(
     events: &[(&str, f32)],
     facts: GameplayFacts,
 ) -> u64 {
-    budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
     host.observe_presentation(
         Some(mod_host::WorldObservation {
             session: 2,
@@ -123,12 +143,10 @@ fn metered_frame(
         frame_seconds: 1. / 60.,
         players: vec![],
     });
-    host.frame_with_controls(false, snapshot, controls)
-        .unwrap_or_else(|error| panic!("metered frame: {error:#}"));
-    assert!(host.is_active());
-    let used = mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining();
-    assert!(used <= FRAME_FUEL, "{used} fuel");
-    used
+    metered_callback(host, budget, |host| {
+        host.frame_with_controls(false, snapshot, controls)
+            .unwrap_or_else(|error| panic!("metered frame: {error:#}"));
+    })
 }
 
 /// Loaded terrain holding `count` ancient debris blocks in a slab north of the player, nearest
@@ -166,6 +184,7 @@ impl BlockSearchSource for Debris {
 
 #[test]
 fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
+    let mut most = 0;
     let component =
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
     for settings in [
@@ -197,6 +216,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             },
         )
         .unwrap_or_else(|error| panic!("init settings {settings}: {error:#}"));
+        let budget = frame_budget(&mut host);
         for (id, value) in [
             ("expand_clicker", 1.0),
             ("expand_aim", 1.0),
@@ -236,8 +256,10 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 id: id.into(),
                 value,
             });
-            host.frame_with_controls(false, None, controls)
-                .unwrap_or_else(|error| panic!("event {id}, settings {settings}: {error:#}"));
+            most = most.max(metered_callback(&mut host, &budget, |host| {
+                host.frame_with_controls(false, None, controls)
+                    .unwrap_or_else(|error| panic!("event {id}, settings {settings}: {error:#}"));
+            }));
             assert!(host.is_active());
             assert!(
                 host.panel()
@@ -275,10 +297,14 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
         assert_eq!(drawn_instances(&host), 0);
         assert!(!host.fullbright());
     }
+    println!(
+        "saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
 fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
+    let mut most = 0;
     let component =
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
     let directory = tempfile::tempdir().unwrap();
@@ -302,9 +328,12 @@ fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
             .map(|control| format!("{control:?}"))
             .unwrap()
     };
+    let budget = frame_budget(&mut host);
     let mut controls = empty_controls();
     controls.focused = true;
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     assert!(pad(&host, "drag_x").contains("-2048"));
     // Press, travel and release over 120 frames, as a real pointer would.
     for frame in 0..=120 {
@@ -326,8 +355,10 @@ fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
                 });
             }
         }
-        host.frame_with_controls(false, None, controls)
-            .unwrap_or_else(|error| panic!("drag frame {frame}: {error:#}"));
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, None, controls)
+                .unwrap_or_else(|error| panic!("drag frame {frame}: {error:#}"));
+        }));
         assert!(host.is_active());
     }
     assert!(pad(&host, "drag_x").contains("-2048"));
@@ -338,10 +369,14 @@ fn dragging_a_column_header_moves_and_saves_within_the_real_host_budget() {
         serde_json::json!([-261.0, -106.5])
     );
     assert_eq!(preferences["collapsed"][0], false);
+    println!(
+        "dragging_a_column_header_moves_and_saves_within_the_real_host_budget: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
 fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel() {
+    let mut most = 0;
     use mod_host::{GameplayMovementSnapshot, GameplaySnapshot, GameplayVector3};
     let component =
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
@@ -359,6 +394,7 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
     )
     .unwrap();
     observe_bindings(&mut host, "MouseLeft", 1);
+    let budget = frame_budget(&mut host);
     let mut controls = empty_controls();
     controls.focused = true;
     controls.panel_open = true;
@@ -366,7 +402,9 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         id: "jump_reset".into(),
         value: 1.0,
     });
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     let frame = || GameplaySnapshot {
         session: 1,
         dimension: 0,
@@ -406,15 +444,17 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         let mut controls = empty_controls();
         controls.focused = true;
         controls.gameplay = true;
-        host.frame_with_movement(
-            false,
-            Some(frame()),
-            Vec::new(),
-            None,
-            Some(movement(tick, sequence, grounded)),
-            controls,
-        )
-        .unwrap();
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_movement(
+                false,
+                Some(frame()),
+                Vec::new(),
+                None,
+                Some(movement(tick, sequence, grounded)),
+                controls,
+            )
+            .unwrap();
+        }));
         assert_eq!(host.take_jump_pulse(), expected);
         assert!(!host.take_jump_pulse(), "pulse is consumed once");
     }
@@ -426,21 +466,27 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         id: "jump_reset".into(),
         value: 0.0,
     });
-    host.frame_with_movement(
-        false,
-        Some(frame()),
-        Vec::new(),
-        None,
-        Some(movement(13, 2, true)),
-        controls,
-    )
-    .unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_movement(
+            false,
+            Some(frame()),
+            Vec::new(),
+            None,
+            Some(movement(13, 2, true)),
+            controls,
+        )
+        .unwrap();
+    }));
     assert!(!host.take_jump_pulse());
     assert!(host.take_jump_cancel());
+    println!(
+        "jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
 fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
+    let mut most = 0;
     let component =
         std::fs::read(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap()).unwrap();
     let directory = tempfile::tempdir().unwrap();
@@ -455,9 +501,12 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         },
     )
     .unwrap();
+    let budget = frame_budget(&mut host);
     let mut controls = empty_controls();
     controls.focused = true;
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     assert_eq!(host.panel().unwrap().toggle_key, "F7");
     let mut controls = empty_controls();
     controls.focused = true;
@@ -466,13 +515,17 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         id: "menu_key".into(),
         value: 1.0,
     });
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     assert!(host.panel().unwrap().capture_key);
     let mut controls = empty_controls();
     controls.focused = true;
     controls.panel_open = true;
     controls.keys_pressed.push("F6".into());
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     assert!(host.is_active());
     assert_eq!(host.panel().unwrap().toggle_key, "F6");
     assert!(!host.panel().unwrap().capture_key);
@@ -481,10 +534,14 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
     let preferences: serde_json::Value =
         serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
     assert_eq!(preferences["menu_key"], "F6");
+    println!(
+        "menu_rebinding_publishes_and_saves_within_the_real_host_budget: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
 fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
+    let mut most = 0;
     let source = std::path::PathBuf::from(std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap());
     let declarations = mod_host::declarations(&source).unwrap();
     assert_eq!(declarations.metadata.name.as_deref(), Some("Cinnaroids"));
@@ -510,16 +567,23 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
     let installed = directory.path().join("cinnaroids.wasm");
     let component = std::fs::read(&source).unwrap();
     let mut host = ModHost::load_snapshot_with_grants(&installed, &component, grants).unwrap();
+    let budget = frame_budget(&mut host);
     let mut controls = empty_controls();
     controls.focused = true;
-    host.frame_with_controls(false, None, controls).unwrap();
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
     assert!(host.is_active());
     assert_eq!(host.panel().unwrap().toggle_key, "F7");
     assert_eq!(host.reserved_keys(), ["F7"]);
+    println!(
+        "single_file_import_declares_metadata_and_loads_with_its_requested_grants: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
 fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
+    let mut most = 0;
     use mod_host::{
         ActorObservation, ActorObservationBounds, GameplaySnapshot, GameplayVector3, ObservedActor,
         module_observations::ModuleObservations,
@@ -556,6 +620,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
         });
         assert!(host.reload_if_changed().unwrap());
         observe_bindings(&mut host, "MouseLeft", 1);
+        let budget = frame_budget(&mut host);
         let mut controls = empty_controls();
         controls.focused = true;
         controls.panel_open = true;
@@ -563,7 +628,9 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             id: "player_esp".into(),
             value: 1.,
         });
-        host.frame_with_controls(false, None, controls).unwrap();
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, None, controls).unwrap();
+        }));
         let snapshot = || GameplaySnapshot {
             session: 1,
             dimension: 0,
@@ -651,8 +718,12 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             let mut controls = empty_controls();
             controls.focused = true;
             controls.gameplay = true;
-            host.frame_with_controls(false, Some(snapshot()), controls)
-                .unwrap_or_else(|error| panic!("ESP frame {frame}, granted {granted}: {error:#}"));
+            most = most.max(metered_callback(&mut host, &budget, |host| {
+                host.frame_with_controls(false, Some(snapshot()), controls)
+                    .unwrap_or_else(|error| {
+                        panic!("ESP frame {frame}, granted {granted}: {error:#}")
+                    });
+            }));
             assert!(host.is_active());
             assert_eq!(host.render().0.masks.len(), usize::from(granted));
             // Three labels take a new name per frame; the fixture's players share one name.
@@ -682,8 +753,10 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             let mut controls = empty_controls();
             controls.focused = true;
             controls.gameplay = true;
-            host.frame_with_controls(false, Some(snapshot()), controls)
-                .unwrap();
+            most = most.max(metered_callback(&mut host, &budget, |host| {
+                host.frame_with_controls(false, Some(snapshot()), controls)
+                    .unwrap();
+            }));
             assert!(host.render().0.masks.is_empty());
             assert_eq!(shown_labels(&host), 0);
         }
@@ -693,8 +766,10 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             let mut active = empty_controls();
             active.focused = true;
             active.gameplay = true;
-            host.frame_with_controls(false, Some(snapshot()), active)
-                .unwrap();
+            most = most.max(metered_callback(&mut host, &budget, |host| {
+                host.frame_with_controls(false, Some(snapshot()), active)
+                    .unwrap();
+            }));
             observe(&mut host, 10);
             let mut controls = empty_controls();
             controls.focused = true;
@@ -714,16 +789,21 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                 }
                 _ => (),
             }
-            host.frame_with_controls(
-                false,
-                if reason == 2 { None } else { Some(snapshot()) },
-                controls,
-            )
-            .unwrap();
+            most = most.max(metered_callback(&mut host, &budget, |host| {
+                host.frame_with_controls(
+                    false,
+                    if reason == 2 { None } else { Some(snapshot()) },
+                    controls,
+                )
+                .unwrap();
+            }));
             assert!(host.render().0.masks.is_empty());
             assert_eq!(shown_labels(&host), 0);
         }
     }
+    println!(
+        "player_esp_uses_real_actor_masks_and_clears_retained_output: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 #[test]
@@ -739,7 +819,7 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
         },
         r#"{"netherite_range":128}"#,
     );
-    metered_frame(
+    let setup = metered_frame(
         &mut host,
         &budget,
         false,
@@ -782,7 +862,7 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
     let moving = run(&mut host, &mut debris, 50);
     assert_eq!(drawn_origins(&host), expected(&debris));
     // Opening the panel keeps the cubes; disabling the finder removes them.
-    metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
+    let panel = metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
     assert_eq!(drawn_instances(&host), 256);
     let mut clearing = 0;
     for frame in 0..20 {
@@ -800,8 +880,13 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
         ));
     }
     assert_eq!(drawn_instances(&host), 0);
+    let most = [setup, panel, drawing, steady, moving, clearing]
+        .into_iter()
+        .max()
+        .unwrap();
     println!(
-        "Netherite Finder, 256 cubes: most fuel per frame {drawing} drawing, {steady} steady, \
+        "Netherite Finder, 256 cubes: peak {most}, {setup} setup, {panel} panel, \
+         {drawing} drawing, {steady} steady, \
          {moving} moving, {clearing} clearing (frame budget {FRAME_FUEL})"
     );
 }
@@ -819,7 +904,7 @@ fn fake_lag_marker_follows_the_relayed_feet_and_hides_around_the_camera() {
         },
         r#"{"fake_lag_ms":200,"show_real_position":true}"#,
     );
-    metered_frame(
+    let mut most = metered_frame(
         &mut host,
         &budget,
         false,
@@ -840,7 +925,6 @@ fn fake_lag_marker_follows_the_relayed_feet_and_hides_around_the_camera() {
         relayed_position: relayed.map(|[x, y, z]| GameplayVector3 { x, y, z }),
         ..Default::default()
     };
-    let mut most = 0;
     // The eye in the gameplay frame stays at the origin; only the camera pose decides.
     for (camera, relayed, shown) in [
         ([0., 1.62, 4.], Some([2., 0., 0.]), true),
@@ -898,7 +982,7 @@ fn every_drawing_module_together_stays_within_the_frame_budget() {
         },
         r#"{"netherite_range":128,"fake_lag_ms":200,"show_real_position":true}"#,
     );
-    metered_frame(
+    let mut most = metered_frame(
         &mut host,
         &budget,
         false,
@@ -910,7 +994,6 @@ fn every_drawing_module_together_stays_within_the_frame_budget() {
         ],
         GameplayFacts::default(),
     );
-    let mut most = 0;
     for frame in 0..90 {
         // Every 20 frames all blocks move and every player gets a new, longest name.
         let generation = frame / 20;
@@ -1026,6 +1109,7 @@ fn observe_bindings(host: &mut ModHost, attack: &str, revision: u64) {
 /// because an unrelated old default is down. Host-only attack evidence still enforces requests.
 #[test]
 fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
+    let mut most = 0;
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
             controls: true,
@@ -1036,13 +1120,13 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         r#"{"clicker":true,"cps":20}"#,
     );
     observe_bindings(&mut host, "KeyK", 2);
-    metered_frame(
+    most = most.max(metered_frame(
         &mut host,
         &budget,
         false,
         &[("clicker", 1.)],
         GameplayFacts::default(),
-    );
+    ));
     let snapshot = |gate| GameplaySnapshot {
         session: 1,
         dimension: 0,
@@ -1065,24 +1149,28 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         ("KeyK", false, true, false),
         ("KeyK", false, true, true),
     ] {
-        budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
         let mut controls = empty_controls();
         controls.seconds = 0.05;
         controls.focused = true;
         controls.gameplay = true;
         controls.panel_open = panel;
         controls.keys_held = vec![key.into()];
-        host.frame_with_controls(false, Some(snapshot(gate)), controls)
-            .unwrap();
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, Some(snapshot(gate)), controls)
+                .unwrap();
+        }));
         assert!(host.is_active());
         assert_eq!(host.take_interaction().attack_pulse, expected);
-        assert!(mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining() <= FRAME_FUEL);
     }
+    println!(
+        "rebound_attack_resolves_in_the_guest_within_the_callback_budget: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 /// Largest admitted binding reads and unchanged refreshes stay within real guest frame fuel.
 #[test]
 fn maximum_binding_snapshot_stays_within_the_frame_budget() {
+    let mut most = 0;
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
             controls: true,
@@ -1112,13 +1200,23 @@ fn maximum_binding_snapshot_stays_within_the_frame_budget() {
     }))
     .unwrap();
     for _ in 0..=mod_api::MAX_INPUT_BINDINGS {
-        metered_frame(&mut host, &budget, true, &[], GameplayFacts::default());
+        most = most.max(metered_frame(
+            &mut host,
+            &budget,
+            true,
+            &[],
+            GameplayFacts::default(),
+        ));
     }
+    println!(
+        "maximum_binding_snapshot_stays_within_the_frame_budget: peak {most} fuel (target {FRAME_FUEL})"
+    );
 }
 
 /// Full raw key and chord lists, including stronger bindings to other actions, stay bounded.
 #[test]
 fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
+    let mut most = 0;
     use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
@@ -1158,15 +1256,14 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
         entries,
     }))
     .unwrap();
-    metered_frame(
+    most = most.max(metered_frame(
         &mut host,
         &budget,
         false,
         &[("clicker", 1.)],
         GameplayFacts::default(),
-    );
+    ));
     for _ in 0..=mod_api::MAX_INPUT_BINDINGS {
-        budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
         let mut controls = empty_controls();
         controls.focused = true;
         controls.gameplay = true;
@@ -1190,10 +1287,204 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
             players: Vec::new(),
             attack_held: false,
         };
-        host.frame_with_controls(false, Some(snapshot), controls)
-            .unwrap();
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, Some(snapshot), controls)
+                .unwrap();
+        }));
         assert!(host.is_active());
         assert!(!host.take_interaction().attack_pulse);
-        assert!(mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining() <= FRAME_FUEL);
     }
+    println!(
+        "maximum_observed_chords_resolve_without_a_quadratic_frame_scan: peak {most} fuel (target {FRAME_FUEL})"
+    );
+}
+
+/// Completing a full catalog cannot multiply held-key scans while drawing modules update.
+#[test]
+fn binding_completion_with_unheld_jump_and_moving_drawings_fits_the_frame_budget() {
+    use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            settings: true,
+            players: true,
+            interaction: true,
+            terrain: true,
+            packet_delay: true,
+            world_draw: true,
+            render_through_walls: true,
+            ..Default::default()
+        },
+        r#"{"netherite_range":128,"show_real_position":true,"cps":20}"#,
+    );
+    let mut most = metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)],
+        GameplayFacts::default(),
+    );
+    // Supported non-modifier desktop keys, excluding the reserved menu key F7.
+    let keys: Vec<String> =
+        "ArrowDown ArrowLeft ArrowRight ArrowUp Backquote Backslash Backspace BracketLeft
+        BracketRight CapsLock Comma ContextMenu Delete Digit0 Digit1 Digit2
+        Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 End
+        Enter Equal Escape F1 F10 F11 F12 F13
+        F14 F15 F16 F17 F18 F19 F2 F20
+        F21 F22 F23 F24 F3 F4 F5 F6
+        F8 F9 Home Insert IntlBackslash KeyA KeyB KeyC
+        KeyD KeyE KeyF KeyG KeyH KeyI KeyJ KeyK
+        KeyL KeyM KeyN KeyO KeyP KeyQ KeyR KeyS
+        KeyT KeyU KeyV KeyW KeyX KeyY KeyZ Minus
+        NumLock Numpad0 Numpad1 Numpad2 Numpad3 Numpad4 Numpad5 Numpad6
+        Numpad7 Numpad8 Numpad9 NumpadAdd NumpadComma NumpadDecimal NumpadDivide NumpadEnter
+        NumpadEqual NumpadMultiply NumpadSubtract PageDown PageUp Pause Period PrintScreen
+        Quote ScrollLock Semicolon Slash Space Tab"
+            .split_ascii_whitespace()
+            .map(str::to_owned)
+            .collect();
+    assert_eq!(keys.len(), 110);
+    let held: Vec<_> = keys
+        .iter()
+        .take(mod_api::MAX_CONTROL_KEYS)
+        .cloned()
+        .collect();
+    assert_eq!(held.len(), 64);
+    assert!(!held.iter().any(|key| key == "NumpadMultiply"));
+    let mut entries: Vec<_> = keys
+        .into_iter()
+        .map(|key| InputActionBinding {
+            action: if key == "NumpadMultiply" {
+                "jump"
+            } else {
+                "attack"
+            }
+            .into(),
+            key,
+            context: BindingContext::Gameplay,
+            modifiers: BindingModifiers {
+                shift: false,
+                control: false,
+                alt: false,
+                super_key: false,
+            },
+        })
+        .collect();
+    while entries.len() < mod_api::MAX_INPUT_BINDINGS {
+        entries.push(entries[0].clone());
+    }
+    assert_eq!(entries.len(), 128);
+    host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+        revision: 9,
+        total: entries.len() as u32,
+        entries,
+    }))
+    .unwrap();
+    let mut debris = Debris {
+        count: mod_api::MAX_FOUND_BLOCKS,
+        shift: 0,
+    };
+    let mut first_marker = Vec::new();
+    let mut completion = 0;
+    let mut collecting = 0;
+    let mut steady = 0;
+    for frame in 0..40 {
+        host.observe_presentation(
+            Some(mod_host::WorldObservation {
+                session: 2,
+                dimension: 0,
+                world: "local-fixture".into(),
+                position: (0., 0., 0.),
+                alive: true,
+                runtime_id: 99,
+            }),
+            None,
+            None,
+            Vec::new(),
+        )
+        .unwrap();
+        host.observe_gameplay(GameplayFacts {
+            camera: Some(GameplayCameraPose {
+                position: GameplayVector3 {
+                    x: 0.,
+                    y: 1.6,
+                    z: 4.,
+                },
+                yaw: 0.,
+                pitch: 0.,
+            }),
+            relayed_position: Some(GameplayVector3 {
+                x: 2. + frame as f32,
+                y: 0.,
+                z: 0.,
+            }),
+            ..Default::default()
+        })
+        .unwrap();
+        mod_host::refresh_block_searches(&mut [&mut host], &mut debris);
+        let mut controls = empty_controls();
+        controls.seconds = 0.05;
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.keys_held = held.clone();
+        let used = metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(
+                false,
+                Some(GameplaySnapshot {
+                    session: 2,
+                    dimension: 0,
+                    eye: GameplayVector3 {
+                        x: 0.,
+                        y: 1.6,
+                        z: 0.,
+                    },
+                    yaw: 0.,
+                    pitch: 0.,
+                    frame_seconds: 0.05,
+                    players: Vec::new(),
+                    attack_held: true,
+                }),
+                controls,
+            )
+            .unwrap_or_else(|error| panic!("binding/drawing frame {frame}: {error:#}"));
+        });
+        most = most.max(used);
+        // Eight binding rows per callback: frame 15 completes collection and resolves holds.
+        match frame {
+            0..15 => collecting = collecting.max(used),
+            15 => completion = used,
+            _ => steady = steady.max(used),
+        }
+        assert_eq!(host.take_interaction().attack_pulse, frame >= 16);
+        let origins = drawn_origins(&host);
+        assert_eq!(
+            origins.iter().filter(|origin| origin[2] == 0).count(),
+            5,
+            "moving FakeLag marker on frame {frame}"
+        );
+        let marker: Vec<_> = origins
+            .iter()
+            .copied()
+            .filter(|origin| origin[2] == 0)
+            .collect();
+        if frame == 0 {
+            first_marker = marker.clone();
+        }
+        if frame == 15 {
+            assert_ne!(
+                marker, first_marker,
+                "marker moved before collection completed"
+            );
+            assert!(
+                origins.iter().any(|origin| origin[2] < 0),
+                "Finder active at completion"
+            );
+        }
+    }
+    assert_eq!(drawn_instances(&host), 256 + 5);
+    println!(
+        "128 binding rows, 110 keys, 64 held, unheld jump + Finder + moving FakeLag: \
+        peak {most}, collecting {collecting}, completion {completion}, steady {steady} fuel \
+        (target {FRAME_FUEL})"
+    );
 }
