@@ -1016,6 +1016,7 @@ impl ClickCadence {
         *self = Self::default();
     }
 
+    /// Consumes the mod's physical chord result with session, dimension and frame time.
     fn update(&mut self, enabled: bool, cps: u8, frame: Option<(u64, i32, bool, f32)>) -> bool {
         let Some((session, dimension, attack_held, seconds)) = frame else {
             self.reset();

@@ -34,6 +34,7 @@ thread_local! {
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
     /// The ESP label slots while their HUD surface is set.
     static ESP_LABELS: RefCell<Option<crate::esp::Labels>> = const { RefCell::new(None) };
+    static BINDINGS: RefCell<crate::bindings::Cache> = RefCell::new(crate::bindings::Cache::default());
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
     static FINDER: RefCell<finder::Finder> = RefCell::new(finder::Finder::default());
     static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
@@ -54,6 +55,7 @@ impl Guest for Cinnaroids {
         });
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
+        BINDINGS.with(|bindings| *bindings.borrow_mut() = crate::bindings::Cache::default());
         AIM.with(|aim| aim.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
         FINDER.with(|finder| finder.borrow_mut().reset());
@@ -72,6 +74,13 @@ impl Guest for Cinnaroids {
         };
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
+            let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
+                let mut bindings = bindings.borrow_mut();
+                bindings.read();
+                let reserved = modules.reserved_keys();
+                let holds = bindings.resolve(&controls, &reserved);
+                (holds.attack, holds.jump, bindings.ready())
+            });
             let events: Vec<_> = controls
                 .events
                 .into_iter()
@@ -107,7 +116,7 @@ impl Guest for Cinnaroids {
                 (
                     frame.session,
                     frame.dimension,
-                    frame.attack_held,
+                    attack_held,
                     frame.frame_seconds,
                 )
             });
@@ -115,7 +124,11 @@ impl Guest for Cinnaroids {
                 let _ = gameplay::pulse_attack();
             }
 
-            let movement = if controls.focused && controls.gameplay && !controls.panel_open {
+            let movement = if bindings_ready
+                && controls.focused
+                && controls.gameplay
+                && !controls.panel_open
+            {
                 gameplay::read_movement().ok().flatten()
             } else {
                 None
@@ -123,7 +136,7 @@ impl Guest for Cinnaroids {
             if !modules.modules.jump_reset
                 || movement
                     .as_ref()
-                    .is_none_or(|frame| !frame.eligible || frame.jump_held)
+                    .is_none_or(|frame| !frame.eligible || jump_held)
             {
                 let _ = gameplay::cancel_jump();
             }
@@ -135,7 +148,7 @@ impl Guest for Cinnaroids {
                     tick: frame.tick,
                     knockback_sequence: frame.knockback_sequence,
                     on_ground: frame.on_ground,
-                    jump_held: frame.jump_held,
+                    jump_held,
                     eligible: frame.eligible,
                     velocity: [frame.velocity.x, frame.velocity.y, frame.velocity.z],
                 });
@@ -181,7 +194,7 @@ impl Guest for Cinnaroids {
                 },
                 yaw: snapshot.yaw,
                 pitch: snapshot.pitch,
-                attack_held: snapshot.attack_held,
+                attack_held,
                 seconds: snapshot.frame_seconds,
                 players: &players,
             };

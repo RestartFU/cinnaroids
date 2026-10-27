@@ -1,6 +1,7 @@
 //! Personal Cinnaroids modules, controlled from the component's own in-game panel surface.
 
 pub mod aim;
+pub mod bindings;
 pub mod esp;
 pub mod finder;
 pub mod ghost;

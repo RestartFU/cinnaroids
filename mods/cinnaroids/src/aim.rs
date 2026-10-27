@@ -54,6 +54,7 @@ pub struct Frame<'a> {
     pub eye: Vec3,
     pub yaw: f32,
     pub pitch: f32,
+    /// This mod's own resolution of the player's physical attack chord.
     pub attack_held: bool,
     pub seconds: f32,
     pub players: &'a [Player],

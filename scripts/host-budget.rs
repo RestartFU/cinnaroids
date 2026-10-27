@@ -67,6 +67,7 @@ fn drawing_host(grants: ModGrants, settings: &str) -> (tempfile::TempDir, ModHos
         permissions: mod_api::drawing::DrawingPermissions::ALL,
     });
     assert!(host.reload_if_changed().unwrap());
+    observe_bindings(&mut host, "MouseLeft", 1);
     let budget = CallbackBudget::new(mod_api::TOTAL_MOD_FRAME_FUEL);
     host.set_frame_authority(budget.clone(), false, false, 0);
     (directory, host, budget)
@@ -357,6 +358,7 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         },
     )
     .unwrap();
+    observe_bindings(&mut host, "MouseLeft", 1);
     let mut controls = empty_controls();
     controls.focused = true;
     controls.panel_open = true;
@@ -553,6 +555,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             permissions: mod_api::drawing::DrawingPermissions::ALL,
         });
         assert!(host.reload_if_changed().unwrap());
+        observe_bindings(&mut host, "MouseLeft", 1);
         let mut controls = empty_controls();
         controls.focused = true;
         controls.panel_open = true;
@@ -748,7 +751,7 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
         shift: 0,
     };
     // Draws the nearest 256 of 1024 found blocks, sixteen placements per frame.
-    let mut run = |host: &mut ModHost, debris: &mut Debris, frames: usize| {
+    let run = |host: &mut ModHost, debris: &mut Debris, frames: usize| {
         let mut most = 0;
         for _ in 0..frames {
             mod_host::refresh_block_searches(&mut [&mut *host], &mut *debris);
@@ -835,7 +838,7 @@ fn fake_lag_marker_follows_the_relayed_feet_and_hides_around_the_camera() {
             pitch: 0.,
         }),
         relayed_position: relayed.map(|[x, y, z]| GameplayVector3 { x, y, z }),
-        use_held: false,
+        ..Default::default()
     };
     let mut most = 0;
     // The eye in the gameplay frame stays at the origin; only the camera pose decides.
@@ -984,7 +987,7 @@ fn every_drawing_module_together_stays_within_the_frame_budget() {
                 y: 0.,
                 z: 0.,
             }),
-            use_held: false,
+            ..Default::default()
         };
         most = most.max(metered_frame(&mut host, &budget, true, &[], facts));
     }
@@ -993,4 +996,204 @@ fn every_drawing_module_together_stays_within_the_frame_budget() {
     assert_eq!(drawn_instances(&host), 256 + 5);
     assert!(host.fullbright());
     println!("Player ESP, Netherite Finder and FakeLag marker: most fuel per frame {most}");
+}
+
+/// Current player assignments, shared with raw controls rather than guest gameplay records.
+fn observe_bindings(host: &mut ModHost, attack: &str, revision: u64) {
+    use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
+    host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+        revision,
+        total: 2,
+        entries: [("attack", attack), ("jump", "Space")]
+            .into_iter()
+            .map(|(action, key)| InputActionBinding {
+                action: action.into(),
+                key: key.into(),
+                context: BindingContext::Gameplay,
+                modifiers: BindingModifiers {
+                    shift: false,
+                    control: false,
+                    alt: false,
+                    super_key: false,
+                },
+            })
+            .collect(),
+    }))
+    .unwrap();
+}
+
+/// The real component follows a rebound key, releases on UI ownership and never pulses merely
+/// because an unrelated old default is down. Host-only attack evidence still enforces requests.
+#[test]
+fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            players: true,
+            interaction: true,
+            ..Default::default()
+        },
+        r#"{"clicker":true,"cps":20}"#,
+    );
+    observe_bindings(&mut host, "KeyK", 2);
+    metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("clicker", 1.)],
+        GameplayFacts::default(),
+    );
+    let snapshot = |gate| GameplaySnapshot {
+        session: 1,
+        dimension: 0,
+        eye: GameplayVector3 {
+            x: 0.,
+            y: 1.6,
+            z: 0.,
+        },
+        yaw: 0.,
+        pitch: 0.,
+        frame_seconds: 0.05,
+        players: Vec::new(),
+        attack_held: gate,
+    };
+    for (key, panel, gate, expected) in [
+        ("MouseLeft", false, false, false),
+        ("KeyK", false, true, false),
+        ("KeyK", false, true, true),
+        ("KeyK", true, false, false),
+        ("KeyK", false, true, false),
+        ("KeyK", false, true, true),
+    ] {
+        budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
+        let mut controls = empty_controls();
+        controls.seconds = 0.05;
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.panel_open = panel;
+        controls.keys_held = vec![key.into()];
+        host.frame_with_controls(false, Some(snapshot(gate)), controls)
+            .unwrap();
+        assert!(host.is_active());
+        assert_eq!(host.take_interaction().attack_pulse, expected);
+        assert!(mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining() <= FRAME_FUEL);
+    }
+}
+
+/// Largest admitted binding reads and unchanged refreshes stay within real guest frame fuel.
+#[test]
+fn maximum_binding_snapshot_stays_within_the_frame_budget() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            players: true,
+            ..Default::default()
+        },
+        "{}",
+    );
+    use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
+    let entries: Vec<_> = (0..mod_api::MAX_INPUT_BINDINGS)
+        .map(|_| InputActionBinding {
+            action: "interact-with-toast".into(),
+            key: "ControlRight".into(),
+            context: BindingContext::Ui,
+            modifiers: BindingModifiers {
+                shift: true,
+                control: true,
+                alt: true,
+                super_key: true,
+            },
+        })
+        .collect();
+    host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+        revision: 10,
+        total: entries.len() as u32,
+        entries,
+    }))
+    .unwrap();
+    for _ in 0..=mod_api::MAX_INPUT_BINDINGS {
+        metered_frame(&mut host, &budget, true, &[], GameplayFacts::default());
+    }
+}
+
+/// Full raw key and chord lists, including stronger bindings to other actions, stay bounded.
+#[test]
+fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
+    use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            players: true,
+            interaction: true,
+            ..Default::default()
+        },
+        "{}",
+    );
+    let keys: Vec<String> = (b'A'..=b'Z')
+        .map(|key| format!("Key{}", char::from(key)))
+        .chain((0..10).map(|key| format!("Digit{key}")))
+        .chain((1..=24).map(|key| format!("F{key}")))
+        .chain(["Space", "Tab", "Enter", "Backspace"].map(String::from))
+        .collect();
+    assert_eq!(keys.len(), mod_api::MAX_CONTROL_KEYS);
+    let entries: Vec<_> = keys
+        .iter()
+        .flat_map(|key| {
+            [false, true].map(|shift| InputActionBinding {
+                action: if shift { "use" } else { "attack" }.into(),
+                key: key.clone(),
+                context: BindingContext::Gameplay,
+                modifiers: BindingModifiers {
+                    shift,
+                    control: false,
+                    alt: false,
+                    super_key: false,
+                },
+            })
+        })
+        .collect();
+    host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+        revision: 10,
+        total: entries.len() as u32,
+        entries,
+    }))
+    .unwrap();
+    metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("clicker", 1.)],
+        GameplayFacts::default(),
+    );
+    for _ in 0..=mod_api::MAX_INPUT_BINDINGS {
+        budget.reset(mod_api::TOTAL_MOD_FRAME_FUEL);
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.keys_held = keys
+            .iter()
+            .take(keys.len() - 1)
+            .cloned()
+            .chain(["ShiftLeft".into()])
+            .collect();
+        let snapshot = GameplaySnapshot {
+            session: 1,
+            dimension: 0,
+            eye: GameplayVector3 {
+                x: 0.,
+                y: 1.6,
+                z: 0.,
+            },
+            yaw: 0.,
+            pitch: 0.,
+            frame_seconds: 0.05,
+            players: Vec::new(),
+            attack_held: false,
+        };
+        host.frame_with_controls(false, Some(snapshot), controls)
+            .unwrap();
+        assert!(host.is_active());
+        assert!(!host.take_interaction().attack_pulse);
+        assert!(mod_api::TOTAL_MOD_FRAME_FUEL - budget.remaining() <= FRAME_FUEL);
+    }
 }
