@@ -1249,6 +1249,114 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
     );
 }
 
+/// A refused attack stays latched while a changed binding revision pages in, even though the
+/// admitted attack key never stops being held; only an observed release starts a new cadence.
+#[test]
+fn refused_attack_stays_latched_while_bindings_refresh() {
+    let mut most = 0;
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            players: true,
+            interaction: true,
+            ..Default::default()
+        },
+        r#"{"clicker":true,"cps":20}"#,
+    );
+    observe_bindings(&mut host, "KeyK", 2);
+    most = most.max(metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("clicker", 1.)],
+        GameplayFacts::default(),
+    ));
+    let snapshot = |gate| GameplaySnapshot {
+        session: 1,
+        dimension: 0,
+        eye: GameplayVector3 {
+            x: 0.,
+            y: 1.6,
+            z: 0.,
+        },
+        yaw: 0.,
+        pitch: 0.,
+        frame_seconds: 0.05,
+        players: Vec::new(),
+        attack_held: gate,
+    };
+    // More rows than one page, so the changed revision takes two callbacks to complete.
+    let refresh = |host: &mut ModHost| {
+        use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
+        let rows = [
+            ("attack", "KeyK"),
+            ("jump", "Space"),
+            ("use", "MouseRight"),
+            ("hotbar-1", "Digit1"),
+            ("hotbar-2", "Digit2"),
+            ("hotbar-3", "Digit3"),
+        ];
+        // Cinnaroids pages four bindings per callback (`bindings::BINDINGS_PER_FRAME`).
+        assert!(rows.len() > 4);
+        host.observe_input_bindings(std::sync::Arc::new(InputBindings {
+            revision: 3,
+            total: rows.len() as u32,
+            entries: rows
+                .into_iter()
+                .map(|(action, key)| InputActionBinding {
+                    action: action.into(),
+                    key: key.into(),
+                    context: BindingContext::Gameplay,
+                    modifiers: BindingModifiers {
+                        shift: false,
+                        control: false,
+                        alt: false,
+                        super_key: false,
+                    },
+                })
+                .collect(),
+        }))
+        .unwrap();
+    };
+    for (step, (admitted, gate, pulse)) in [
+        // A fresh hold, one accepted repeat, then a refused repeat that latches.
+        (true, true, false),
+        (true, true, true),
+        (true, false, false),
+        // The revision changes while KeyK stays admitted; paging, then completion.
+        (true, true, false),
+        (true, true, false),
+        (true, true, false),
+        (true, true, false),
+        // Only an observed release clears the latch; the next hold starts over.
+        (false, false, false),
+        (true, true, false),
+        (true, true, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if step == 3 {
+            refresh(&mut host);
+        }
+        let mut controls = empty_controls();
+        controls.seconds = 0.05;
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.keys_held = vec!["KeyK".into()];
+        controls.keys_admitted = if admitted { vec!["KeyK".into()] } else { vec![] };
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, Some(snapshot(gate)), controls)
+                .unwrap();
+        }));
+        assert!(host.is_active());
+        assert_eq!(host.take_interaction().attack_pulse, pulse, "step {step}");
+    }
+    println!(
+        "refused_attack_stays_latched_while_bindings_refresh: peak {most} fuel (target {FRAME_FUEL})"
+    );
+}
+
 /// Largest admitted binding reads and unchanged refreshes stay within real guest frame fuel.
 #[test]
 fn maximum_binding_snapshot_stays_within_the_frame_budget() {

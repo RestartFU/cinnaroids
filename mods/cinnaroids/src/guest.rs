@@ -187,15 +187,19 @@ impl Guest for Cinnaroids {
                 None
             };
             let _ = gameplay::set_attack_reach(modules.attack_reach(snapshot.is_some()));
-            // An unobserved hold must not clear Clicker's refusal latch while disabled.
-            let cadence = snapshot.as_ref().filter(|_| attack_needed).map(|frame| {
-                (
-                    frame.session,
-                    frame.dimension,
-                    attack_held,
-                    frame.frame_seconds,
-                )
-            });
+            // An unobserved hold must not clear Clicker's refusal latch while disabled or
+            // while changed bindings are still paging in.
+            let cadence = snapshot
+                .as_ref()
+                .filter(|_| attack_needed && bindings_ready)
+                .map(|frame| {
+                    (
+                        frame.session,
+                        frame.dimension,
+                        attack_held,
+                        frame.frame_seconds,
+                    )
+                });
             if modules.attack_pulse(cadence) && gameplay::pulse_attack().is_err() {
                 modules.attack_refused();
             }
