@@ -28,13 +28,26 @@ use crate::{
 const _: () =
     assert!(4 + 1 + finder::SYNC_CALLS + 2 * crate::ghost::INSTANCES <= mod_api::MAX_RENDER_CALLS);
 
+/// Serialization and canonical-ABI publication each have a bounded turn.
+#[derive(Default)]
+enum PanelUpdate {
+    #[default]
+    Idle,
+    Shell(String),
+    BuildRoute(Box<crate::panel::Bindings>),
+    Route(String),
+}
+
+type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
+
 type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
-    static WORLD_FIRST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
+    static DRAW_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
-    static ESP_PENDING: RefCell<Option<(u64, i32, Vec<player_state::ObservedActor>)>> = const { RefCell::new(None) };
+    static ESP_PENDING: RefCell<Option<EspSample>> = const { RefCell::new(None) };
     static ESP_MASK: RefCell<Option<(u64, i32, Handle)>> = const { RefCell::new(None) };
     /// The ESP label slots while their HUD surface is set.
     static ESP_LABELS: RefCell<Option<crate::esp::Labels>> = const { RefCell::new(None) };
@@ -59,7 +72,8 @@ impl Guest for Cinnaroids {
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
         ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
-        WORLD_FIRST.with(|first| first.set(false));
+        DRAW_TURN.with(|first| first.set(0));
+        PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
         BINDINGS.with(|bindings| *bindings.borrow_mut() = crate::bindings::Cache::default());
@@ -72,8 +86,24 @@ impl Guest for Cinnaroids {
 
     fn frame() {
         let fuel = FrameFuel(budget::remaining_fuel());
+        let pressed = MODULES.with(|modules| {
+            let modules = modules.borrow();
+            let p = &modules.preferences;
+            [
+                "MouseLeft",
+                "Escape",
+                &p.clicker_key,
+                &p.aim_key,
+                &p.jump_reset_key,
+                &p.reach_key,
+            ]
+            .into_iter()
+            .filter(|key| !key.is_empty())
+            .map(str::to_owned)
+            .collect()
+        });
         let Ok(mut controls) = input::read_selected_controls(&input::Selection {
-            keys_pressed: None,
+            keys_pressed: Some(pressed),
             keys_held: Some(vec!["MouseLeft".into()]),
             keys_admitted: None,
             events: true,
@@ -89,6 +119,24 @@ impl Guest for Cinnaroids {
             real_position(false, None, false, &fuel);
             return;
         };
+        let capture = MODULES.with(|modules| modules.borrow().capturing_key.is_some())
+            || controls.events.iter().any(|event| {
+                matches!(
+                    event.id.as_str(),
+                    "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key"
+                )
+            });
+        if controls.panel_open && capture {
+            // Key capture needs the full edge list only while the panel owns gameplay.
+            if let Ok(edges) = input::read_selected_controls(&input::Selection {
+                keys_pressed: None,
+                keys_held: Some(Vec::new()),
+                keys_admitted: Some(Vec::new()),
+                events: false,
+            }) {
+                controls.keys_pressed = edges.keys_pressed;
+            }
+        }
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
             let events: Vec<_> = std::mem::take(&mut controls.events)
@@ -106,6 +154,8 @@ impl Guest for Cinnaroids {
                 seconds: controls.seconds,
                 events: &events,
             });
+            // Charge the entire bounded event batch's destruction before optional work.
+            drop(events);
             let config = modules.aim_config();
             let attack_needed =
                 modules.modules.clicker || (config.enabled && config.only_when_clicking);
@@ -125,7 +175,6 @@ impl Guest for Cinnaroids {
             controls.keys_admitted.clear();
             controls.keys_pressed.clear();
             controls.keys_held.clear();
-            publish(&mut modules);
             let _ = gameplay::set_packet_delay(modules.packet_delay_ms());
 
             let snapshot = if controls.focused && controls.gameplay {
@@ -188,21 +237,35 @@ impl Guest for Cinnaroids {
 
             assist_aim(config, snapshot.as_ref(), attack_held);
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
-            prepare_netherite(modules.finder_range(), drawn);
-            // Alternate priority so continuous label and terrain changes both make progress.
-            let world_first = WORLD_FIRST.with(|first| {
-                let old = first.get();
-                first.set(!old);
-                old
+            // Disabled drawings receive their teardown turn before any optional producer.
+            if modules.finder_range().is_none() {
+                netherite(None, drawn, false, &fuel);
+            }
+            if !modules.show_real_position() {
+                real_position(false, None, false, &fuel);
+            }
+            if !modules.modules.player_esp || drawn.is_none() {
+                clear_esp();
+            }
+            publish(&mut modules, &fuel);
+            // Labels get every other first turn; terrain and marker also have reserved turns.
+            let turn = DRAW_TURN.with(|next| {
+                let turn = next.get();
+                next.set((turn + 1) % 6);
+                [1, 0, 1, 2, 1, 0][turn as usize]
             });
-            if world_first {
-                netherite(modules.finder_range(), drawn, false, &fuel);
-                real_position(modules.show_real_position(), drawn, false, &fuel);
-                player_esp(&modules, drawn, &fuel);
-            } else {
-                let labelled = player_esp(&modules, drawn, &fuel);
-                netherite(modules.finder_range(), drawn, labelled, &fuel);
-                real_position(modules.show_real_position(), drawn, labelled, &fuel);
+            for offset in 0..3 {
+                match (turn + offset) % 3 {
+                    0 if modules.finder_range().is_some() => {
+                        prepare_netherite(modules.finder_range(), drawn);
+                        netherite(modules.finder_range(), drawn, false, &fuel);
+                    }
+                    1 => {
+                        player_esp(&modules, drawn, &fuel);
+                    }
+                    2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
+                    _ => {}
+                }
             }
         });
     }
@@ -211,12 +274,20 @@ impl Guest for Cinnaroids {
 /// Reserves fuel for canonical-ABI return cleanup and dropping maximum observations.
 struct FrameFuel(u64);
 impl FrameFuel {
-    /// Every optional work unit checks current fuel; no cached allowance survives an import.
+    /// Leaves a publication and callback-return reserve after ordinary optional work.
     fn allows(&self, cost: u64) -> bool {
+        self.allows_until(cost, 81_000)
+    }
+    /// Gives bounded publication, saving and observation retirement their reserved turn.
+    fn publishes(&self, cost: u64) -> bool {
+        self.allows_until(cost, 81_000)
+    }
+    /// Rechecks live fuel after every host import and bounded unit.
+    fn allows_until(&self, cost: u64, limit: u64) -> bool {
         self.0
             .saturating_sub(budget::remaining_fuel())
             .saturating_add(cost)
-            <= 82_000
+            <= limit
     }
 }
 
@@ -270,7 +341,8 @@ fn assist_aim(
     });
 }
 
-fn publish(modules: &mut State) {
+/// Publishes fixed-size control and preference steps before optional drawing producers.
+fn publish(modules: &mut State, fuel: &FrameFuel) {
     if modules.fullbright_dirty {
         match environment::set_fullbright(modules.modules.fullbright) {
             Ok(()) => modules.fullbright_dirty = false,
@@ -282,15 +354,7 @@ fn publish(modules: &mut State) {
     if modules.reservations_dirty && input::reserve_keys(&modules.reserved_keys()).is_ok() {
         modules.reservations_dirty = false;
     }
-    if modules.panel_dirty
-        && let Ok(json) = modules.panel_shell_json()
-        && let Ok(update) = modules.panel_update_json()
-        && panel::set_content(&json).is_ok()
-        && panel::update_content(&update).is_ok()
-    {
-        modules.panel_dirty = false;
-    }
-    if modules.preferences_dirty {
+    if modules.preferences_dirty && fuel.publishes(15_000) {
         let saved = serde_json::to_string(&modules.preferences)
             .ok()
             .is_some_and(|json| settings::save(&json).is_ok());
@@ -300,6 +364,54 @@ fn publish(modules: &mut State) {
             let _ = hud::set_label("Cinnaroids: preferences could not be saved");
         }
     }
+    PANEL_PENDING.with(|pending| {
+        let mut pending = pending.borrow_mut();
+        for _ in 0..48 {
+            let cost = if matches!(*pending, PanelUpdate::BuildRoute(_)) {
+                3_000
+            } else {
+                12_000
+            };
+            if !fuel.allows(cost) {
+                break;
+            }
+            if let PanelUpdate::BuildRoute(builder) = &mut *pending {
+                if builder.advance() {
+                    let PanelUpdate::BuildRoute(builder) = std::mem::take(&mut *pending) else {
+                        unreachable!()
+                    };
+                    *pending = PanelUpdate::Route(format!(
+                        "{{\"surface\":\"clickgui\",\"bindings\":{}}}",
+                        builder.finish()
+                    ));
+                }
+                continue;
+            }
+            *pending = match &*pending {
+                PanelUpdate::Idle if modules.panel_dirty => {
+                    let Ok(json) = modules.panel_shell_json() else {
+                        break;
+                    };
+                    modules.panel_dirty = false;
+                    PanelUpdate::Shell(json)
+                }
+                PanelUpdate::Shell(json) => {
+                    if panel::set_content(json).is_err() {
+                        break;
+                    }
+                    PanelUpdate::BuildRoute(Box::new(crate::panel::Bindings::new(modules)))
+                }
+                PanelUpdate::BuildRoute(_) => unreachable!("advanced below"),
+                PanelUpdate::Route(json) => {
+                    if panel::update_content(json).is_err() {
+                        break;
+                    }
+                    PanelUpdate::Idle
+                }
+                PanelUpdate::Idle => break,
+            };
+        }
+    });
 }
 
 mod_api::bindings::export!(Cinnaroids with_types_in mod_api::bindings);
@@ -328,12 +440,29 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
         if context_changed {
             clear_esp();
         }
+        if ESP_LABELS.with(|labels| labels.borrow().is_none()) {
+            // Initial surface publication is independent of actor import and label writes.
+            if fuel.publishes(16_000) && hud::set_surface(crate::esp::SURFACE).is_ok() {
+                ESP_LABELS.with(|labels| *labels.borrow_mut() = Some(Default::default()));
+            }
+            return false;
+        }
         let pending = ESP_PENDING.with(|pending| pending.borrow_mut().take());
-        let actors = match pending {
-            Some((session, dimension, actors))
+        let (actors, turns) = match pending {
+            Some((session, dimension, actors, turns))
                 if (session, dimension) == (world.session, world.dimension) =>
             {
-                actors
+                if turns == 0 {
+                    if fuel.publishes(16_000) {
+                        drop(actors);
+                    } else {
+                        ESP_PENDING.with(|pending| {
+                            *pending.borrow_mut() = Some((session, dimension, actors, 0))
+                        });
+                    }
+                    return false;
+                }
+                (actors, turns)
             }
             _ => {
                 if !fuel.allows(8_000) {
@@ -344,17 +473,30 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
                     clear_esp();
                     return false;
                 };
-                actors
+
+                if fuel.allows(45_000) {
+                    (actors, 1)
+                } else {
+                    // Import and destruction of the maximum sample have their own turn.
+                    ESP_PENDING.with(|pending| {
+                        *pending.borrow_mut() = Some((
+                            world.session,
+                            world.dimension,
+                            actors,
+                            crate::esp::MAX_PLAYERS,
+                        ));
+                    });
+                    return true;
+                }
             }
         };
         if !fuel.allows(8_000) {
             ESP_PENDING.with(|pending| {
-                *pending.borrow_mut() = Some((world.session, world.dimension, actors))
+                *pending.borrow_mut() = Some((world.session, world.dimension, actors, turns))
             });
             return true;
         }
-        // Leave a label write and publication after each admitted actor check. Processing
-        // every affordable actor first could otherwise starve all of their name updates.
+        // Under load admit one actor before label publication, preserving its write turn.
         let actor_limit = if fuel.allows(45_000) {
             crate::esp::MAX_PLAYERS
         } else {
@@ -363,22 +505,23 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
         let mut checked = 0;
         let (shown, named) = ESP_LABELS.with(|labels| {
             let mut labels = labels.borrow_mut();
-            let fresh = labels.is_none();
-            let output = labels.get_or_insert_with(Default::default).update_budgeted(
+            let labels = labels.get_or_insert_with(Default::default);
+            labels.stage_writes(!fuel.allows(45_000));
+            let output = labels.update_budgeted(
                 &modules.preferences,
                 world.session,
                 world.dimension,
                 [frame.eye.x, frame.eye.y, frame.eye.z],
                 &actors,
-                |actor| {
-                    if actor {
-                        if checked == actor_limit || !fuel.allows(8_000) {
+                |work| {
+                    if let crate::esp::Work::Label(cost) = work {
+                        fuel.publishes(cost)
+                    } else {
+                        if checked == actor_limit || !fuel.allows(crate::esp::ACTOR_FUEL) {
                             return false;
                         }
                         checked += 1;
                         true
-                    } else {
-                        fuel.allows(5_000)
                     }
                 },
             );
@@ -387,11 +530,15 @@ fn player_esp(modules: &State, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
                 world.dimension,
                 modules.preferences.esp_color,
                 &output.players,
-            ) && (!fresh || hud::set_surface(crate::esp::SURFACE).is_ok())
-                && output
-                    .labels
-                    .is_none_or(|update| hud::update_surface(&update).is_ok());
+            ) && output
+                .labels
+                .is_none_or(|update| hud::update_surface(&update).is_ok());
             (shown, output.named)
+        });
+        let turns = turns.saturating_sub(usize::from(checked != 0));
+        // Maximum observation destruction has its own turn, after the last publication.
+        ESP_PENDING.with(|pending| {
+            *pending.borrow_mut() = Some((world.session, world.dimension, actors, turns));
         });
         if shown {
             return named;
@@ -482,9 +629,6 @@ fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool, 
         match (range, frame) {
             (None, _) => {
                 FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
-                if !fuel.allows(25_000) {
-                    return;
-                }
                 finder.clear_notice();
                 finder.clear();
             }
@@ -497,7 +641,7 @@ fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool, 
                     return;
                 }
                 if finder.synced() && FINDER_ANSWER.with(|answer| answer.borrow().is_some()) {
-                    if !fuel.allows(14_000) {
+                    if !fuel.allows(5_000) {
                         return;
                     }
                     if let Some((_, dimension, through_walls, positions)) =
@@ -508,12 +652,16 @@ fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool, 
                 }
             }
         }
-        if busy {
+        if busy && range.is_some() {
             return;
         }
         if finder.comparing() {
-            if fuel.allows(12_000) {
-                finder.compare(finder::COMPARE_BLOCKS);
+            for _ in 0..finder::COMPARE_BLOCKS {
+                // Includes the bounded 256-entry final partition on the last position.
+                if !finder.comparing() || !fuel.allows(7_000) {
+                    break;
+                }
+                finder.compare(1);
             }
             return;
         }
@@ -586,12 +734,28 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
             .update(sample, camera, seconds)
             .zip(frame)
             .map(|(feet, frame)| (frame.dimension, feet));
-        let cost = if marker.geometries.is_none() {
-            20_000
-        } else {
-            7_000
-        };
-        if !fuel.allows(cost) {
+        if target.is_some() && marker.geometries.is_none() {
+            for spec in ghost::geometries().iter().skip(marker.uploading.len()) {
+                if !fuel.allows(5_000) {
+                    return;
+                }
+                match drawing::create_geometry(spec) {
+                    Ok(handle) => marker.uploading.push(handle),
+                    Err(error) => {
+                        if stale(&error) {
+                            marker.reset();
+                        }
+                        return;
+                    }
+                }
+            }
+            marker.geometries = Some(
+                std::mem::take(&mut marker.uploading)
+                    .try_into()
+                    .expect("five geometries"),
+            );
+        }
+        if !fuel.allows(7_000) {
             return;
         }
         if let Err(error) = place_marker(&mut marker, target, busy)
@@ -700,10 +864,8 @@ fn show_esp(session: u64, dimension: i32, color: u8, players: &[u64]) -> bool {
                 mask
             }
         };
-        let entities: Vec<_> = players
-            .iter()
-            .filter_map(|id| masks::entity(*id).ok())
-            .collect();
+        let mut entities = Vec::with_capacity(crate::esp::MAX_PLAYERS);
+        entities.extend(players.iter().filter_map(|id| masks::entity(*id).ok()));
         !entities.is_empty()
             && masks::select(mask, &entities).is_ok()
             && masks::set_style(mask, Some(crate::esp::appearance(color))).is_ok()

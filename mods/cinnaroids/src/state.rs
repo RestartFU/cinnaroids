@@ -273,7 +273,7 @@ pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
     ]
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Modules {
     pub clicker: bool,
     pub aim: bool,
@@ -294,7 +294,7 @@ pub enum KeybindTarget {
     JumpReset,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct State {
     pub preferences: Preferences,
     pub modules: Modules,
@@ -1010,7 +1010,7 @@ fn replace<T: PartialEq>(target: &mut T, value: T) -> bool {
 }
 
 /// A held attack begins with the physical press, followed by bounded repeat edges.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct ClickCadence {
     context: Option<(u64, i32)>,
     held: bool,

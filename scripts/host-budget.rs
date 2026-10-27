@@ -722,9 +722,9 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             })
             .unwrap();
         };
-        for frame in 0..3 {
+        for frame in 0..6 {
             // Player-only consent filters mobs before the bounded six-row result.
-            observe(&mut host, frame * 5);
+            observe(&mut host, frame.min(2) * 5);
             let mut controls = empty_controls();
             controls.focused = true;
             controls.gameplay = true;
@@ -735,11 +735,14 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                     });
             }));
             assert!(host.is_active());
-            assert_eq!(host.render().0.masks.len(), usize::from(granted));
+            if frame == 5 || !granted {
+                assert_eq!(host.render().0.masks.len(), usize::from(granted));
+            }
             // Three labels take a new name per frame; the fixture's players share one name.
-            let labels = if frame == 0 { 3 } else { 6 };
-            assert_eq!(shown_labels(&host), if granted { labels } else { 0 });
-            if granted {
+            if frame == 5 || !granted {
+                assert_eq!(shown_labels(&host), if granted { 6 } else { 0 });
+            }
+            if granted && !host.render().0.masks.is_empty() {
                 let output = host.render().0;
                 assert!(
                     output
@@ -747,7 +750,9 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                         .iter()
                         .all(|r| r.instances.is_empty() && r.geometry.is_empty())
                 );
-                assert_eq!(output.masks[0].entities.len(), 6);
+                if frame == 5 {
+                    assert_eq!(output.masks[0].entities.len(), 6);
+                }
                 assert_eq!(output.masks[0].depth, mod_api::drawing::MaskDepth::Always);
                 let style = output.masks[0].style.unwrap();
                 assert!(
@@ -1425,6 +1430,18 @@ fn all_modules_with_maximum_observations_fit_the_frame_budget() {
 
 /// Exercises collection, completion and steady state with a full catalog and admission sample.
 fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: bool, maximum: bool) {
+    combined_workload(aim, jump_reset, late, esp, maximum, Stress::Standard);
+}
+
+/// Input dimensions share one workload so regressions cannot accidentally omit other modules.
+fn combined_workload(
+    aim: bool,
+    jump_reset: bool,
+    late: bool,
+    esp: bool,
+    maximum: bool,
+    stress: Stress,
+) {
     use mod_host::{BindingContext, BindingModifiers, InputActionBinding, InputBindings};
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
@@ -1446,7 +1463,7 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
             render_through_walls: true,
             ..Default::default()
         },
-        r#"{"netherite_range":128,"show_real_position":true,"cps":20}"#,
+        &maximum_settings(stress == Stress::Maximum),
     );
     let mut events = vec![("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)];
     if esp {
@@ -1463,7 +1480,7 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
     }
     let mut most = metered_frame(&mut host, &budget, false, &events, GameplayFacts::default());
     // Supported non-modifier desktop keys, excluding the reserved menu key F7.
-    let keys: Vec<String> =
+    let mut keys: Vec<String> =
         "ArrowDown ArrowLeft ArrowRight ArrowUp Backquote Backslash Backspace BracketLeft
         BracketRight CapsLock Comma ContextMenu Delete Digit0 Digit1 Digit2
         Digit3 Digit4 Digit5 Digit6 Digit7 Digit8 Digit9 End
@@ -1482,6 +1499,13 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
             .map(str::to_owned)
             .collect();
     assert_eq!(keys.len(), 110);
+    if matches!(stress, Stress::Longest) {
+        keys.sort_by_key(|name| std::cmp::Reverse(name.len()));
+        let k = keys.iter().position(|key| key == "KeyK").unwrap();
+        keys.swap(k, 63);
+        let j = keys.iter().position(|key| key == "NumpadMultiply").unwrap();
+        keys.swap(j, 109);
+    }
     let held: Vec<_> = keys
         .iter()
         .take(mod_api::MAX_CONTROL_KEYS)
@@ -1512,15 +1536,40 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
         entries.push(entries[0].clone());
     }
     assert_eq!(entries.len(), 128);
+    if stress == Stress::Maximum {
+        for (index, entry) in entries.iter_mut().enumerate().take(126) {
+            entry.key = format!("K{index:031}");
+            entry.action = "x".repeat(mod_api::MAX_INPUT_ACTION_BYTES);
+        }
+        entries[126].key = "KeyK".into();
+        entries[126].action = "attack".into();
+        entries[126].modifiers = BindingModifiers {
+            shift: false,
+            control: false,
+            alt: false,
+            super_key: false,
+        };
+        entries[127].key = "NumpadMultiply".into();
+        entries[127].action = "jump".into();
+        entries[127].modifiers = BindingModifiers {
+            shift: false,
+            control: false,
+            alt: false,
+            super_key: false,
+        };
+    }
     host.observe_input_bindings(std::sync::Arc::new(InputBindings {
         revision: 9,
         total: entries.len() as u32,
         entries,
     }))
     .unwrap();
-    let mut debris = Debris {
-        count: mod_api::MAX_FOUND_BLOCKS,
-        shift: 0,
+    let mut debris = StressTerrain {
+        base: Debris {
+            count: mod_api::MAX_FOUND_BLOCKS,
+            shift: 0,
+        },
+        clustered: stress.collisions().then(clustered_blocks),
     };
     let mut first_marker = Vec::new();
     let mut middle_cubes = Vec::new();
@@ -1528,7 +1577,10 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
     let mut collecting = 0;
     let mut steady = 0;
     let completed = (mod_api::MAX_INPUT_BINDINGS as u64).div_ceil(4) - 1;
-    for frame in 0..160 {
+    let frames = if stress == Stress::Maximum { 1000 } else { 160 };
+    let mut updates = [0; 6];
+    let mut previous: [String; 6] = Default::default();
+    for frame in 0..frames {
         if esp {
             use mod_host::{
                 ActorObservation, ActorObservationBounds, ObservedActor,
@@ -1542,7 +1594,11 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
                             mod_api::drawing::MaskEntity {
                                 connection: 1,
                                 dimension: 0,
-                                runtime_id: index as u64 + 1,
+                                runtime_id: if stress == Stress::Maximum {
+                                    u64::MAX - index as u64
+                                } else {
+                                    index as u64 + 1
+                                },
                                 spawn_revision: 1,
                             },
                             72,
@@ -1556,7 +1612,11 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
                         actor: ActorObservation {
                             session: 2,
                             dimension: 0,
-                            runtime_id: index as u64 + 1,
+                            runtime_id: if stress == Stress::Maximum {
+                                u64::MAX - index as u64
+                            } else {
+                                index as u64 + 1
+                            },
                             player: true,
                             position: (index as f32 + frame as f32 * 0.05, 0., -4.),
                             boxes: vec![
@@ -1566,9 +1626,12 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
                                 };
                                 mod_api::MAX_OBSERVED_ACTOR_BOXES
                             ],
-                            name: format!("§{generation}")
-                                .repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES / 3),
-                            identifier: "minecraft:player".into(),
+                            name: stress.name(frame),
+                            identifier: if stress == Stress::Maximum {
+                                "x".repeat(128)
+                            } else {
+                                "minecraft:player".into()
+                            },
                             yaw: 0.,
                             pitch: 0.,
                             pickable: true,
@@ -1578,9 +1641,17 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
                             invisible: false,
                             sneaking: false,
                             hurt: false,
-                            health: Some(10. + generation as f32),
+                            health: Some(if stress == Stress::Maximum {
+                                f32::MAX
+                            } else {
+                                10. + generation as f32
+                            }),
                         },
-                        max_health: Some(40.),
+                        max_health: Some(if stress == Stress::Maximum {
+                            f32::MAX
+                        } else {
+                            40.
+                        }),
                     })
                     .collect(),
                 ..Default::default()
@@ -1588,13 +1659,17 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
             .unwrap();
         }
         if maximum {
-            debris.shift = (frame / 20) as i32;
+            debris.base.shift = (if stress == Stress::Maximum {
+                frame.min(100)
+            } else {
+                frame
+            } / 20) as i32;
         }
         host.observe_presentation(
             Some(mod_host::WorldObservation {
                 session: 2,
                 dimension: 0,
-                world: "local-fixture".into(),
+                world: "x".repeat(mod_api::MAX_WORLD_IDENTITY_BYTES),
                 position: (0., 0., 0.),
                 alive: true,
                 runtime_id: 99,
@@ -1629,6 +1704,24 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
         controls.gameplay = true;
         controls.keys_held = held.clone();
         controls.keys_admitted = held.clone();
+        controls.keys_pressed = held.clone();
+        let toggles = stress.toggles(frame);
+        if !toggles.is_empty() {
+            controls.panel_open = true;
+            controls.keys_admitted.clear();
+            for (id, value) in &toggles {
+                controls.events.push(ControlEvent {
+                    id: (*id).into(),
+                    value: *value,
+                });
+            }
+            while controls.events.len() < ui::mod_panel::MAX_PANEL_EVENTS {
+                controls.events.push(ControlEvent {
+                    id: "x".repeat(ui::mod_panel::MAX_PANEL_ID_BYTES),
+                    value: 1.,
+                });
+            }
+        }
         let used = metered_callback(&mut host, &budget, |host| {
             host.frame_with_movement(
                 false,
@@ -1682,10 +1775,23 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
             .unwrap_or_else(|error| panic!("binding/drawing frame {frame}: {error:#}"));
         });
         most = most.max(used);
-        if esp && frame == 159 {
+        if esp {
+            if let Some((surface, _)) = host.hud_surface() {
+                for slot in 0..6 {
+                    if let Some(ui::mod_panel::SurfaceValue::Text(name)) =
+                        surface.bindings.get(&format!("#esp_{slot}_line1"))
+                    {
+                        if *name != previous[slot] {
+                            updates[slot] += 1;
+                            previous[slot] = name.clone();
+                        }
+                    }
+                }
+            }
+        }
+        if esp && frame == frames - 1 && stress != Stress::Churn {
             assert_eq!(shown_labels(&host), 6, "deferred ESP must catch up");
-            let expected = format!("§{}", frame.min(99) / 20)
-                .repeat(mod_api::MAX_OBSERVED_ACTOR_NAME_BYTES / 3);
+            let expected = stress.name(frame);
             let surface = host.hud_surface().unwrap().0;
             for slot in 0..6 {
                 assert_eq!(
@@ -1693,6 +1799,86 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
                     ui::mod_panel::SurfaceValue::Text(expected.clone()),
                     "name update must progress"
                 );
+            }
+        }
+        if stress == Stress::Maximum {
+            if frame >= 12 {
+                for (id, value) in stress.toggles(frame - 12) {
+                    let control = host
+                        .panel()
+                        .unwrap()
+                        .controls
+                        .iter()
+                        .find(|control| control.id() == id)
+                        .unwrap();
+                    let ui::mod_panel::Control::Toggle {
+                        value: published, ..
+                    } = control
+                    else {
+                        panic!("toggle control")
+                    };
+                    assert_eq!(*published, value >= 0.5, "panel queue deadline for {id}");
+                    if id == "show_real_position" {
+                        let saved: serde_json::Value = serde_json::from_slice(
+                            &std::fs::read(_directory.path().join("drawing.settings.json"))
+                                .unwrap(),
+                        )
+                        .unwrap();
+                        assert_eq!(saved[id], value >= 0.5, "settings queue deadline");
+                    }
+                }
+            }
+            // Disable deadlines: 32 callbacks for 256 cubes; immediate HUD/mask removal;
+            // five marker instances retire in one bounded batch.
+            if [331, 831].contains(&frame) {
+                assert!(
+                    drawn_instances(&host) <= if frame == 831 { 0 } else { 5 },
+                    "Finder teardown deadline"
+                );
+            }
+            if [501, 815].contains(&frame) {
+                assert_eq!(shown_labels(&host), 0);
+                assert!(host.render().0.masks.is_empty());
+            }
+            if frame == 601 {
+                assert_eq!(drawn_instances(&host), 256);
+            }
+            if frame == 701 {
+                assert!(!host.fullbright());
+            }
+            if [148, 380, 564, 664, 764, 880].contains(&frame) {
+                assert_eq!(
+                    shown_labels(&host),
+                    6,
+                    "48-callback ESP deadline at {frame}"
+                );
+                let surface = host.hud_surface().unwrap().0;
+                for slot in 0..6 {
+                    assert_eq!(
+                        surface.bindings[&format!("#esp_{slot}_line1")],
+                        ui::mod_panel::SurfaceValue::Text(stress.name(frame)),
+                        "48-callback name deadline"
+                    );
+                }
+            }
+            // Every producer must converge after initial load and every re-enable, with
+            // names and terrain settled. This checks exact output, not only queue activity.
+            if [290, 490, 590, 690, 790, 990].contains(&frame) {
+                assert_eq!(
+                    drawn_instances(&host),
+                    261,
+                    "drawing convergence at {frame}"
+                );
+                assert_eq!(shown_labels(&host), 6, "label convergence at {frame}");
+                assert_eq!(host.render().0.masks.len(), 1);
+                assert!(host.fullbright());
+                let origins = drawn_origins(&host);
+                for point in debris.blocks(256) {
+                    assert!(
+                        origins.contains(&[point.x as i64, point.y as i64, point.z as i64]),
+                        "terrain convergence at {frame}"
+                    );
+                }
             }
         }
         if frame == 80 {
@@ -1709,18 +1895,20 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
         } else {
             steady = steady.max(used);
         }
-        assert_eq!(host.take_interaction().attack_pulse, frame > completed);
-        assert_eq!(
-            host.take_camera_delta().is_some(),
-            aim && frame >= completed
-        );
-        assert_eq!(
-            host.take_jump_pulse(),
-            jump_reset && frame >= completed + 2 && frame % 2 == 1
-        );
-        assert_eq!(host.take_jump_cancel(), !jump_reset || frame < completed);
+        let attack = host.take_interaction().attack_pulse;
+        let camera = host.take_camera_delta().is_some();
+        let jump = host.take_jump_pulse();
+        let cancel = host.take_jump_cancel();
+        if stress != Stress::Maximum {
+            assert_eq!(attack, frame > completed);
+            assert_eq!(camera, aim && frame >= completed);
+            assert_eq!(jump, jump_reset && frame >= completed + 2 && frame % 2 == 1);
+            assert_eq!(cancel, !jump_reset || frame < completed);
+        } else if (100..190).contains(&frame) {
+            assert!(attack && camera, "mandatory work continues");
+        }
         let origins = drawn_origins(&host);
-        if !esp || frame >= completed {
+        if (!esp || frame >= completed) && !stress.collisions() {
             assert_eq!(
                 origins.iter().filter(|origin| origin[2] == 0).count(),
                 5,
@@ -1749,6 +1937,13 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
         }
     }
     assert_eq!(drawn_instances(&host), 256 + 5);
+    if stress == Stress::Churn {
+        assert!(
+            updates.iter().all(|n| *n >= 10),
+            "name queue starvation: {updates:?}"
+        );
+    }
+    println!("stress {stress:?}: name updates {updates:?}");
     if maximum {
         let last: Vec<_> = drawn_origins(&host)
             .into_iter()
@@ -1771,4 +1966,169 @@ fn combined_binding_completion(aim: bool, jump_reset: bool, late: bool, esp: boo
         peak {most}, collecting {collecting}, completion {completion}, steady {steady} fuel \
         (target {FRAME_FUEL})"
     );
+}
+
+/// Adversarial and lifecycle variants of the same full gameplay load.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Stress {
+    Standard,
+    Quotes,
+    Escaped,
+    Control,
+    Longest,
+    Churn,
+    Collision,
+    Maximum,
+}
+impl Stress {
+    /// Whether to use 256 nearby positions that cluster a multiplicative lookup index.
+    fn collisions(self) -> bool {
+        matches!(self, Self::Collision | Self::Maximum)
+    }
+    /// Maximum-byte legal names, including their serialized quote/backslash expansion.
+    fn name(self, frame: u64) -> String {
+        let generation = if self == Self::Churn {
+            frame
+        } else {
+            frame.min(99) / 20
+        };
+        match self {
+            Self::Quotes => format!("{generation:03}{}", "\"".repeat(125)),
+            Self::Escaped | Self::Maximum => {
+                (if generation % 2 == 0 { "\"" } else { "\\" }).repeat(128)
+            }
+            Self::Control => format!("{generation:03}{}\u{00a0}", "x".repeat(123)),
+            _ => {
+                let unit = format!("§{generation}");
+                unit.repeat(128 / unit.len())
+            }
+        }
+    }
+    /// Actual panel control events toggle each drawing producer under the full input load.
+    fn toggles(self, frame: u64) -> Vec<(&'static str, f32)> {
+        if self != Self::Maximum {
+            return Vec::new();
+        }
+        let (ids, enabled): (&[&str], bool) = match frame {
+            300 | 332 => (&["netherite"], frame == 332),
+            500 | 516 => (&["player_esp"], frame == 516),
+            600 | 616 => (&["show_real_position"], frame == 616),
+            700 | 716 => (&["fullbright"], frame == 716),
+            800 | 832 => (
+                &[
+                    "netherite",
+                    "player_esp",
+                    "show_real_position",
+                    "fullbright",
+                ],
+                frame == 832,
+            ),
+            _ => return Vec::new(),
+        };
+        ids.iter()
+            .map(|id| (*id, if enabled { 1. } else { 0. }))
+            .collect()
+    }
+}
+
+/// Fills the host's settings byte allowance while preserving valid maximum-range preferences.
+fn maximum_settings(maximum: bool) -> String {
+    let mut settings = r#"{"netherite_range":128,"esp_range":128,"show_real_position":true,"cps":20,"padding":""}"#.to_owned();
+    if maximum {
+        settings = r#"{"netherite_range":128,"esp_range":128,"show_real_position":true,"cps":30,"aim_strength":100,"aim_mode":"continuous","reach_blocks":6,"fake_lag_ms":1000,"jump_reset_window_ticks":10,"padding":""}"#.into();
+    }
+    settings.insert_str(
+        settings.len() - 2,
+        &"x".repeat(mod_api::MAX_SETTINGS_BYTES - settings.len()),
+    );
+    assert_eq!(settings.len(), mod_api::MAX_SETTINGS_BYTES);
+    settings
+}
+
+/// Generates nearby distinct positions sorted by distance; no fixture file is needed.
+fn clustered_blocks() -> Vec<[i32; 3]> {
+    let mut buckets = vec![Vec::new(); 512];
+    for x in -64i32..=64 {
+        for z in -64i32..=64 {
+            for y in 0i32..=32 {
+                let key = ((x as i64 + (1 << 25)) as u64) << 38
+                    | ((z as i64 + (1 << 25)) as u64) << 12
+                    | (y as u64 + (1 << 11));
+                let bucket = (key.wrapping_mul(0x9e3779b97f4a7c15) >> 55) as usize;
+                buckets[bucket].push([x, y, z]);
+            }
+        }
+    }
+    let mut points = buckets.into_iter().max_by_key(Vec::len).unwrap();
+    points.sort_by_key(|p| p.iter().map(|v| v * v).sum::<i32>());
+    points.truncate(256);
+    assert!(
+        points
+            .iter()
+            .all(|p| p.iter().map(|v| v * v).sum::<i32>() < 54 * 54)
+    );
+    points
+}
+
+/// Search source with either an ordinary slab or a clustered nearby selection.
+struct StressTerrain {
+    base: Debris,
+    clustered: Option<Vec<[i32; 3]>>,
+}
+impl StressTerrain {
+    /// The selected points for exact convergence checks.
+    fn blocks(&self, limit: usize) -> Vec<TerrainPosition> {
+        match &self.clustered {
+            None => self.base.blocks(limit),
+            Some(points) => points
+                .iter()
+                .take(limit)
+                .map(|[x, y, z]| TerrainPosition {
+                    x: x + self.base.shift,
+                    y: *y,
+                    z: *z,
+                })
+                .collect(),
+        }
+    }
+}
+impl BlockSearchSource for StressTerrain {
+    fn find(&mut self, search: &BlockSearch) -> Result<FoundBlocks, TerrainReadError> {
+        Ok(FoundBlocks {
+            session: 2,
+            dimension: 0,
+            positions: self.blocks(search.limit as usize),
+        })
+    }
+}
+
+/// Maximum observations, escaping and retained geometry coexist with panel lifecycle changes.
+#[test]
+fn maximum_everything_and_drawing_lifecycles_fit_with_headroom() {
+    combined_workload(true, true, true, true, true, Stress::Maximum);
+}
+/// Each independently reported boundary remains covered alongside all enabled modules.
+#[test]
+fn escaped_names_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Escaped);
+}
+#[test]
+fn quote_names_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Quotes);
+}
+#[test]
+fn unicode_names_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Control);
+}
+#[test]
+fn longest_desktop_keys_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Longest);
+}
+#[test]
+fn colliding_terrain_positions_fit_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Collision);
+}
+#[test]
+fn continuously_changed_names_keep_progressing() {
+    combined_workload(true, true, true, true, true, Stress::Churn);
 }

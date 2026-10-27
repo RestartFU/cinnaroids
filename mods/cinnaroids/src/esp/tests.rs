@@ -372,7 +372,7 @@ fn budgeted_labels_make_progress_and_hide_reassigned_slots() {
             [0., 1.6, 0.],
             &actors,
             |actor| {
-                if actor {
+                if matches!(actor, Work::Actor) {
                     return true;
                 }
                 let allowed = remaining != 0;
@@ -395,7 +395,72 @@ fn budgeted_labels_make_progress_and_hide_reassigned_slots() {
         0,
         [0., 1.6, 0.],
         &replacement,
-        |actor| actor,
+        |actor| matches!(actor, Work::Actor),
     );
     assert!(labels.slots.iter().all(|slot| !slot.shown));
+}
+
+/// Actor turns must wait for publication when alternate callbacks cannot write labels.
+#[test]
+fn periodic_label_pressure_cannot_skip_the_same_actors_forever() {
+    let actors: Vec<_> = (0..MAX_PLAYERS)
+        .map(|i| {
+            let mut actor = actor();
+            actor.actor.runtime_id += i as u64;
+            actor.actor.name = format!("Player {i}");
+            actor
+        })
+        .collect();
+    let mut labels = Labels::default();
+    labels.stage_writes(true);
+    for frame in 0..24 {
+        let mut checked = false;
+        let mut written = false;
+        labels.update_budgeted(
+            &Preferences::default(),
+            3,
+            0,
+            [0., 1.6, 0.],
+            &actors,
+            |work| match work {
+                Work::Actor => {
+                    let allowed = !checked;
+                    checked = true;
+                    allowed
+                }
+                Work::Label(_) => {
+                    let allowed = frame % 2 == 1 && !written;
+                    written = true;
+                    allowed
+                }
+            },
+        );
+    }
+    assert!(labels.slots.iter().all(|slot| slot.shown));
+    let mut names: Vec<_> = labels.slots.iter().map(|slot| slot.name.clone()).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        (0..MAX_PLAYERS)
+            .map(|i| format!("Player {i}"))
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Admission counts serialized bytes exactly across word boundaries and UTF-8 names.
+#[test]
+fn escaped_size_matches_json_for_every_host_text_byte() {
+    for byte in 0x20u8..0x7f {
+        for length in 0..=32 {
+            let value = format!(
+                "§{}\\\"{}",
+                char::from(byte).to_string().repeat(length),
+                char::from(byte)
+            );
+            assert_eq!(
+                escaped_len(&value),
+                serde_json::to_string(&value).unwrap().len() - 2
+            );
+        }
+    }
 }

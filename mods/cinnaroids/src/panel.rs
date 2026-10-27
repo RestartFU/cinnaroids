@@ -579,134 +579,190 @@ pub fn key_label(key: &str) -> &str {
 
 /// Write a small JSON object from trusted names, fixed copy, booleans and bounded numbers.
 /// Direct appends avoid generic map/key escaping on every frame under the host fuel cap.
-fn bindings_json(state: &State) -> String {
-    let mut json = String::with_capacity(4096);
-    json.push_str(r##"{"#world_blur":4,"#world_brightness":0.7,"#world_saturation":0.85"##);
-    let enabled = state.enabled_flags();
-    name(&mut json, "#menu_capture");
-    integer(
-        &mut json,
-        (state.capturing_key == Some(KeybindTarget::Menu)).into(),
-    );
-
-    // Module rows, stacked per column with eased offsets beneath expanded settings.
-    let mut heights = [0, 0, 0, MENU_BODY];
-    let mut placed = [false; 3];
-    for (index, (module, column, details)) in MODULES.iter().enumerate() {
-        let on = enabled[index];
-        let expanded = *details > 0 && state.expanded[index];
-        if std::mem::replace(&mut placed[*column], true) {
-            name_parts(&mut json, &[module, "_y"]);
-            json.push_str("[0,");
-            integer(&mut json, heights[*column]);
-            json.push(']');
-        }
-        name_parts(&mut json, &[module, "_bar"]);
-        json.push_str(if on { "[1,1]" } else { "[1,0]" });
-        name_parts(&mut json, &[module, "_indent"]);
-        json.push_str(if on { "[13,6]" } else { "[10,6]" });
-        if *details > 0 {
-            name_parts(&mut json, &[module, "_h"]);
-            integer(&mut json, if expanded { *details } else { 0 });
-            name_parts(&mut json, &[module, "_detail"]);
-            integer(&mut json, expanded.into());
-            name_parts(&mut json, &[module, "_angle"]);
-            integer(&mut json, if expanded { 0 } else { -90 });
-        }
-        heights[*column] += ROW + if expanded { *details } else { 0 };
-    }
-    // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
-    let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
-    name(&mut json, "#reach_value");
-    json.push('"');
-    integer(&mut json, tenths / 10);
-    json.push('.');
-    integer(&mut json, tenths % 10);
-    json.push_str(" blocks\"");
-    for (index, target) in KEYED {
-        let module = MODULES[index].0;
-        let bound = !state.key_for(target).is_empty();
-        name_parts(&mut json, &[module, "_keycap"]);
-        integer(&mut json, bound.into());
-        // The trailing value slides left to make room for the keycap.
-        name_parts(&mut json, &[module, "_value_at"]);
-        json.push_str(if bound { "[50,6]" } else { "[72,6]" });
-        name_parts(&mut json, &[module, "_capture"]);
-        integer(&mut json, (state.capturing_key == Some(target)).into());
-    }
-
-    for (column, id) in COLUMNS.iter().enumerate() {
-        let [x, y] = state.preferences.columns[column];
-        let open = !state.preferences.collapsed[column];
-        let body = if open { heights[column] } else { 0 };
-        name_parts(&mut json, &["col_", id, "_pos"]);
-        pair(&mut json, x, y);
-        // The drag pad is centred on the desk origin from inside the moving header.
-        name_parts(&mut json, &["col_", id, "_pad"]);
-        pair(&mut json, -x, -y);
-        name_parts(&mut json, &["col_", id, "_in"]);
-        json.push_str("[0,0]");
-        name_parts(&mut json, &["col_", id, "_alpha"]);
-        integer(&mut json, 1);
-        name_parts(&mut json, &["col_", id, "_h"]);
-        integer(&mut json, body);
-        name_parts(&mut json, &["col_", id, "_bg"]);
-        integer(&mut json, HEADER + body + if open { FOOTER } else { 0 });
-        name_parts(&mut json, &["col_", id, "_open"]);
-        integer(&mut json, open.into());
-        name_parts(&mut json, &["col_", id, "_angle"]);
-        integer(&mut json, if open { 0 } else { -90 });
-        let lifted = state.drag.is_some_and(|drag| drag.column == column);
-        name_parts(&mut json, &["col_", id, "_edge"]);
-        json.push_str(if lifted { "[1,1,1,0.24]" } else { "[1,1,1,0]" });
-        if column < 3 {
-            let (on, all) = MODULES
-                .iter()
-                .enumerate()
-                .filter(|(_, module)| module.1 == column)
-                .fold((0, 0), |(on, all), (index, _)| {
-                    (on + i32::from(enabled[index]), all + 1)
-                });
-            name_parts(&mut json, &["col_", id, "_count"]);
-            json.push('"');
-            integer(&mut json, on);
-            json.push('/');
-            integer(&mut json, all);
-            json.push('"');
+/// A snapshot of panel scalars serialized one bounded row at a time.
+pub(crate) struct Bindings {
+    state: State,
+    json: String,
+    heights: [i32; 4],
+    placed: [bool; 3],
+    step: usize,
+}
+impl Bindings {
+    /// Captures one coherent update without retaining a borrow of gameplay state.
+    pub(crate) fn new(state: &State) -> Self {
+        Self {
+            state: state.clone(),
+            json: String::with_capacity(8192),
+            heights: [0, 0, 0, MENU_BODY],
+            placed: [false; 3],
+            step: 0,
         }
     }
+    /// Appends at most one module, column or feedback control; true after the closing brace.
+    pub(crate) fn advance(&mut self) -> bool {
+        let state = &self.state;
+        let enabled = state.enabled_flags();
+        let json = &mut self.json;
+        let heights = &mut self.heights;
+        let placed = &mut self.placed;
+        match self.step {
+            0 => {
+                json.push_str(
+                    r##"{"#world_blur":4,"#world_brightness":0.7,"#world_saturation":0.85"##,
+                );
+                name(json, "#menu_capture");
+                integer(
+                    json,
+                    (state.capturing_key == Some(KeybindTarget::Menu)).into(),
+                );
+            }
+            1..=8 => {
+                let index = self.step - 1;
+                let (module, column, details) = &MODULES[index];
 
-    // Control feedback Cinnabar's native layout used to publish.
-    let mut digits = String::with_capacity(2);
-    let mut control = |json: &mut String, index: usize, suffix: &str| {
-        digits.clear();
-        let tens = index / 10;
-        if tens > 0 {
-            digits.push(char::from(b'0' + tens as u8));
+                let on = enabled[index];
+                let expanded = *details > 0 && state.expanded[index];
+                if std::mem::replace(&mut placed[*column], true) {
+                    name_parts(json, &[module, "_y"]);
+                    json.push_str("[0,");
+                    integer(json, heights[*column]);
+                    json.push(']');
+                }
+                name_parts(json, &[module, "_bar"]);
+                json.push_str(if on { "[1,1]" } else { "[1,0]" });
+                name_parts(json, &[module, "_indent"]);
+                json.push_str(if on { "[13,6]" } else { "[10,6]" });
+                if *details > 0 {
+                    name_parts(json, &[module, "_h"]);
+                    integer(json, if expanded { *details } else { 0 });
+                    name_parts(json, &[module, "_detail"]);
+                    integer(json, expanded.into());
+                    name_parts(json, &[module, "_angle"]);
+                    integer(json, if expanded { 0 } else { -90 });
+                }
+                heights[*column] += ROW + if expanded { *details } else { 0 };
+            }
+            9 => {
+                // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
+                let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
+                name(json, "#reach_value");
+                json.push('"');
+                integer(json, tenths / 10);
+                json.push('.');
+                integer(json, tenths % 10);
+                json.push_str(" blocks\"");
+                for (index, target) in KEYED {
+                    let module = MODULES[index].0;
+                    let bound = !state.key_for(target).is_empty();
+                    name_parts(json, &[module, "_keycap"]);
+                    integer(json, bound.into());
+                    // The trailing value slides left to make room for the keycap.
+                    name_parts(json, &[module, "_value_at"]);
+                    json.push_str(if bound { "[50,6]" } else { "[72,6]" });
+                    name_parts(json, &[module, "_capture"]);
+                    integer(json, (state.capturing_key == Some(target)).into());
+                }
+            }
+            10..=13 => {
+                let column = self.step - 10;
+                let id = COLUMNS[column];
+
+                let [x, y] = state.preferences.columns[column];
+                let open = !state.preferences.collapsed[column];
+                let body = if open { heights[column] } else { 0 };
+                name_parts(json, &["col_", id, "_pos"]);
+                pair(json, x, y);
+                // The drag pad is centred on the desk origin from inside the moving header.
+                name_parts(json, &["col_", id, "_pad"]);
+                pair(json, -x, -y);
+                name_parts(json, &["col_", id, "_in"]);
+                json.push_str("[0,0]");
+                name_parts(json, &["col_", id, "_alpha"]);
+                integer(json, 1);
+                name_parts(json, &["col_", id, "_h"]);
+                integer(json, body);
+                name_parts(json, &["col_", id, "_bg"]);
+                integer(json, HEADER + body + if open { FOOTER } else { 0 });
+                name_parts(json, &["col_", id, "_open"]);
+                integer(json, open.into());
+                name_parts(json, &["col_", id, "_angle"]);
+                integer(json, if open { 0 } else { -90 });
+                let lifted = state.drag.is_some_and(|drag| drag.column == column);
+                name_parts(json, &["col_", id, "_edge"]);
+                json.push_str(if lifted { "[1,1,1,0.24]" } else { "[1,1,1,0]" });
+                if column < 3 {
+                    let (on, all) = MODULES
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, module)| module.1 == column)
+                        .fold((0, 0), |(on, all), (index, _)| {
+                            (on + i32::from(enabled[index]), all + 1)
+                        });
+                    name_parts(json, &["col_", id, "_count"]);
+                    json.push('"');
+                    integer(json, on);
+                    json.push('/');
+                    integer(json, all);
+                    json.push('"');
+                }
+            }
+            14..=26 => {
+                let (index, on) = toggles(state)[self.step - 14];
+                control(json, index, "_on");
+                integer(json, on.into());
+            }
+            27..=33 => {
+                let (index, value, min, max) = sliders(state)[self.step - 27];
+                control(json, index, "_text");
+                slider_text(json, value);
+                control(json, index, "_fill");
+                fraction(json, (value - min) / (max - min));
+            }
+            34..=38 => {
+                let (index, target) = KEYBINDS[self.step - 34];
+                control(json, index, "_text");
+                escaped(json, key_label(state.key_for(target)));
+            }
+            39..=40 => {
+                let (index, option) = choices(state)[self.step - 39];
+                control(json, index, "_text");
+                text(json, option);
+            }
+            41 => json.push('}'),
+            _ => return true,
         }
-        digits.push(char::from(b'0' + (index % 10) as u8));
-        name_parts(json, &["c", &digits, suffix]);
+        self.step += 1;
+        self.step == 42
+    }
+    /// The completed scalar object, ready for one bounded publication call.
+    pub(crate) fn finish(self) -> String {
+        self.json
+    }
+}
+
+/// Names a bounded two-digit control without allocating a temporary formatted integer.
+fn control(json: &mut String, index: usize, suffix: &str) {
+    let digits = [b'0' + (index / 10) as u8, b'0' + (index % 10) as u8];
+    let digits = if index < 10 {
+        &digits[1..]
+    } else {
+        &digits[..]
     };
-    for (index, on) in toggles(state) {
-        control(&mut json, index, "_on");
-        integer(&mut json, on.into());
-    }
-    for (index, value, min, max) in sliders(state) {
-        control(&mut json, index, "_text");
-        slider_text(&mut json, value);
-        control(&mut json, index, "_fill");
-        fraction(&mut json, (value - min) / (max - min));
-    }
-    for (index, target) in KEYBINDS {
-        control(&mut json, index, "_text");
-        escaped(&mut json, key_label(state.key_for(target)));
-    }
-    for (index, option) in choices(state) {
-        control(&mut json, index, "_text");
-        text(&mut json, option);
-    }
-    json.push('}');
-    json
+    name_parts(
+        json,
+        &[
+            "c",
+            std::str::from_utf8(digits).expect("control digits"),
+            suffix,
+        ],
+    );
+}
+
+/// Builds the same scalar object synchronously for offline schema validation.
+fn bindings_json(state: &State) -> String {
+    let mut bindings = Bindings::new(state);
+    while !bindings.advance() {}
+    bindings.finish()
 }
 
 #[cfg(test)]
