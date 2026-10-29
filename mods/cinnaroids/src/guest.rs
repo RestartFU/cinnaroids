@@ -50,6 +50,7 @@ type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
+    static PANEL_BINDINGS_DIRTY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static PANEL_KEY: RefCell<Option<String>> = const { RefCell::new(None) };
     static SETTINGS_PENDING: RefCell<Option<String>> = const { RefCell::new(None) };
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
@@ -86,6 +87,7 @@ impl Guest for Cinnaroids {
         WORK_TURN.with(|first| first.set(0));
         SETTINGS_PENDING.with(|pending| *pending.borrow_mut() = None);
         PANEL_KEY.with(|key| *key.borrow_mut() = None);
+        PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
         PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
@@ -286,7 +288,7 @@ impl Guest for Cinnaroids {
                         player_esp(&modules, drawn, &fuel);
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
-                    3 => publish_panel(&mut modules, &fuel),
+                    3 => publish_panel(&mut modules, &fuel, controls.panel_open),
                     4 => publish_preferences(&mut modules, &fuel),
                     _ => {}
                 }
@@ -406,9 +408,25 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
 }
 
 /// Completes a coherent panel snapshot even if controls change again during serialization.
-fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
+fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
+        // An open panel's input state must not wait behind an older visual snapshot.
+        if open
+            && modules.panel_dirty
+            && matches!(
+                *pending,
+                PanelUpdate::BuildRoute { .. } | PanelUpdate::Route(_)
+            )
+            && PANEL_KEY.with(|key| key.borrow().as_ref() == Some(&modules.preferences.menu_key))
+            && fuel.publishes(24_000)
+        {
+            let json = crate::panel::control_patch(modules);
+            if panel::update_content(&json).is_ok() {
+                modules.panel_dirty = false;
+                PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(true));
+            }
+        }
         for _ in 0..48 {
             let cost = match &*pending {
                 PanelUpdate::BuildRoute { builder, .. } if builder.finishing() => 12_000,
@@ -430,6 +448,12 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
                 continue;
             }
             *pending = match &*pending {
+                PanelUpdate::Idle if PANEL_BINDINGS_DIRTY.with(|dirty| dirty.replace(false)) => {
+                    PanelUpdate::BuildRoute {
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
+                        json: "{}".into(),
+                    }
+                }
                 PanelUpdate::Idle if modules.panel_dirty => {
                     let key = modules.preferences.menu_key.clone();
                     let installed =
@@ -847,7 +871,7 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
             .map(|(feet, frame)| (frame.dimension, feet));
         if target.is_some() && marker.geometries.is_none() {
             for spec in ghost::geometries().iter().skip(marker.uploading.len()) {
-                if !fuel.allows(5_000) {
+                if !fuel.publishes(5_000) {
                     return;
                 }
                 match drawing::create_geometry(spec) {
@@ -866,7 +890,7 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
                     .expect("five geometries"),
             );
         }
-        if !fuel.allows(7_000) {
+        if !fuel.publishes(7_000) {
             return;
         }
         if let Err(error) = place_marker(&mut marker, target, busy, fuel)

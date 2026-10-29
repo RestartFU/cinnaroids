@@ -281,7 +281,7 @@ pub(crate) fn route_update(state: &State) -> Result<String, serde_json::Error> {
 }
 
 /// Updates live control values without replacing the retained surface or its transitions.
-/// The caller appends the bindings from the same state snapshot before publication.
+/// Publish these ahead of incremental visual bindings so key capture stays responsive.
 #[cfg(any(target_arch = "wasm32", test))]
 pub(crate) fn control_patch(state: &State) -> String {
     let mut json = String::with_capacity(4096);
