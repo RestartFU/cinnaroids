@@ -33,8 +33,15 @@ const _: () =
 enum PanelUpdate {
     #[default]
     Idle,
-    Shell(String),
-    BuildRoute(Box<crate::panel::Bindings>),
+    Shell {
+        json: String,
+        key: String,
+        builder: Box<crate::panel::Bindings>,
+    },
+    BuildRoute {
+        builder: Box<crate::panel::Bindings>,
+        json: String,
+    },
     Route(String),
 }
 
@@ -43,6 +50,7 @@ type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
+    static PANEL_KEY: RefCell<Option<String>> = const { RefCell::new(None) };
     static SETTINGS_PENDING: RefCell<Option<String>> = const { RefCell::new(None) };
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
     static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -77,6 +85,7 @@ impl Guest for Cinnaroids {
         ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
         WORK_TURN.with(|first| first.set(0));
         SETTINGS_PENDING.with(|pending| *pending.borrow_mut() = None);
+        PANEL_KEY.with(|key| *key.borrow_mut() = None);
         PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
@@ -401,7 +410,7 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
         for _ in 0..48 {
-            let cost = if matches!(*pending, PanelUpdate::BuildRoute(_)) {
+            let cost = if matches!(*pending, PanelUpdate::BuildRoute { .. }) {
                 3_000
             } else {
                 12_000
@@ -409,33 +418,56 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
             if !fuel.allows(cost) {
                 break;
             }
-            if let PanelUpdate::BuildRoute(builder) = &mut *pending {
+            if let PanelUpdate::BuildRoute { builder, .. } = &mut *pending {
                 if builder.advance() {
-                    let PanelUpdate::BuildRoute(builder) = std::mem::take(&mut *pending) else {
+                    let PanelUpdate::BuildRoute { builder, mut json } =
+                        std::mem::take(&mut *pending)
+                    else {
                         unreachable!()
                     };
-                    *pending = PanelUpdate::Route(format!(
-                        "{{\"surface\":\"clickgui\",\"bindings\":{}}}",
-                        builder.finish()
-                    ));
+                    json.pop();
+                    json.push_str(",\"bindings\":");
+                    json.push_str(&builder.finish());
+                    json.push('}');
+                    *pending = PanelUpdate::Route(json);
                 }
                 continue;
             }
             *pending = match &*pending {
                 PanelUpdate::Idle if modules.panel_dirty => {
-                    let Ok(json) = modules.panel_shell_json() else {
-                        break;
+                    let builder = Box::new(crate::panel::Bindings::new(modules));
+                    let key = modules.preferences.menu_key.clone();
+                    let installed =
+                        PANEL_KEY.with(|current| current.borrow().as_ref() == Some(&key));
+                    let next = if installed {
+                        PanelUpdate::BuildRoute {
+                            builder,
+                            json: crate::panel::control_patch(modules),
+                        }
+                    } else {
+                        // The host requires a full panel to change its menu shortcut.
+                        let Ok(json) = modules.panel_shell_json() else {
+                            break;
+                        };
+                        PanelUpdate::Shell { json, key, builder }
                     };
                     modules.panel_dirty = false;
-                    PanelUpdate::Shell(json)
+                    next
                 }
-                PanelUpdate::Shell(json) => {
+                PanelUpdate::Shell { json, key, .. } => {
                     if panel::set_content(json).is_err() {
                         break;
                     }
-                    PanelUpdate::BuildRoute(Box::new(crate::panel::Bindings::new(modules)))
+                    PANEL_KEY.with(|current| *current.borrow_mut() = Some(key.clone()));
+                    let PanelUpdate::Shell { builder, .. } = std::mem::take(&mut *pending) else {
+                        unreachable!()
+                    };
+                    PanelUpdate::BuildRoute {
+                        builder,
+                        json: r#"{"surface":"clickgui"}"#.into(),
+                    }
                 }
-                PanelUpdate::BuildRoute(_) => unreachable!("advanced below"),
+                PanelUpdate::BuildRoute { .. } => unreachable!("advanced above"),
                 PanelUpdate::Route(json) => {
                     if panel::update_content(json).is_err() {
                         break;

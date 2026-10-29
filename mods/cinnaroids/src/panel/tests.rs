@@ -556,3 +556,68 @@ fn hand_built_shell_matches_the_serde_schema_in_every_state() {
         assert_eq!(normalize(fast), normalize(reference));
     }
 }
+
+#[test]
+fn retained_patches_match_all_live_controls_without_replacing_the_surface() {
+    use crate::state::{AimMode, KeybindTarget, Preferences, State};
+    for mode in [AimMode::Continuous, AimMode::WhileClicking] {
+        for capture in [None, Some(KeybindTarget::Menu), Some(KeybindTarget::Aim)] {
+            let mut state = State::new(Preferences {
+                clicker_key: "KeyR".into(),
+                aim_key: "Numpad7".into(),
+                reach_blocks: 4.2,
+                cps: 27,
+                aim_mode: mode,
+                esp_color: 2,
+                esp_names: false,
+                aim_horizontal_only: true,
+                ..Preferences::default()
+            });
+            state.modules.clicker = true;
+            state.modules.player_esp = true;
+            state.capturing_key = capture;
+            let patch: Value = serde_json::from_str(&super::control_patch(&state)).unwrap();
+            let (expected, _) = panel(&state);
+            assert_eq!(patch["capture_key"], expected["capture_key"]);
+            assert!(patch.get("surface").is_none());
+            assert!(patch.get("document").is_none());
+            let mut checked = std::collections::BTreeSet::new();
+            for entry in patch["control_values"].as_array().unwrap() {
+                let index = entry[0].as_u64().unwrap() as usize;
+                let control = &expected["controls"][index];
+                let field = if control["kind"] == "choice" {
+                    "index"
+                } else {
+                    "value"
+                };
+                assert_eq!(
+                    normalize(entry[1].clone()),
+                    normalize(control[field].clone()),
+                    "{}",
+                    control["id"]
+                );
+                assert!(checked.insert(control["id"].as_str().unwrap()));
+            }
+            for edit in patch["controls"].as_array().unwrap() {
+                let control = expected["controls"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|control| control["id"] == edit["id"])
+                    .unwrap();
+                assert_eq!(edit["key"], control["key"]);
+                assert_eq!(edit["capturing"], control["capturing"]);
+                assert!(checked.insert(control["id"].as_str().unwrap()));
+            }
+            assert_eq!(
+                checked.len(),
+                expected["controls"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|control| control["kind"] != "button")
+                    .count()
+            );
+        }
+    }
+}

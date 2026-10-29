@@ -149,6 +149,59 @@ fn metered_frame(
     })
 }
 
+#[test]
+fn module_edits_preserve_the_surface_on_every_frame() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            settings: true,
+            ..Default::default()
+        },
+        "{}",
+    );
+    // Let initial publication finish before inspecting interactive updates.
+    for _ in 0..24 {
+        metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
+    }
+    let original = host.panel().unwrap().surface.clone();
+    assert!(!original.transitions.is_empty());
+    for id in [
+        "clicker",
+        "aim",
+        "reach",
+        "jump_reset",
+        "fake_lag",
+        "netherite",
+        "fullbright",
+        "player_esp",
+    ] {
+        for enabled in [true, false] {
+            let mut updated = false;
+            for frame in 0..24 {
+                let events = [(id, if enabled { 1.0 } else { 0.0 })];
+                metered_frame(
+                    &mut host,
+                    &budget,
+                    false,
+                    if frame == 0 { &events } else { &[] },
+                    GameplayFacts::default(),
+                );
+                let panel = host.panel().unwrap();
+                assert!(
+                    panel.surface.same_definition(&original),
+                    "{id}, frame {frame}: surface replaced"
+                );
+                updated |= panel.controls.iter().any(|control| {
+                    matches!(control,
+                    ui::mod_panel::Control::Toggle { id: current, value, .. }
+                        if current == id && *value == enabled)
+                });
+            }
+            assert!(updated, "{id}: control value did not update");
+        }
+    }
+}
+
 /// Loaded terrain holding `count` ancient debris blocks in a slab north of the player, nearest
 /// first, moved `shift` blocks east.
 struct Debris {
