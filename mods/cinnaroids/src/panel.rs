@@ -347,6 +347,19 @@ pub(crate) fn control_patch(state: &State) -> String {
     json
 }
 
+/// Appends completed bindings to either an empty value patch or an initial route selection.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) fn with_bindings(mut patch: String, bindings: &str) -> String {
+    patch.pop();
+    if patch.len() > 1 {
+        patch.push(',');
+    }
+    patch.push_str("\"bindings\":");
+    patch.push_str(bindings);
+    patch.push('}');
+    patch
+}
+
 /// Short keycap legend for a physical key name, such as `R` for `KeyR`.
 pub fn key_legend(key: &str) -> &str {
     if key.is_empty() {
@@ -665,6 +678,12 @@ impl Bindings {
             step: 0,
         }
     }
+    /// The last binding step also publishes the completed string to the pending patch.
+    #[cfg(any(target_arch = "wasm32", test))]
+    pub(crate) fn finishing(&self) -> bool {
+        self.step == 41
+    }
+
     /// Appends at most one module, column or feedback control; true after the closing brace.
     pub(crate) fn advance(&mut self) -> bool {
         let state = &self.state;

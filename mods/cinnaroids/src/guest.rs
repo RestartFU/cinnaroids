@@ -36,8 +36,8 @@ enum PanelUpdate {
     Shell {
         json: String,
         key: String,
-        builder: Box<crate::panel::Bindings>,
     },
+    Controls(String),
     BuildRoute {
         builder: Box<crate::panel::Bindings>,
         json: String,
@@ -300,7 +300,7 @@ struct FrameFuel(u64);
 impl FrameFuel {
     /// Leaves a publication and callback-return reserve after ordinary optional work.
     fn allows(&self, cost: u64) -> bool {
-        self.allows_until(cost, 81_000)
+        self.allows_until(cost, 79_000)
     }
     /// Gives bounded publication, saving and observation retirement their reserved turn.
     fn publishes(&self, cost: u64) -> bool {
@@ -410,46 +410,38 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
         for _ in 0..48 {
-            let cost = if matches!(*pending, PanelUpdate::BuildRoute { .. }) {
-                3_000
-            } else {
-                12_000
+            let cost = match &*pending {
+                PanelUpdate::BuildRoute { builder, .. } if builder.finishing() => 12_000,
+                PanelUpdate::BuildRoute { .. } => 3_000,
+                _ => 12_000,
             };
-            if !fuel.allows(cost) {
+            if !fuel.publishes(cost) {
                 break;
             }
             if let PanelUpdate::BuildRoute { builder, .. } = &mut *pending {
                 if builder.advance() {
-                    let PanelUpdate::BuildRoute { builder, mut json } =
-                        std::mem::take(&mut *pending)
+                    let PanelUpdate::BuildRoute { builder, json } = std::mem::take(&mut *pending)
                     else {
                         unreachable!()
                     };
-                    json.pop();
-                    json.push_str(",\"bindings\":");
-                    json.push_str(&builder.finish());
-                    json.push('}');
-                    *pending = PanelUpdate::Route(json);
+                    *pending =
+                        PanelUpdate::Route(crate::panel::with_bindings(json, &builder.finish()));
                 }
                 continue;
             }
             *pending = match &*pending {
                 PanelUpdate::Idle if modules.panel_dirty => {
-                    let builder = Box::new(crate::panel::Bindings::new(modules));
                     let key = modules.preferences.menu_key.clone();
                     let installed =
                         PANEL_KEY.with(|current| current.borrow().as_ref() == Some(&key));
                     let next = if installed {
-                        PanelUpdate::BuildRoute {
-                            builder,
-                            json: crate::panel::control_patch(modules),
-                        }
+                        PanelUpdate::Controls(crate::panel::control_patch(modules))
                     } else {
                         // The host requires a full panel to change its menu shortcut.
                         let Ok(json) = modules.panel_shell_json() else {
                             break;
                         };
-                        PanelUpdate::Shell { json, key, builder }
+                        PanelUpdate::Shell { json, key }
                     };
                     modules.panel_dirty = false;
                     next
@@ -459,12 +451,18 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
                         break;
                     }
                     PANEL_KEY.with(|current| *current.borrow_mut() = Some(key.clone()));
-                    let PanelUpdate::Shell { builder, .. } = std::mem::take(&mut *pending) else {
-                        unreachable!()
-                    };
                     PanelUpdate::BuildRoute {
-                        builder,
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
                         json: r#"{"surface":"clickgui"}"#.into(),
+                    }
+                }
+                PanelUpdate::Controls(json) => {
+                    if panel::update_content(json).is_err() {
+                        break;
+                    }
+                    PanelUpdate::BuildRoute {
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
+                        json: "{}".into(),
                     }
                 }
                 PanelUpdate::BuildRoute { .. } => unreachable!("advanced above"),

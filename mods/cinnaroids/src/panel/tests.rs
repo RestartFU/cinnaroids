@@ -621,3 +621,36 @@ fn retained_patches_match_all_live_controls_without_replacing_the_surface() {
         }
     }
 }
+
+#[test]
+fn completed_binding_updates_are_valid_for_initial_and_retained_publication() {
+    let state = crate::state::State::new(Default::default());
+    let bindings = super::bindings_json(&state);
+    for prefix in ["{}", r#"{"surface":"clickgui"}"#] {
+        let patch: Value =
+            serde_json::from_str(&super::with_bindings(prefix.into(), &bindings)).unwrap();
+        assert_eq!(
+            patch["bindings"],
+            serde_json::from_str::<Value>(&bindings).unwrap()
+        );
+        assert_eq!(
+            patch.get("surface"),
+            serde_json::from_str::<Value>(prefix)
+                .unwrap()
+                .get("surface")
+        );
+    }
+}
+
+#[test]
+fn final_binding_step_reserves_publication_work() {
+    let state = crate::state::State::new(Default::default());
+    let mut builder = super::Bindings::new(&state);
+    for _ in 0..41 {
+        assert!(!builder.finishing());
+        assert!(!builder.advance());
+    }
+    assert!(builder.finishing());
+    assert!(builder.advance());
+    assert_eq!(builder.finish(), super::bindings_json(&state));
+}
