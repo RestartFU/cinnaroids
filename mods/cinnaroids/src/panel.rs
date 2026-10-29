@@ -280,6 +280,86 @@ pub(crate) fn route_update(state: &State) -> Result<String, serde_json::Error> {
     Ok(json)
 }
 
+/// Updates live control values without replacing the retained surface or its transitions.
+/// Publish these ahead of incremental visual bindings so key capture stays responsive.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) fn control_patch(state: &State) -> String {
+    let mut json = String::with_capacity(4096);
+    json.push_str(r#"{"capture_key":"#);
+    flag(&mut json, state.capturing_key.is_some());
+    json.push_str(r#","control_values":["#);
+    let mut first = true;
+    for (index, value) in toggles(state) {
+        if !first {
+            json.push(',');
+        }
+        first = false;
+        json.push('[');
+        integer(&mut json, index as i32);
+        json.push(',');
+        flag(&mut json, value);
+        json.push(']');
+    }
+    for (index, value, _, _) in sliders(state).into_iter().chain([
+        (27, state.pad_value(0), -2048.0, 2048.0),
+        (28, state.pad_value(1), -2048.0, 2048.0),
+    ]) {
+        json.push_str(",[");
+        integer(&mut json, index as i32);
+        json.push(',');
+        decimal(&mut json, value);
+        json.push(']');
+    }
+    for (index, value) in [
+        (
+            6,
+            i32::from(state.preferences.aim_mode == crate::state::AimMode::WhileClicking),
+        ),
+        (32, i32::from(state.preferences.esp_color)),
+    ] {
+        json.push_str(",[");
+        integer(&mut json, index);
+        json.push(',');
+        integer(&mut json, value);
+        json.push(']');
+    }
+    json.push_str(r#"],"controls":["#);
+    for (position, (_, target)) in KEYBINDS.iter().enumerate() {
+        if position != 0 {
+            json.push(',');
+        }
+        let id = match target {
+            KeybindTarget::Menu => "menu_key",
+            KeybindTarget::Clicker => "clicker_key",
+            KeybindTarget::Aim => "aim_key",
+            KeybindTarget::Reach => "reach_key",
+            KeybindTarget::JumpReset => "jump_reset_key",
+        };
+        json.push_str(r#"{"id":"#);
+        text(&mut json, id);
+        json.push_str(r#","key":"#);
+        text(&mut json, key_legend(state.key_for(*target)));
+        json.push_str(r#","capturing":"#);
+        flag(&mut json, state.capturing_key == Some(*target));
+        json.push('}');
+    }
+    json.push_str("]}");
+    json
+}
+
+/// Appends completed bindings to either an empty value patch or an initial route selection.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) fn with_bindings(mut patch: String, bindings: &str) -> String {
+    patch.pop();
+    if patch.len() > 1 {
+        patch.push(',');
+    }
+    patch.push_str("\"bindings\":");
+    patch.push_str(bindings);
+    patch.push('}');
+    patch
+}
+
 /// Short keycap legend for a physical key name, such as `R` for `KeyR`.
 pub fn key_legend(key: &str) -> &str {
     if key.is_empty() {
@@ -598,6 +678,12 @@ impl Bindings {
             step: 0,
         }
     }
+    /// The last binding step also publishes the completed string to the pending patch.
+    #[cfg(any(target_arch = "wasm32", test))]
+    pub(crate) fn finishing(&self) -> bool {
+        self.step == 41
+    }
+
     /// Appends at most one module, column or feedback control; true after the closing brace.
     pub(crate) fn advance(&mut self) -> bool {
         let state = &self.state;

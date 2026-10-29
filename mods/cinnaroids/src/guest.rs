@@ -33,8 +33,15 @@ const _: () =
 enum PanelUpdate {
     #[default]
     Idle,
-    Shell(String),
-    BuildRoute(Box<crate::panel::Bindings>),
+    Shell {
+        json: String,
+        key: String,
+    },
+    Controls(String),
+    BuildRoute {
+        builder: Box<crate::panel::Bindings>,
+        json: String,
+    },
     Route(String),
 }
 
@@ -43,6 +50,8 @@ type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
+    static PANEL_BINDINGS_DIRTY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static PANEL_KEY: RefCell<Option<String>> = const { RefCell::new(None) };
     static SETTINGS_PENDING: RefCell<Option<String>> = const { RefCell::new(None) };
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
     static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -77,6 +86,8 @@ impl Guest for Cinnaroids {
         ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
         WORK_TURN.with(|first| first.set(0));
         SETTINGS_PENDING.with(|pending| *pending.borrow_mut() = None);
+        PANEL_KEY.with(|key| *key.borrow_mut() = None);
+        PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
         PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
@@ -277,7 +288,7 @@ impl Guest for Cinnaroids {
                         player_esp(&modules, drawn, &fuel);
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
-                    3 => publish_panel(&mut modules, &fuel),
+                    3 => publish_panel(&mut modules, &fuel, controls.panel_open),
                     4 => publish_preferences(&mut modules, &fuel),
                     _ => {}
                 }
@@ -291,7 +302,7 @@ struct FrameFuel(u64);
 impl FrameFuel {
     /// Leaves a publication and callback-return reserve after ordinary optional work.
     fn allows(&self, cost: u64) -> bool {
-        self.allows_until(cost, 81_000)
+        self.allows_until(cost, 79_000)
     }
     /// Gives bounded publication, saving and observation retirement their reserved turn.
     fn publishes(&self, cost: u64) -> bool {
@@ -397,45 +408,88 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
 }
 
 /// Completes a coherent panel snapshot even if controls change again during serialization.
-fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
+fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
+        // An open panel's input state must not wait behind an older visual snapshot.
+        if open
+            && modules.panel_dirty
+            && matches!(
+                *pending,
+                PanelUpdate::BuildRoute { .. } | PanelUpdate::Route(_)
+            )
+            && PANEL_KEY.with(|key| key.borrow().as_ref() == Some(&modules.preferences.menu_key))
+            && fuel.publishes(24_000)
+        {
+            let json = crate::panel::control_patch(modules);
+            if panel::update_content(&json).is_ok() {
+                modules.panel_dirty = false;
+                PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(true));
+            }
+        }
         for _ in 0..48 {
-            let cost = if matches!(*pending, PanelUpdate::BuildRoute(_)) {
-                3_000
-            } else {
-                12_000
+            let cost = match &*pending {
+                PanelUpdate::BuildRoute { builder, .. } if builder.finishing() => 12_000,
+                PanelUpdate::BuildRoute { .. } => 3_000,
+                _ => 12_000,
             };
-            if !fuel.allows(cost) {
+            if !fuel.publishes(cost) {
                 break;
             }
-            if let PanelUpdate::BuildRoute(builder) = &mut *pending {
+            if let PanelUpdate::BuildRoute { builder, .. } = &mut *pending {
                 if builder.advance() {
-                    let PanelUpdate::BuildRoute(builder) = std::mem::take(&mut *pending) else {
+                    let PanelUpdate::BuildRoute { builder, json } = std::mem::take(&mut *pending)
+                    else {
                         unreachable!()
                     };
-                    *pending = PanelUpdate::Route(format!(
-                        "{{\"surface\":\"clickgui\",\"bindings\":{}}}",
-                        builder.finish()
-                    ));
+                    *pending =
+                        PanelUpdate::Route(crate::panel::with_bindings(json, &builder.finish()));
                 }
                 continue;
             }
             *pending = match &*pending {
+                PanelUpdate::Idle if PANEL_BINDINGS_DIRTY.with(|dirty| dirty.replace(false)) => {
+                    PanelUpdate::BuildRoute {
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
+                        json: "{}".into(),
+                    }
+                }
                 PanelUpdate::Idle if modules.panel_dirty => {
-                    let Ok(json) = modules.panel_shell_json() else {
-                        break;
+                    let key = modules.preferences.menu_key.clone();
+                    let installed =
+                        PANEL_KEY.with(|current| current.borrow().as_ref() == Some(&key));
+                    let next = if installed {
+                        PanelUpdate::Controls(crate::panel::control_patch(modules))
+                    } else {
+                        // The host requires a full panel to change its menu shortcut.
+                        let Ok(json) = modules.panel_shell_json() else {
+                            break;
+                        };
+                        PanelUpdate::Shell { json, key }
                     };
                     modules.panel_dirty = false;
-                    PanelUpdate::Shell(json)
+                    next
                 }
-                PanelUpdate::Shell(json) => {
+                PanelUpdate::Shell { json, key, .. } => {
                     if panel::set_content(json).is_err() {
                         break;
                     }
-                    PanelUpdate::BuildRoute(Box::new(crate::panel::Bindings::new(modules)))
+                    PANEL_KEY.with(|current| *current.borrow_mut() = Some(key.clone()));
+                    PanelUpdate::BuildRoute {
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
+                        json: r#"{"surface":"clickgui"}"#.into(),
+                    }
                 }
-                PanelUpdate::BuildRoute(_) => unreachable!("advanced below"),
+                PanelUpdate::Controls(json) => {
+                    if panel::update_content(json).is_err() {
+                        break;
+                    }
+                    PanelUpdate::BuildRoute {
+                        builder: Box::new(crate::panel::Bindings::new(modules)),
+                        json: "{}".into(),
+                    }
+                }
+                PanelUpdate::BuildRoute { .. } => unreachable!("advanced above"),
                 PanelUpdate::Route(json) => {
                     if panel::update_content(json).is_err() {
                         break;
@@ -817,7 +871,7 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
             .map(|(feet, frame)| (frame.dimension, feet));
         if target.is_some() && marker.geometries.is_none() {
             for spec in ghost::geometries().iter().skip(marker.uploading.len()) {
-                if !fuel.allows(5_000) {
+                if !fuel.publishes(5_000) {
                     return;
                 }
                 match drawing::create_geometry(spec) {
@@ -836,7 +890,7 @@ fn real_position(show: bool, frame: Option<&gameplay::Snapshot>, busy: bool, fue
                     .expect("five geometries"),
             );
         }
-        if !fuel.allows(7_000) {
+        if !fuel.publishes(7_000) {
             return;
         }
         if let Err(error) = place_marker(&mut marker, target, busy, fuel)
