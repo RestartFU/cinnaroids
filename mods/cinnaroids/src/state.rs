@@ -275,6 +275,7 @@ pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
 
 #[derive(Clone, Debug, Default)]
 pub struct Modules {
+    pub auto_totem: bool,
     pub clicker: bool,
     pub aim: bool,
     pub reach: bool,
@@ -301,7 +302,7 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded: [bool; 8],
+    pub expanded: [bool; 9],
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -318,7 +319,7 @@ impl State {
             modules: Modules::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded: [false; 8],
+            expanded: [false; 9],
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -507,7 +508,7 @@ impl State {
     }
 
     /// Runtime enabled flags in panel order.
-    pub fn enabled_flags(&self) -> [bool; 8] {
+    pub fn enabled_flags(&self) -> [bool; 9] {
         let m = &self.modules;
         [
             m.clicker,
@@ -518,6 +519,7 @@ impl State {
             m.netherite,
             m.fullbright,
             m.player_esp,
+            m.auto_totem,
         ]
     }
 
@@ -569,6 +571,7 @@ impl State {
                 self.panel_dirty = true;
                 return;
             }
+            "auto_totem" => replace(&mut self.modules.auto_totem, value >= 0.5),
             "clicker" => replace(&mut self.modules.clicker, value >= 0.5),
             "cps" => replace(
                 &mut self.preferences.cps,
@@ -654,7 +657,8 @@ impl State {
             }
             if !matches!(
                 event.id.as_str(),
-                "clicker"
+                "auto_totem"
+                    | "clicker"
                     | "aim"
                     | "reach"
                     | "fake_lag"
@@ -975,6 +979,11 @@ impl State {
                 label: "Player ESP settings",
             },
         ]);
+        controls.push(Control::Toggle {
+            id: "auto_totem",
+            label: "AutoTotem",
+            value: self.modules.auto_totem,
+        });
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
             toggle_key: &self.preferences.menu_key,

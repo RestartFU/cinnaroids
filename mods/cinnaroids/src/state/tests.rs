@@ -556,6 +556,7 @@ fn panel_exposes_all_controls_without_category_sections() {
             "esp_distance",
             "esp_health",
             "expand_esp",
+            "auto_totem",
         ]
     );
 }
@@ -962,13 +963,13 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
-    assert_eq!(state.expanded, [false; 8]);
+    assert_eq!(state.expanded, [false; 9]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, false, true, false, false, false, false, false]
+        [false, false, true, false, false, false, false, false, false]
     );
     assert!(!state.modules.reach);
     assert_eq!(state.preferences, preferences);
@@ -977,13 +978,13 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     controls(&mut state, &[], &[("expand_aim", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, true, true, false, false, false, false, false],
+        [false, true, true, false, false, false, false, false, false],
         "independent rows"
     );
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, true, false, false, false, false, false, false]
+        [false, true, false, false, false, false, false, false, false]
     );
     assert!(!state.preferences_dirty);
 }
@@ -1294,4 +1295,17 @@ fn refused_attack_waits_for_an_admitted_release_and_a_fresh_cadence() {
     assert!(!state.attack_pulse(Some((2, 1, false, 0.05))));
     assert!(!state.attack_pulse(Some((2, 1, true, 0.05))));
     assert!(state.attack_pulse(Some((2, 1, true, 0.05))));
+}
+
+#[test]
+fn auto_totem_is_a_runtime_toggle_and_does_not_persist_enabled_state() {
+    let mut state = state();
+    assert!(!state.modules.auto_totem);
+    state.preferences_dirty = false;
+    controls(&mut state, &[], &[("auto_totem", 1.)]);
+    assert!(state.modules.auto_totem);
+    assert!(!state.preferences_dirty);
+    assert!(!State::new(state.preferences.clone()).modules.auto_totem);
+    controls(&mut state, &[], &[("auto_totem", 0.)]);
+    assert!(!state.modules.auto_totem);
 }

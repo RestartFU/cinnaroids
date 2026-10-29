@@ -42,7 +42,7 @@ const MENU_BODY: i32 = 52;
 
 /// Module binding prefix, owning column and the height of its generated settings region.
 /// A column's first module never moves and so has no `_y` binding.
-const MODULES: [(&str, usize, i32); 8] = [
+const MODULES: [(&str, usize, i32); 9] = [
     ("clicker", 0, 60),
     ("aim", 0, 112),
     ("reach", 0, 60),
@@ -51,6 +51,7 @@ const MODULES: [(&str, usize, i32); 8] = [
     ("netherite", 2, 38),
     ("fullbright", 2, 0),
     ("player_esp", 2, 130),
+    ("auto_totem", 0, 0),
 ];
 const KEYED: [(usize, KeybindTarget); 4] = [
     (0, KeybindTarget::Clicker),
@@ -223,7 +224,9 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     toggle(json, "esp_names", "Names", p.esp_names);
     toggle(json, "esp_distance", "Distance", p.esp_distance);
     toggle(json, "esp_health", "Health", p.esp_health);
-    json.push_str(r#",{"kind":"button","id":"expand_esp","label":"Player ESP settings"}] }"#);
+    json.push_str(r#",{"kind":"button","id":"expand_esp","label":"Player ESP settings"}"#);
+    toggle(json, "auto_totem", "AutoTotem", m.auto_totem);
+    json.push_str("] }");
     append_shell(json);
 }
 
@@ -438,7 +441,7 @@ fn text(json: &mut String, value: &str) {
 }
 
 /// Toggle controls by panel index; one eased progress drives each row wash, lift bar and switch.
-fn toggles(state: &State) -> [(usize, bool); 13] {
+fn toggles(state: &State) -> [(usize, bool); 14] {
     let (m, p) = (&state.modules, &state.preferences);
     [
         (1, m.clicker),
@@ -454,6 +457,7 @@ fn toggles(state: &State) -> [(usize, bool); 13] {
         (33, p.esp_names),
         (34, p.esp_distance),
         (35, p.esp_health),
+        (37, m.auto_totem),
     ]
 }
 
@@ -681,7 +685,7 @@ impl Bindings {
     /// The last binding step also publishes the completed string to the pending patch.
     #[cfg(any(target_arch = "wasm32", test))]
     pub(crate) fn finishing(&self) -> bool {
-        self.step == 41
+        self.step == 43
     }
 
     /// Appends at most one module, column or feedback control; true after the closing brace.
@@ -702,7 +706,7 @@ impl Bindings {
                     (state.capturing_key == Some(KeybindTarget::Menu)).into(),
                 );
             }
-            1..=8 => {
+            1..=9 => {
                 let index = self.step - 1;
                 let (module, column, details) = &MODULES[index];
 
@@ -728,7 +732,7 @@ impl Bindings {
                 }
                 heights[*column] += ROW + if expanded { *details } else { 0 };
             }
-            9 => {
+            10 => {
                 // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
                 let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
                 name(json, "#reach_value");
@@ -749,8 +753,8 @@ impl Bindings {
                     integer(json, (state.capturing_key == Some(target)).into());
                 }
             }
-            10..=13 => {
-                let column = self.step - 10;
+            11..=14 => {
+                let column = self.step - 11;
                 let id = COLUMNS[column];
 
                 let [x, y] = state.preferences.columns[column];
@@ -792,33 +796,33 @@ impl Bindings {
                     json.push('"');
                 }
             }
-            14..=26 => {
-                let (index, on) = toggles(state)[self.step - 14];
+            15..=28 => {
+                let (index, on) = toggles(state)[self.step - 15];
                 control(json, index, "_on");
                 integer(json, on.into());
             }
-            27..=33 => {
-                let (index, value, min, max) = sliders(state)[self.step - 27];
+            29..=35 => {
+                let (index, value, min, max) = sliders(state)[self.step - 29];
                 control(json, index, "_text");
                 slider_text(json, value);
                 control(json, index, "_fill");
                 fraction(json, (value - min) / (max - min));
             }
-            34..=38 => {
-                let (index, target) = KEYBINDS[self.step - 34];
+            36..=40 => {
+                let (index, target) = KEYBINDS[self.step - 36];
                 control(json, index, "_text");
                 escaped(json, key_label(state.key_for(target)));
             }
-            39..=40 => {
-                let (index, option) = choices(state)[self.step - 39];
+            41..=42 => {
+                let (index, option) = choices(state)[self.step - 41];
                 control(json, index, "_text");
                 text(json, option);
             }
-            41 => json.push('}'),
+            43 => json.push('}'),
             _ => return true,
         }
         self.step += 1;
-        self.step == 42
+        self.step == 44
     }
     /// The completed scalar object, ready for one bounded publication call.
     pub(crate) fn finish(self) -> String {

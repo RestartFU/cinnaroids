@@ -5,7 +5,8 @@ use std::cell::RefCell;
 use mod_api::bindings::{
     Guest,
     cinnabar::extension::{
-        budget, environment, gameplay, hud, input, panel, player_state, settings, terrain,
+        budget, environment, gameplay, hud, input, inventory, panel, player_state, settings,
+        terrain,
     },
 };
 
@@ -56,6 +57,7 @@ thread_local! {
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
     static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
+    static AUTO_TOTEM: RefCell<crate::auto_totem::AutoTotem> = RefCell::new(crate::auto_totem::AutoTotem::default());
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
     static ESP_CLEARING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static ESP_PENDING: RefCell<Option<EspSample>> = const { RefCell::new(None) };
@@ -93,6 +95,7 @@ impl Guest for Cinnaroids {
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
         BINDINGS.with(|bindings| *bindings.borrow_mut() = crate::bindings::Cache::default());
         AIM.with(|aim| aim.borrow_mut().reset());
+        AUTO_TOTEM.with(|totem| totem.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
         FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
         FINDER.with(|finder| finder.borrow_mut().reset());
@@ -127,6 +130,7 @@ impl Guest for Cinnaroids {
                 modules.borrow_mut().attack_pulse(None);
             });
             AIM.with(|aim| aim.borrow_mut().reset());
+            AUTO_TOTEM.with(|totem| totem.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
             clear_esp(&fuel);
@@ -254,6 +258,10 @@ impl Guest for Cinnaroids {
                 }
             });
 
+            auto_totem(
+                modules.modules.auto_totem && snapshot.is_some() && !controls.panel_open,
+                controls.seconds,
+            );
             assist_aim(config, snapshot.as_ref(), attack_held);
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
             // Disabled drawings receive their teardown turn before any optional producer.
@@ -315,6 +323,27 @@ impl FrameFuel {
             .saturating_add(cost)
             <= limit
     }
+}
+
+/// Queries compact item matches and requests a swap only after a change or retry delay.
+fn auto_totem(enabled: bool, seconds: f32) {
+    AUTO_TOTEM.with(|policy| {
+        let mut policy = policy.borrow_mut();
+        if !enabled {
+            policy.reset();
+            return;
+        }
+        let Ok(Some(equipment)) = player_state::read_equipment_matches(crate::auto_totem::TOTEM)
+        else {
+            policy.reset();
+            return;
+        };
+        if policy.observe(equipment.revisions, seconds) {
+            if let Some(slot) = policy.select(&equipment) {
+                let _ = inventory::swap_offhand(slot);
+            }
+        }
+    });
 }
 
 /// Combat assistance runs before optional drawing work and uses the current complete sample.

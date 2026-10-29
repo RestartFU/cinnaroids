@@ -1,6 +1,6 @@
 # Install Cinnaroids
 
-1. Update Cinnabar to a build with **Settings → Mods → Import**.
+1. Update Cinnabar to a build with [offhand inventory actions](https://github.com/cinnabar-mc/cinnabar/pull/2510) and **Settings → Mods → Import**.
 2. Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest). The same file works on all Cinnabar desktop platforms.
 3. In Cinnabar, open **Settings → Mods → Import** and select the WASM file.
 4. Review and approve its requested permissions, then select **Enable**.

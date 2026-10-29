@@ -170,6 +170,7 @@ fn module_edits_preserve_the_surface_on_every_frame() {
         "aim",
         "reach",
         "jump_reset",
+        "auto_totem",
         "fake_lag",
         "netherite",
         "fullbright",
@@ -1622,6 +1623,7 @@ fn combined_workload(
             settings: true,
             players: true,
             interaction: true,
+            inventory: true,
             terrain: true,
             packet_delay: true,
             world_draw: true,
@@ -1630,7 +1632,12 @@ fn combined_workload(
         },
         &stress.settings(),
     );
-    let mut events = vec![("netherite", 1.), ("fake_lag", 1.), ("clicker", 1.)];
+    let mut events = vec![
+        ("netherite", 1.),
+        ("fake_lag", 1.),
+        ("clicker", 1.),
+        ("auto_totem", 1.),
+    ];
     if esp {
         events.extend([("player_esp", 1.), ("fullbright", 1.)]);
     }
@@ -2025,7 +2032,7 @@ fn combined_workload(
                     attack_held: true,
                 }),
                 Vec::new(),
-                None,
+                Some(totem_equipment(2, frame as u32)),
                 Some(mod_host::GameplayMovementSnapshot {
                     session: 2,
                     dimension: 0,
@@ -2649,5 +2656,120 @@ fn every_stable_queue_converges_while_other_producers_change_every_callback() {
         for phase in 0..8 {
             combined_workload(true, true, true, true, true, Stress::Fair(victim, phase));
         }
+    }
+}
+
+/// Maximum-sized unrelated item names alongside a real totem at the last inventory cell.
+fn totem_equipment(session: u64, metadata: u32) -> mod_host::PlayerStateSnapshot {
+    use mod_host::{PlayerStateItem, PlayerStateSlot, PlayerStateSnapshot};
+    let empty = PlayerStateSlot {
+        known: true,
+        item: None,
+    };
+    let item = PlayerStateItem {
+        identifier: Some(format!(
+            "c:{}",
+            "x".repeat(mod_api::MAX_ITEM_IDENTIFIER_BYTES - 2)
+        )),
+        network_id: 1,
+        metadata,
+        count: 1,
+        block: false,
+        damage: None,
+        max_durability: None,
+    };
+    let mut inventory = vec![
+        PlayerStateSlot {
+            known: true,
+            item: Some(item.clone())
+        };
+        mod_api::PLAYER_STATE_INVENTORY_SLOTS
+    ];
+    inventory.last_mut().unwrap().item = Some(PlayerStateItem {
+        identifier: Some("minecraft:totem_of_undying".into()),
+        network_id: 42,
+        ..item
+    });
+    PlayerStateSnapshot {
+        session,
+        dimension: 0,
+        selected_slot: Some(0),
+        inventory,
+        armor: vec![empty.clone(); 4],
+        offhand: empty,
+        effects: Vec::new(),
+    }
+}
+
+/// The packaged component requests replenishment, leaves an equipped totem alone and pauses in menus.
+#[test]
+fn auto_totem_uses_inventory_authority_and_replenishes_after_consumption() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            players: true,
+            player_state: true,
+            inventory: true,
+            controls: true,
+            ..Default::default()
+        },
+        "{}",
+    );
+    metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("auto_totem", 1.)],
+        GameplayFacts::default(),
+    );
+    let mut equipment = totem_equipment(1, 0);
+    for (focused, panel_open, equipped, expected) in [
+        (true, false, false, true),
+        (true, false, true, false),
+        (true, true, false, false),
+        (true, false, false, true),
+        (false, false, false, false),
+        (true, false, false, true),
+    ] {
+        equipment.offhand.item = equipped.then(|| equipment.inventory[35].item.clone().unwrap());
+        let mut controls = empty_controls();
+        controls.focused = focused;
+        controls.gameplay = focused && !panel_open;
+        controls.panel_open = panel_open;
+        controls.seconds = 0.3;
+        metered_callback(&mut host, &budget, |host| {
+            host.frame_with_player_state(
+                false,
+                Some(GameplaySnapshot {
+                    session: 1,
+                    dimension: 0,
+                    eye: GameplayVector3 {
+                        x: 0.,
+                        y: 1.6,
+                        z: 0.,
+                    },
+                    yaw: 0.,
+                    pitch: 0.,
+                    attack_held: false,
+                    frame_seconds: 0.3,
+                    players: Vec::new(),
+                }),
+                Vec::new(),
+                Some(equipment.clone()),
+                controls,
+            )
+            .unwrap();
+        });
+        let requests = host.take_inventory_requests();
+        assert_eq!(
+            requests,
+            if expected {
+                vec![mod_host::InventoryRequest::SwapOffhand {
+                    session: 1,
+                    slot: 35,
+                }]
+            } else {
+                Vec::new()
+            }
+        );
     }
 }

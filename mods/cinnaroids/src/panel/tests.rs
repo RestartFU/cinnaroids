@@ -75,7 +75,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 37);
+    assert_eq!(controls.len(), 38);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
@@ -210,7 +210,7 @@ fn every_value_control_publishes_its_own_feedback() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 13 + 7 + 5 + 2);
+    assert_eq!(checked, 14 + 7 + 5 + 2);
     assert_eq!(bindings["#c3_text"], "RShift");
     assert_eq!(bindings["#c7_text"], "Num7");
     assert_eq!(bindings["#c9_text"], "4.2");
@@ -297,8 +297,8 @@ fn hover_and_press_are_native_button_states() {
     }
     let mut count = 0;
     visit(&document["panel"], &mut count);
-    // Eight rows, seven disclosure arrows, five keycaps, two dropdowns and Reset layout.
-    assert_eq!(count, 8 + 7 + 5 + 2 + 1);
+    // Nine rows, seven disclosure arrows, five keycaps, two dropdowns and Reset layout.
+    assert_eq!(count, 9 + 7 + 5 + 2 + 1);
 }
 
 #[test]
@@ -432,8 +432,8 @@ fn disclosure_and_toggles_change_only_bindings() {
     assert_eq!(bindings["#aim_h"], 0);
     assert_eq!(bindings["#jump_reset_y"], serde_json::json!([0, 120]));
     assert!(bindings.get("#clicker_y").is_none(), "first rows stay put");
-    assert_eq!(bindings["#col_combat_h"], 140);
-    assert_eq!(bindings["#col_combat_bg"], 167);
+    assert_eq!(bindings["#col_combat_h"], 160);
+    assert_eq!(bindings["#col_combat_bg"], 187);
     assert_eq!(bindings["#reach_value"], "4.2 blocks");
     assert_eq!(bindings["#c9_text"], "4.2");
     assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
@@ -646,11 +646,24 @@ fn completed_binding_updates_are_valid_for_initial_and_retained_publication() {
 fn final_binding_step_reserves_publication_work() {
     let state = crate::state::State::new(Default::default());
     let mut builder = super::Bindings::new(&state);
-    for _ in 0..41 {
+    for _ in 0..43 {
         assert!(!builder.finishing());
         assert!(!builder.advance());
     }
     assert!(builder.finishing());
     assert!(builder.advance());
     assert_eq!(builder.finish(), super::bindings_json(&state));
+}
+
+#[test]
+fn reach_row_preserves_every_supported_decimal_distance() {
+    let mut state = crate::state::State::new(Default::default());
+    for tenths in 30..=60 {
+        state.preferences.reach_blocks = tenths as f32 / 10.;
+        let bindings: Value = serde_json::from_str(&super::bindings_json(&state)).unwrap();
+        assert_eq!(
+            bindings["#reach_value"],
+            format!("{}.{:01} blocks", tenths / 10, tenths % 10)
+        );
+    }
 }

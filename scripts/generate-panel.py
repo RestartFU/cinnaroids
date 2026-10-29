@@ -58,6 +58,7 @@ MODULES = [
     ("player_esp", "Player ESP", "render", 30, 36, None,
      [("slider", 31, "Range", "blocks"), ("choice", 32, "Outline color"),
       ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
+    ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 

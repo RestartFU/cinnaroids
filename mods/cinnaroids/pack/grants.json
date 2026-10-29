@@ -4,6 +4,7 @@
   "camera": true,
   "controls": true,
   "interaction": true,
+  "inventory": true,
   "movement": true,
   "settings": true,
   "packet_delay": true,
