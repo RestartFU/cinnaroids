@@ -23,12 +23,12 @@ fn controls(state: &mut State, keys: &[&str], events: &[(&str, f32)]) {
 }
 
 fn state() -> State {
-    State::new(Preferences::default())
+    State::permitted(Preferences::default())
 }
 
 /// Assign explicit shortcuts for tests of binding conflicts and keyboard toggles.
 fn state_with_bindings() -> State {
-    State::new(Preferences {
+    State::permitted(Preferences {
         clicker_key: BOUND_CLICKER_KEY.into(),
         aim_key: BOUND_AIM_KEY.into(),
         reach_key: BOUND_REACH_KEY.into(),
@@ -47,7 +47,7 @@ fn horizontal_only_defaults_off_and_persists_panel_changes() {
     assert!(state.aim_config().horizontal_only);
     assert!(state.preferences_dirty);
     let saved = serde_json::to_string(&state.preferences).unwrap();
-    let restored = State::new(Preferences::from_json(&saved));
+    let restored = State::permitted(Preferences::from_json(&saved));
     assert!(restored.aim_config().horizontal_only);
     assert!(!restored.modules.aim);
     let panel: Value = serde_json::from_str(&restored.panel_json().unwrap()).unwrap();
@@ -67,7 +67,7 @@ fn preferences_restore_without_enabling_any_module() {
     let preferences = Preferences::from_json(
         r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0],[0,0],[900,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
     );
-    let state = State::new(preferences);
+    let state = State::permitted(preferences);
     assert_eq!(state.preferences.cps, 18);
     assert_eq!(state.preferences.aim_strength, 70);
     assert_eq!(state.preferences.aim_mode, AimMode::Continuous);
@@ -245,7 +245,7 @@ fn saved_left_click_bindings_recover_without_resetting_other_preferences() {
             ..Preferences::default()
         };
         assert_eq!(preferences, expected, "{id}");
-        let mut state = State::new(preferences);
+        let mut state = State::permitted(preferences);
         assert!(!state.reserved_keys().contains(&"MouseLeft".into()));
         controls(&mut state, &["MouseLeft"], &[("clicker_key", 1.0)]);
         controls(&mut state, &["KeyG"], &[]);
@@ -346,7 +346,7 @@ fn all_module_bindings_can_remain_unbound_after_reload() {
         Preferences::from_json(&serde_json::to_string(&prefs).unwrap()),
         prefs
     );
-    let mut state = State::new(prefs);
+    let mut state = State::permitted(prefs);
     assert_eq!(state.reserved_keys(), [PANEL_KEY]);
     controls(&mut state, &[""], &[]);
     assert!(
@@ -488,7 +488,7 @@ fn netherite_finder_searches_its_saved_range_only_while_enabled() {
     assert_eq!(state.finder_range(), Some(128));
     assert!(state.preferences_dirty);
     let saved = serde_json::to_string(&state.preferences).unwrap();
-    let restored = State::new(Preferences::from_json(&saved));
+    let restored = State::permitted(Preferences::from_json(&saved));
     assert_eq!(restored.preferences.netherite_range, 128);
     assert_eq!(restored.finder_range(), None);
     assert_eq!(
@@ -745,7 +745,7 @@ fn capture_loss_consumes_module_edges_without_toggling() {
 
 #[test]
 fn fake_lag_delay_is_bounded_persisted_and_disabled_by_its_toggle() {
-    let mut state = State::new(Preferences::from_json(
+    let mut state = State::permitted(Preferences::from_json(
         r#"{"fake_lag_ms":5000,"fake_lag":true}"#,
     ));
     assert_eq!(
@@ -807,7 +807,7 @@ fn fake_lag_panel_exposes_millisecond_slider_and_toggle() {
 
 #[test]
 fn real_position_preference_requires_live_nonzero_fake_lag() {
-    let mut state = State::new(Preferences::from_json(r#"{"show_real_position":true}"#));
+    let mut state = State::permitted(Preferences::from_json(r#"{"show_real_position":true}"#));
     assert!(!state.show_real_position());
     controls(&mut state, &[], &[("fake_lag", 1.0)]);
     assert!(state.show_real_position());
@@ -840,7 +840,7 @@ fn real_position_preference_requires_live_nonzero_fake_lag() {
 
 #[test]
 fn fullbright_is_runtime_only_and_can_be_disabled_independently() {
-    let mut state = State::new(Preferences::from_json(r#"{"fullbright":true}"#));
+    let mut state = State::permitted(Preferences::from_json(r#"{"fullbright":true}"#));
     assert!(!state.modules.fullbright);
     assert!(state.fullbright_dirty);
     state.fullbright_dirty = false;
@@ -892,7 +892,7 @@ fn jump_reset_preferences_are_bounded_and_binding_is_independent() {
     );
     assert_eq!(restored.jump_reset_window_ticks, MAX_WINDOW_TICKS);
     assert_ne!(restored.jump_reset_key, restored.aim_key);
-    assert!(!State::new(restored).modules.jump_reset);
+    assert!(!State::permitted(restored).modules.jump_reset);
     let mut state = state_with_bindings();
     controls(
         &mut state,
@@ -1210,7 +1210,7 @@ fn default_module_shortcuts_are_unbound_and_do_not_reserve_or_toggle_old_keys() 
         Preferences::from_json("{}"),
         Preferences::from_json("broken"),
     ] {
-        let mut state = State::new(preferences);
+        let mut state = State::permitted(preferences);
         assert!(state.preferences.clicker_key.is_empty());
         assert!(state.preferences.aim_key.is_empty());
         assert!(state.preferences.reach_key.is_empty());
@@ -1256,7 +1256,7 @@ fn esp_preferences_round_trip_clamp_and_do_not_restore_enablement() {
     assert_eq!(p.esp_range, 128);
     assert_eq!(p.esp_color, 3);
     assert!(!p.esp_names && !p.esp_distance && !p.esp_health);
-    assert!(!State::new(p.clone()).modules.player_esp);
+    assert!(!State::permitted(p.clone()).modules.player_esp);
     assert_eq!(
         Preferences::from_json(&serde_json::to_string(&p).unwrap()),
         p
@@ -1305,7 +1305,11 @@ fn auto_totem_is_a_runtime_toggle_and_does_not_persist_enabled_state() {
     controls(&mut state, &[], &[("auto_totem", 1.)]);
     assert!(state.modules.auto_totem);
     assert!(!state.preferences_dirty);
-    assert!(!State::new(state.preferences.clone()).modules.auto_totem);
+    assert!(
+        !State::permitted(state.preferences.clone())
+            .modules
+            .auto_totem
+    );
     controls(&mut state, &[], &[("auto_totem", 0.)]);
     assert!(!state.modules.auto_totem);
 }

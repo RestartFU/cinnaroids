@@ -152,11 +152,13 @@ fn metered_frame(
 #[test]
 fn module_edits_preserve_the_surface_on_every_frame() {
     let (_directory, mut host, budget) = drawing_host(
-        ModGrants {
-            controls: true,
-            settings: true,
-            ..Default::default()
-        },
+        mod_host::declarations(&std::path::PathBuf::from(
+            std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap(),
+        ))
+        .unwrap()
+        .requested
+        .unwrap()
+        .unwrap(),
         "{}",
     );
     // Let initial publication finish before inspecting interactive updates.
@@ -2706,7 +2708,6 @@ fn totem_equipment(session: u64, metadata: u32) -> mod_host::PlayerStateSnapshot
 fn auto_totem_uses_inventory_authority_and_replenishes_after_consumption() {
     let (_directory, mut host, budget) = drawing_host(
         ModGrants {
-            players: true,
             player_state: true,
             inventory: true,
             controls: true,
@@ -2770,6 +2771,75 @@ fn auto_totem_uses_inventory_authority_and_replenishes_after_consumption() {
             } else {
                 Vec::new()
             }
+        );
+    }
+}
+
+/// Upgrading a component preserves old grants; missing permissions must be visible.
+#[test]
+fn auto_totem_cannot_enable_without_inventory_and_equipment_permissions() {
+    for player_state in [false, true] {
+        let (_directory, mut host, budget) = drawing_host(
+            ModGrants {
+                players: true,
+                player_state,
+                controls: true,
+                hud: true,
+                fullbright: true,
+                ..Default::default()
+            },
+            "{}",
+        );
+        metered_frame(
+            &mut host,
+            &budget,
+            false,
+            &[("auto_totem", 1.)],
+            GameplayFacts::default(),
+        );
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.gameplay = true;
+        controls.seconds = 0.3;
+        metered_callback(&mut host, &budget, |host| {
+            host.frame_with_player_state(
+                false,
+                Some(GameplaySnapshot {
+                    session: 1,
+                    dimension: 0,
+                    eye: GameplayVector3 {
+                        x: 0.,
+                        y: 1.6,
+                        z: 0.,
+                    },
+                    yaw: 0.,
+                    pitch: 0.,
+                    attack_held: false,
+                    frame_seconds: 0.3,
+                    players: Vec::new(),
+                }),
+                Vec::new(),
+                Some(totem_equipment(1, 0)),
+                controls,
+            )
+            .unwrap();
+        });
+        assert!(host.take_inventory_requests().is_empty());
+        for _ in 0..24 {
+            metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
+        }
+        assert!(
+            host.panel()
+                .unwrap()
+                .controls
+                .iter()
+                .any(|control| matches!(control,
+            ui::mod_panel::Control::Toggle { id, value: false, .. } if id == "auto_totem"))
+        );
+        let surface = &host.panel().unwrap().surface;
+        assert_eq!(
+            surface.bindings.get("#auto_totem_available"),
+            Some(&ui::mod_panel::SurfaceValue::Bool(false))
         );
     }
 }

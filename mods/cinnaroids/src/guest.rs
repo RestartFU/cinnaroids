@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use mod_api::bindings::{
     Guest,
     cinnabar::extension::{
-        budget, environment, gameplay, hud, input, inventory, panel, player_state, settings,
-        terrain,
+        budget, environment, gameplay, hud, input, inventory, panel, permissions, player_state,
+        settings, terrain,
     },
 };
 
@@ -82,6 +82,7 @@ impl Guest for Cinnaroids {
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
             *modules = State::new(preferences);
+            modules.set_permissions(&permissions::read());
             // Publish on the first frame, with a fresh budget after settings parsing.
         });
         ESP_CLEARING.with(|clearing| clearing.set(false));
@@ -259,7 +260,10 @@ impl Guest for Cinnaroids {
             });
 
             auto_totem(
-                modules.modules.auto_totem && snapshot.is_some() && !controls.panel_open,
+                modules.modules.auto_totem
+                    && controls.focused
+                    && controls.gameplay
+                    && !controls.panel_open,
                 controls.seconds,
             );
             assist_aim(config, snapshot.as_ref(), attack_held);
@@ -333,14 +337,23 @@ fn auto_totem(enabled: bool, seconds: f32) {
             policy.reset();
             return;
         }
-        let Ok(Some(equipment)) = player_state::read_equipment_matches(crate::auto_totem::TOTEM)
-        else {
-            policy.reset();
-            return;
+        let equipment = match player_state::read_equipment_matches(crate::auto_totem::TOTEM) {
+            Ok(Some(equipment)) => equipment,
+            Ok(None) => {
+                policy.reset();
+                return;
+            }
+            Err(error) => {
+                policy.reset();
+                let _ = hud::set_label(&format!("AutoTotem: {error}"));
+                return;
+            }
         };
         if policy.observe(equipment.revisions, seconds) {
-            if let Some(slot) = policy.select(&equipment) {
-                let _ = inventory::swap_offhand(slot);
+            if let Some(slot) = policy.select(&equipment)
+                && let Err(error) = inventory::swap_offhand(slot)
+            {
+                let _ = hud::set_label(&format!("AutoTotem: {error}"));
             }
         }
     });
@@ -398,6 +411,9 @@ fn assist_aim(
 
 /// Publishes bounded settings and authority changes in their own scheduled turn.
 fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
+    if modules.fullbright_dirty && !modules.access.0[6].is_empty() {
+        modules.fullbright_dirty = false;
+    }
     if modules.fullbright_dirty {
         match environment::set_fullbright(modules.modules.fullbright) {
             Ok(()) => modules.fullbright_dirty = false,
@@ -440,6 +456,14 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
 fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
+        // A changed menu shortcut replaces the input shell before older visual work.
+        if open
+            && modules.panel_dirty
+            && PANEL_KEY.with(|key| key.borrow().as_ref() != Some(&modules.preferences.menu_key))
+        {
+            *pending = PanelUpdate::Idle;
+            PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
+        }
         // An open panel's input state must not wait behind an older visual snapshot.
         if open
             && modules.panel_dirty

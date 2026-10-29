@@ -52,7 +52,7 @@ fn column<'a>(document: &'a Value, id: &str) -> &'a Value {
 
 #[test]
 fn every_control_is_reachable_from_the_floating_columns() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let (panel, document) = panel(&state);
     let controls = panel["controls"].as_array().unwrap();
     let mut routes = Vec::new();
@@ -136,7 +136,7 @@ fn bound(node: &Value, result: &mut Vec<String>) {
 #[test]
 fn the_surface_reads_only_values_this_component_publishes() {
     use crate::state::{Preferences, State};
-    let mut state = State::new(Preferences::default());
+    let mut state = State::permitted(Preferences::default());
     state.drag = None;
     let (panel, document) = panel(&state);
     let bindings = panel["surface"]["bindings"].as_object().unwrap();
@@ -163,7 +163,7 @@ fn the_surface_reads_only_values_this_component_publishes() {
 #[test]
 fn every_value_control_publishes_its_own_feedback() {
     use crate::state::{AimMode, KeybindTarget, Preferences, State};
-    let mut state = State::new(Preferences {
+    let mut state = State::permitted(Preferences {
         clicker_key: "ShiftRight".into(),
         aim_key: "Numpad7".into(),
         reach_blocks: 4.2,
@@ -275,7 +275,7 @@ fn find<'a>(node: &'a Value, name: &str) -> Option<&'a Value> {
 
 #[test]
 fn hover_and_press_are_native_button_states() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let (_, document) = panel(&state);
     fn visit(node: &Value, count: &mut usize) {
         if node["hover_control"] == "hover" {
@@ -303,7 +303,7 @@ fn hover_and_press_are_native_button_states() {
 
 #[test]
 fn trailing_values_reuse_slider_text_with_a_fixed_unit() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let (panel, document) = panel(&state);
     let clicker = find(&document["panel"], "clicker").unwrap();
     let value = find(clicker, "value").unwrap();
@@ -322,7 +322,7 @@ fn trailing_values_reuse_slider_text_with_a_fixed_unit() {
 
 #[test]
 fn generated_settings_heights_match_the_row_layout() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let (_, document) = panel(&state);
     for (module, owner, height) in super::MODULES {
         let body = child(
@@ -348,7 +348,7 @@ fn generated_settings_heights_match_the_row_layout() {
 
 #[test]
 fn open_and_close_motion_is_reversible_and_dims_the_world() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let (panel, document) = panel(&state);
     let surface = &panel["surface"];
     let transitions = &surface["transitions"];
@@ -398,7 +398,7 @@ fn open_and_close_motion_is_reversible_and_dims_the_world() {
 #[test]
 fn disclosure_and_toggles_change_only_bindings() {
     use crate::state::{Controls, Event, Preferences, State};
-    let mut state = State::new(Preferences::default());
+    let mut state = State::permitted(Preferences::default());
     let (initial, _) = panel(&state);
     state.controls(Controls {
         focused: true,
@@ -444,7 +444,7 @@ fn disclosure_and_toggles_change_only_bindings() {
 #[test]
 fn rows_keep_values_and_show_bound_keys_as_keycaps() {
     use crate::state::{Preferences, State};
-    let mut state = State::new(Preferences {
+    let mut state = State::permitted(Preferences {
         clicker_key: "KeyR".into(),
         aim_key: "Digit4".into(),
         ..Preferences::default()
@@ -491,7 +491,7 @@ fn collapsed_columns_hide_their_body_and_pads_track_column_positions() {
     preferences.collapsed[2] = true;
     preferences.collapsed[3] = true;
     preferences.columns[2] = [12.5, -40.0];
-    let state = State::new(preferences);
+    let state = State::permitted(preferences);
     let (panel, _) = panel(&state);
     let bindings = &panel["surface"]["bindings"];
     assert_eq!(bindings["#col_render_h"], 0);
@@ -534,8 +534,8 @@ fn normalize(value: Value) -> Value {
 #[test]
 fn hand_built_shell_matches_the_serde_schema_in_every_state() {
     use crate::state::{KeybindTarget, Preferences, State};
-    let mut states = vec![State::new(Preferences::default())];
-    let mut busy = State::new(Preferences {
+    let mut states = vec![State::permitted(Preferences::default())];
+    let mut busy = State::permitted(Preferences {
         clicker_key: "KeyR".into(),
         aim_key: "Digit4".into(),
         reach_key: "F9".into(),
@@ -562,7 +562,7 @@ fn retained_patches_match_all_live_controls_without_replacing_the_surface() {
     use crate::state::{AimMode, KeybindTarget, Preferences, State};
     for mode in [AimMode::Continuous, AimMode::WhileClicking] {
         for capture in [None, Some(KeybindTarget::Menu), Some(KeybindTarget::Aim)] {
-            let mut state = State::new(Preferences {
+            let mut state = State::permitted(Preferences {
                 clicker_key: "KeyR".into(),
                 aim_key: "Numpad7".into(),
                 reach_blocks: 4.2,
@@ -624,7 +624,7 @@ fn retained_patches_match_all_live_controls_without_replacing_the_surface() {
 
 #[test]
 fn completed_binding_updates_are_valid_for_initial_and_retained_publication() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let bindings = super::bindings_json(&state);
     for prefix in ["{}", r#"{"surface":"clickgui"}"#] {
         let patch: Value =
@@ -644,7 +644,7 @@ fn completed_binding_updates_are_valid_for_initial_and_retained_publication() {
 
 #[test]
 fn final_binding_step_reserves_publication_work() {
-    let state = crate::state::State::new(Default::default());
+    let state = crate::state::State::permitted(Default::default());
     let mut builder = super::Bindings::new(&state);
     for _ in 0..43 {
         assert!(!builder.finishing());
@@ -657,13 +657,31 @@ fn final_binding_step_reserves_publication_work() {
 
 #[test]
 fn reach_row_preserves_every_supported_decimal_distance() {
-    let mut state = crate::state::State::new(Default::default());
+    let mut state = crate::state::State::permitted(Default::default());
     for tenths in 30..=60 {
         state.preferences.reach_blocks = tenths as f32 / 10.;
         let bindings: Value = serde_json::from_str(&super::bindings_json(&state)).unwrap();
         assert_eq!(
             bindings["#reach_value"],
             format!("{}.{:01} blocks", tenths / 10, tenths % 10)
+        );
+    }
+}
+
+#[test]
+fn denied_module_rows_expose_disabled_state_and_missing_permission_explanations() {
+    let mut state = crate::state::State::new(Default::default());
+    state.set_permissions(&[]);
+    let bindings: serde_json::Value = serde_json::from_str(&super::bindings_json(&state)).unwrap();
+    for (index, requirement) in crate::permissions::REQUIREMENTS.iter().enumerate() {
+        assert_eq!(super::MODULES[index].0, requirement.id);
+        assert_eq!(bindings[format!("#{}_available", requirement.id)], false);
+        assert_eq!(bindings[format!("#{}_opacity", requirement.id)], 0.4);
+        assert!(
+            bindings[format!("#{}_permission", requirement.id)]
+                .as_str()
+                .unwrap()
+                .starts_with("Requires: ")
         );
     }
 }

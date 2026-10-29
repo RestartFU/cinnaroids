@@ -710,6 +710,15 @@ impl Bindings {
                 let index = self.step - 1;
                 let (module, column, details) = &MODULES[index];
 
+                let reason = &state.access.0[index];
+                name_parts(json, &[module, "_available"]);
+                flag(json, reason.is_empty());
+                name_parts(json, &[module, "_blocked"]);
+                flag(json, !reason.is_empty());
+                name_parts(json, &[module, "_opacity"]);
+                json.push_str(if reason.is_empty() { "1" } else { "0.4" });
+                name_parts(json, &[module, "_permission"]);
+                escaped(json, reason);
                 let on = enabled[index];
                 let expanded = *details > 0 && state.expanded[index];
                 if std::mem::replace(&mut placed[*column], true) {

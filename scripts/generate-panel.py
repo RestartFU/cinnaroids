@@ -335,7 +335,18 @@ def module_row(module, title, toggle_index, expand, key, settings, first):
                                              border_width=0.5),
                                     legend=legend, lit=lit)), (f"#{module}_keycap", "#alpha"))
         contents["keycap"] = keycap_node
-    controls = dict(tint=tint, bar=bar, row=button(toggle_index, [width, ROW], **contents))
+    toggle_row = button(toggle_index, [width, ROW], **contents)
+    toggle_row["propagate_alpha"] = True
+    bind(toggle_row, (f"#{module}_available", "#enabled"),
+         (f"#{module}_opacity", "#alpha"), (f"#{module}_permission", "#hover_text"))
+    hint_text = label(f"#{module}_permission", [width - 12, 60], [6, 6], color=MUTED, scale=0.72)
+    hint_text["text_alignment"] = "left"
+    hint_text["word_wrap"] = True
+    hint = node("panel", [width, 72], visible=False, allow_clipping=False, layer=100,
+                controls=children(background=rect([width, 72], radius=3, color=FIELD), text=hint_text))
+    denied = node("button", [width, ROW], hover_control="hint", controls=children(hint=hint))
+    bind(denied, (f"#{module}_blocked", "#visible"))
+    controls = dict(tint=tint, bar=bar, row=toggle_row, denied=denied)
     height = 0
     if expand is not None:
         chevron = icon("chevron", [5, 3], [9, 9], MUTED)

@@ -299,6 +299,7 @@ pub enum KeybindTarget {
 pub struct State {
     pub preferences: Preferences,
     pub modules: Modules,
+    pub access: crate::permissions::Access,
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
@@ -317,6 +318,7 @@ impl State {
         Self {
             preferences,
             modules: Modules::default(),
+            access: Default::default(),
             capturing_key: None,
             panel_dirty: true,
             expanded: [false; 9],
@@ -405,21 +407,34 @@ impl State {
             return;
         }
         for key in controls.keys.iter().filter(|key| !key.is_empty()) {
-            if *key == self.preferences.clicker_key {
+            if *key == self.preferences.clicker_key && self.access.0[0].is_empty() {
                 self.modules.clicker = !self.modules.clicker;
                 self.clicker.reset();
                 self.panel_dirty = true;
-            } else if *key == self.preferences.aim_key {
+            } else if *key == self.preferences.aim_key && self.access.0[1].is_empty() {
                 self.modules.aim = !self.modules.aim;
                 self.panel_dirty = true;
-            } else if *key == self.preferences.jump_reset_key {
+            } else if *key == self.preferences.jump_reset_key && self.access.0[3].is_empty() {
                 self.modules.jump_reset = !self.modules.jump_reset;
                 self.panel_dirty = true;
-            } else if *key == self.preferences.reach_key {
+            } else if *key == self.preferences.reach_key && self.access.0[2].is_empty() {
                 self.modules.reach = !self.modules.reach;
                 self.panel_dirty = true;
             }
         }
+        self.panel_dirty |= self.access.enforce(&mut self.modules);
+    }
+
+    /// Updates permission availability and immediately withdraws enabled modules lacking it.
+    pub fn set_permissions(
+        &mut self,
+        permissions: &[mod_api::bindings::cinnabar::extension::permissions::Permission],
+    ) {
+        self.access = crate::permissions::Access::read(permissions);
+        self.access.enforce(&mut self.modules);
+        self.fullbright_dirty = true;
+        self.clicker.reset();
+        self.panel_dirty = true;
     }
 
     fn binding_mut(&mut self, target: KeybindTarget) -> &mut String {
@@ -536,6 +551,16 @@ impl State {
     fn event(&mut self, event: &Event) {
         let value = event.value;
         if !value.is_finite() {
+            return;
+        }
+        if value >= 0.5
+            && crate::permissions::REQUIREMENTS
+                .iter()
+                .enumerate()
+                .any(|(index, requirement)| {
+                    requirement.id == event.id && !self.access.0[index].is_empty()
+                })
+        {
             return;
         }
         let changed = match event.id.as_str() {
@@ -1169,3 +1194,13 @@ enum Control<'a> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+impl State {
+    /// Creates policy fixtures with every module's authority explicitly available.
+    pub(crate) fn permitted(preferences: Preferences) -> Self {
+        let mut state = Self::new(preferences);
+        state.access = crate::permissions::Access(std::array::from_fn(|_| String::new()));
+        state
+    }
+}

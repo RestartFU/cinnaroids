@@ -4,7 +4,7 @@ Cinnaroids — Third-party notices
 Cinnaroids is a WASM module for Cinnabar. Its own source and original branding
 assets are covered by LICENSE.txt. The Cinnabar mod-api SDK is covered by the
 PolyForm Noncommercial License 1.0.0 in licenses/mod-api-0.1.31/LICENSE.
-SDK source: https://github.com/cinnabar-mc/cinnabar/tree/5354b4a6c16d809e81de945a88beeb418da128a7/crates/mod-api
+SDK source: https://github.com/cinnabar-mc/cinnabar/tree/177772515c4ce7c21e6fe01bc1a2f01ef0da3da3/crates/mod-api
 
 The packaged WASM embeds this notice, the project license, and the unchanged
 license files for every external package in the current Cargo.lock. Retained

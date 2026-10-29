@@ -327,7 +327,7 @@ fn startup_paging_waits_for_complete_bindings_and_starts_a_fresh_hold() {
     });
     let input = controls(&["KeyK"]);
     assert!(!cache.ready());
-    let mut state = State::new(Preferences {
+    let mut state = State::permitted(Preferences {
         cps: 20,
         ..Default::default()
     });

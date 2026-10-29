@@ -57,3 +57,5 @@ cargo test --locked -p cinnaroids-mod
 Rust 1.99.0, `wasm32-unknown-unknown`, and Python 3.11 or newer are required. The result is `dist/cinnaroids.wasm`; there is no native executable. On Windows, `scripts/build-cinnaroids.ps1` invokes the same build.
 
 To check actual WASM execution against a matching Cinnabar source checkout, run `scripts/verify-host-budget.ps1 -HostRepo PATH` after building. It exercises startup with saved preferences and panel changes without starting a game.
+
+Modules require their relevant permissions before they can be enabled. Unavailable rows are dimmed; hover them to see the missing permissions. Granting permissions does not enable a module automatically. Optional effects, such as FakeLag’s position marker, do not block the main module.

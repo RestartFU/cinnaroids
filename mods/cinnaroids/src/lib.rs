@@ -10,4 +10,5 @@ pub mod ghost;
 mod guest;
 pub mod jump_reset;
 mod panel;
+pub mod permissions;
 pub mod state;

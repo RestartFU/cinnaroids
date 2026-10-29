@@ -10,7 +10,7 @@ rust-version = "1.99.0"
 repository = "https://github.com/RestartFU/cinnaroids"
 
 [workspace.dependencies]
-mod-api = { git = "https://github.com/cinnabar-mc/cinnabar", rev = "5354b4a6c16d809e81de945a88beeb418da128a7" }
+mod-api = { git = "https://github.com/cinnabar-mc/cinnabar", rev = "177772515c4ce7c21e6fe01bc1a2f01ef0da3da3" }
 
 [profile.release]
 # Callback fuel is bounded by the host; optimize execution rather than file size.
