@@ -75,7 +75,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 38);
+    assert_eq!(controls.len(), 41);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
@@ -210,7 +210,7 @@ fn every_value_control_publishes_its_own_feedback() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 14 + 7 + 5 + 2);
+    assert_eq!(checked, 15 + 7 + 6 + 2);
     assert_eq!(bindings["#c3_text"], "RShift");
     assert_eq!(bindings["#c7_text"], "Num7");
     assert_eq!(bindings["#c9_text"], "4.2");
@@ -297,8 +297,8 @@ fn hover_and_press_are_native_button_states() {
     }
     let mut count = 0;
     visit(&document["panel"], &mut count);
-    // Nine rows, seven disclosure arrows, five keycaps, two dropdowns and Reset layout.
-    assert_eq!(count, 9 + 7 + 5 + 2 + 1);
+    // Ten rows, eight disclosure arrows, six keycaps, two dropdowns and Reset layout.
+    assert_eq!(count, 10 + 8 + 6 + 2 + 1);
 }
 
 #[test]
@@ -432,8 +432,8 @@ fn disclosure_and_toggles_change_only_bindings() {
     assert_eq!(bindings["#aim_h"], 0);
     assert_eq!(bindings["#jump_reset_y"], serde_json::json!([0, 120]));
     assert!(bindings.get("#clicker_y").is_none(), "first rows stay put");
-    assert_eq!(bindings["#col_combat_h"], 160);
-    assert_eq!(bindings["#col_combat_bg"], 187);
+    assert_eq!(bindings["#col_combat_h"], 180);
+    assert_eq!(bindings["#col_combat_bg"], 207);
     assert_eq!(bindings["#reach_value"], "4.2 blocks");
     assert_eq!(bindings["#c9_text"], "4.2");
     assert_eq!(bindings["#fake_lag_bar"], serde_json::json!([1, 1]));
@@ -646,7 +646,7 @@ fn completed_binding_updates_are_valid_for_initial_and_retained_publication() {
 fn final_binding_step_reserves_publication_work() {
     let state = crate::state::State::permitted(Default::default());
     let mut builder = super::Bindings::new(&state);
-    for _ in 0..43 {
+    for _ in 0..46 {
         assert!(!builder.finishing());
         assert!(!builder.advance());
     }

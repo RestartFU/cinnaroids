@@ -206,6 +206,7 @@ fn left_clicks_cannot_capture_any_binding_even_when_opening_the_keycap() {
         ("aim_key", KeybindTarget::Aim),
         ("reach_key", KeybindTarget::Reach),
         ("jump_reset_key", KeybindTarget::JumpReset),
+        ("omni_sprint_key", KeybindTarget::OmniSprint),
     ] {
         let mut state = state();
         state.reservations_dirty = false;
@@ -557,6 +558,9 @@ fn panel_exposes_all_controls_without_category_sections() {
             "esp_health",
             "expand_esp",
             "auto_totem",
+            "omni_sprint",
+            "omni_sprint_key",
+            "expand_omni_sprint",
         ]
     );
 }
@@ -634,7 +638,7 @@ fn every_module_has_a_persisted_independent_binding() {
         Preferences::from_json(&serde_json::to_string(&saved).unwrap()),
         saved
     );
-    for field in ["aim_key", "reach_key", "jump_reset_key"] {
+    for field in ["aim_key", "reach_key", "jump_reset_key", "omni_sprint_key"] {
         for invalid in ["MouseLeft", "Escape", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
@@ -649,6 +653,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         ("aim_key", KeybindTarget::Aim),
         ("reach_key", KeybindTarget::Reach),
         ("jump_reset_key", KeybindTarget::JumpReset),
+        ("omni_sprint_key", KeybindTarget::OmniSprint),
     ] {
         let mut state = state();
         state.modules.aim = true;
@@ -661,6 +666,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         controls(&mut state, &["KeyG"], &[]);
         match target {
             KeybindTarget::Menu => unreachable!(),
+            KeybindTarget::OmniSprint => assert!(state.modules.omni_sprint),
             KeybindTarget::Clicker => {
                 assert!(state.modules.clicker && state.modules.aim && !state.modules.reach)
             }
@@ -963,13 +969,15 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
-    assert_eq!(state.expanded, [false; 9]);
+    assert_eq!(state.expanded, [false; 10]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, false, true, false, false, false, false, false, false]
+        [
+            false, false, true, false, false, false, false, false, false, false
+        ]
     );
     assert!(!state.modules.reach);
     assert_eq!(state.preferences, preferences);
@@ -978,13 +986,17 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     controls(&mut state, &[], &[("expand_aim", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, true, true, false, false, false, false, false, false],
+        [
+            false, true, true, false, false, false, false, false, false, false
+        ],
         "independent rows"
     );
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
-        [false, true, false, false, false, false, false, false, false]
+        [
+            false, true, false, false, false, false, false, false, false, false
+        ]
     );
     assert!(!state.preferences_dirty);
 }
@@ -1312,4 +1324,38 @@ fn auto_totem_is_a_runtime_toggle_and_does_not_persist_enabled_state() {
     );
     controls(&mut state, &[], &[("auto_totem", 0.)]);
     assert!(!state.modules.auto_totem);
+}
+
+#[test]
+fn omni_sprint_saves_its_shortcut_but_starts_disabled() {
+    let mut state = state();
+    controls(
+        &mut state,
+        &[],
+        &[("omni_sprint", 1.0), ("omni_sprint_key", 1.0)],
+    );
+    controls(&mut state, &["KeyO"], &[]);
+    assert!(state.modules.omni_sprint);
+    assert!(state.reserved_keys().contains(&"KeyO".into()));
+    let preferences = Preferences::from_json(&serde_json::to_string(&state.preferences).unwrap());
+    assert_eq!(preferences.omni_sprint_key, "KeyO");
+    assert!(!State::new(preferences).modules.omni_sprint);
+    controls(&mut state, &[], &[("omni_sprint_key", 1.0)]);
+    controls(&mut state, &["Escape"], &[]);
+    assert!(state.preferences.omni_sprint_key.is_empty());
+}
+
+#[test]
+fn omni_sprint_binding_conflicts_preserve_existing_assignments() {
+    for key in ["F7", "F6", "F5", "F4", "F3"] {
+        let preferences = Preferences::from_json(&format!(
+            r#"{{"clicker_key":"F7","aim_key":"F6","reach_key":"F5","jump_reset_key":"F4","omni_sprint_key":"{key}"}}"#
+        ));
+        if key == "F3" {
+            assert_eq!(preferences.omni_sprint_key, "F3");
+            assert_eq!(preferences.menu_key, "F2");
+        } else {
+            assert!(preferences.omni_sprint_key.is_empty());
+        }
+    }
 }

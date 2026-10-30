@@ -42,7 +42,7 @@ const MENU_BODY: i32 = 52;
 
 /// Module binding prefix, owning column and the height of its generated settings region.
 /// A column's first module never moves and so has no `_y` binding.
-const MODULES: [(&str, usize, i32); 9] = [
+const MODULES: [(&str, usize, i32); 10] = [
     ("clicker", 0, 60),
     ("aim", 0, 112),
     ("reach", 0, 60),
@@ -52,12 +52,14 @@ const MODULES: [(&str, usize, i32); 9] = [
     ("fullbright", 2, 0),
     ("player_esp", 2, 130),
     ("auto_totem", 0, 0),
+    ("omni_sprint", 0, 30),
 ];
-const KEYED: [(usize, KeybindTarget); 4] = [
+const KEYED: [(usize, KeybindTarget); 5] = [
     (0, KeybindTarget::Clicker),
     (1, KeybindTarget::Aim),
     (2, KeybindTarget::Reach),
     (3, KeybindTarget::JumpReset),
+    (9, KeybindTarget::OmniSprint),
 ];
 
 /// Copy pre-serialized geometry and append only the changing bindings within callback fuel.
@@ -226,6 +228,15 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     toggle(json, "esp_health", "Health", p.esp_health);
     json.push_str(r#",{"kind":"button","id":"expand_esp","label":"Player ESP settings"}"#);
     toggle(json, "auto_totem", "AutoTotem", m.auto_totem);
+    toggle(json, "omni_sprint", "Omni Sprint", m.omni_sprint);
+    keybind(
+        json,
+        "omni_sprint_key",
+        "Omni Sprint key",
+        &p.omni_sprint_key,
+        capturing(KeybindTarget::OmniSprint),
+    );
+    json.push_str(r#",{"kind":"button","id":"expand_omni_sprint","label":"Omni Sprint settings"}"#);
     json.push_str("] }");
     append_shell(json);
 }
@@ -337,6 +348,7 @@ pub(crate) fn control_patch(state: &State) -> String {
             KeybindTarget::Aim => "aim_key",
             KeybindTarget::Reach => "reach_key",
             KeybindTarget::JumpReset => "jump_reset_key",
+            KeybindTarget::OmniSprint => "omni_sprint_key",
         };
         json.push_str(r#"{"id":"#);
         text(&mut json, id);
@@ -441,7 +453,7 @@ fn text(json: &mut String, value: &str) {
 }
 
 /// Toggle controls by panel index; one eased progress drives each row wash, lift bar and switch.
-fn toggles(state: &State) -> [(usize, bool); 14] {
+fn toggles(state: &State) -> [(usize, bool); 15] {
     let (m, p) = (&state.modules, &state.preferences);
     [
         (1, m.clicker),
@@ -458,6 +470,7 @@ fn toggles(state: &State) -> [(usize, bool); 14] {
         (34, p.esp_distance),
         (35, p.esp_health),
         (37, m.auto_totem),
+        (38, m.omni_sprint),
     ]
 }
 
@@ -491,12 +504,13 @@ fn sliders(state: &State) -> [(usize, f32, f32, f32); 7] {
 }
 
 /// Keybind controls by panel index.
-const KEYBINDS: [(usize, KeybindTarget); 5] = [
+const KEYBINDS: [(usize, KeybindTarget); 6] = [
     (0, KeybindTarget::Menu),
     (3, KeybindTarget::Clicker),
     (7, KeybindTarget::Aim),
     (10, KeybindTarget::Reach),
     (13, KeybindTarget::JumpReset),
+    (39, KeybindTarget::OmniSprint),
 ];
 
 /// The selected option of each choice control, by panel index.
@@ -666,6 +680,9 @@ pub fn key_label(key: &str) -> &str {
 /// A snapshot of panel scalars serialized one bounded row at a time.
 pub(crate) struct Bindings {
     state: State,
+    enabled: [bool; 10],
+    toggles: [(usize, bool); 15],
+    sliders: [(usize, f32, f32, f32); 7],
     json: String,
     heights: [i32; 4],
     placed: [bool; 3],
@@ -676,6 +693,9 @@ impl Bindings {
     pub(crate) fn new(state: &State) -> Self {
         Self {
             state: state.clone(),
+            enabled: state.enabled_flags(),
+            toggles: toggles(state),
+            sliders: sliders(state),
             json: String::with_capacity(8192),
             heights: [0, 0, 0, MENU_BODY],
             placed: [false; 3],
@@ -685,13 +705,13 @@ impl Bindings {
     /// The last binding step also publishes the completed string to the pending patch.
     #[cfg(any(target_arch = "wasm32", test))]
     pub(crate) fn finishing(&self) -> bool {
-        self.step == 43
+        self.step == 46
     }
 
     /// Appends at most one module, column or feedback control; true after the closing brace.
     pub(crate) fn advance(&mut self) -> bool {
         let state = &self.state;
-        let enabled = state.enabled_flags();
+        let enabled = &self.enabled;
         let json = &mut self.json;
         let heights = &mut self.heights;
         let placed = &mut self.placed;
@@ -706,7 +726,7 @@ impl Bindings {
                     (state.capturing_key == Some(KeybindTarget::Menu)).into(),
                 );
             }
-            1..=9 => {
+            1..=10 => {
                 let index = self.step - 1;
                 let (module, column, details) = &MODULES[index];
 
@@ -741,7 +761,7 @@ impl Bindings {
                 }
                 heights[*column] += ROW + if expanded { *details } else { 0 };
             }
-            10 => {
+            11 => {
                 // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
                 let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
                 name(json, "#reach_value");
@@ -762,8 +782,8 @@ impl Bindings {
                     integer(json, (state.capturing_key == Some(target)).into());
                 }
             }
-            11..=14 => {
-                let column = self.step - 11;
+            12..=15 => {
+                let column = self.step - 12;
                 let id = COLUMNS[column];
 
                 let [x, y] = state.preferences.columns[column];
@@ -805,33 +825,33 @@ impl Bindings {
                     json.push('"');
                 }
             }
-            15..=28 => {
-                let (index, on) = toggles(state)[self.step - 15];
+            16..=30 => {
+                let (index, on) = self.toggles[self.step - 16];
                 control(json, index, "_on");
                 integer(json, on.into());
             }
-            29..=35 => {
-                let (index, value, min, max) = sliders(state)[self.step - 29];
+            31..=37 => {
+                let (index, value, min, max) = self.sliders[self.step - 31];
                 control(json, index, "_text");
                 slider_text(json, value);
                 control(json, index, "_fill");
                 fraction(json, (value - min) / (max - min));
             }
-            36..=40 => {
-                let (index, target) = KEYBINDS[self.step - 36];
+            38..=43 => {
+                let (index, target) = KEYBINDS[self.step - 38];
                 control(json, index, "_text");
                 escaped(json, key_label(state.key_for(target)));
             }
-            41..=42 => {
-                let (index, option) = choices(state)[self.step - 41];
+            44..=45 => {
+                let (index, option) = choices(state)[self.step - 44];
                 control(json, index, "_text");
                 text(json, option);
             }
-            43 => json.push('}'),
+            46 => json.push('}'),
             _ => return true,
         }
         self.step += 1;
-        self.step == 44
+        self.step == 47
     }
     /// The completed scalar object, ready for one bounded publication call.
     pub(crate) fn finish(self) -> String {

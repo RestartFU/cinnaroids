@@ -59,6 +59,7 @@ MODULES = [
      [("slider", 31, "Range", "blocks"), ("choice", 32, "Outline color"),
       ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
     ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
+    ("omni_sprint", "Omni Sprint", "combat", 38, 40, 39, []),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 
@@ -317,7 +318,7 @@ def module_row(module, title, toggle_index, expand, key, settings, first):
     contents = dict(name=name)
     # The trailing value always reads in muted text; a bound key gets its own small keycap.
     # Bound modules slide the value left to make room for the keycap.
-    if expand is not None:
+    if settings:
         value = trailing_value(module, settings)
         value["offset"] = [width - 56, 6]
         if key is not None:

@@ -28,6 +28,7 @@ pub struct Preferences {
     pub aim_key: String,
     pub reach_key: String,
     pub jump_reset_key: String,
+    pub omni_sprint_key: String,
     pub jump_reset_window_ticks: u8,
     pub aim_strength: u8,
     pub aim_mode: AimMode,
@@ -55,6 +56,7 @@ impl Default for Preferences {
             aim_key: String::new(),
             reach_key: String::new(),
             jump_reset_key: String::new(),
+            omni_sprint_key: String::new(),
             jump_reset_window_ticks: DEFAULT_WINDOW_TICKS,
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
@@ -175,6 +177,7 @@ impl Preferences {
             ("aim_key", &mut preferences.aim_key),
             ("reach_key", &mut preferences.reach_key),
             ("jump_reset_key", &mut preferences.jump_reset_key),
+            ("omni_sprint_key", &mut preferences.omni_sprint_key),
         ] {
             if let Some(binding) = values.get(field).and_then(Value::as_str)
                 && (binding.is_empty() || valid_binding(binding))
@@ -202,15 +205,27 @@ impl Preferences {
         {
             preferences.jump_reset_key.clear();
         }
+        if !preferences.omni_sprint_key.is_empty()
+            && [
+                &preferences.clicker_key,
+                &preferences.aim_key,
+                &preferences.reach_key,
+                &preferences.jump_reset_key,
+            ]
+            .contains(&&preferences.omni_sprint_key)
+        {
+            preferences.omni_sprint_key.clear();
+        }
         if [
             &preferences.clicker_key,
             &preferences.aim_key,
             &preferences.reach_key,
             &preferences.jump_reset_key,
+            &preferences.omni_sprint_key,
         ]
         .contains(&&preferences.menu_key)
         {
-            preferences.menu_key = [PANEL_KEY, "F6", "F5", "F4", "F3"]
+            preferences.menu_key = [PANEL_KEY, "F6", "F5", "F4", "F3", "F2"]
                 .into_iter()
                 .find(|key| {
                     ![
@@ -218,6 +233,7 @@ impl Preferences {
                         preferences.aim_key.as_str(),
                         preferences.reach_key.as_str(),
                         preferences.jump_reset_key.as_str(),
+                        preferences.omni_sprint_key.as_str(),
                     ]
                     .contains(key)
                 })
@@ -284,6 +300,7 @@ pub struct Modules {
     pub fullbright: bool,
     pub player_esp: bool,
     pub jump_reset: bool,
+    pub omni_sprint: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -293,6 +310,7 @@ pub enum KeybindTarget {
     Aim,
     Reach,
     JumpReset,
+    OmniSprint,
 }
 
 #[derive(Clone, Debug)]
@@ -303,7 +321,7 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded: [bool; 9],
+    pub expanded: [bool; 10],
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -321,7 +339,7 @@ impl State {
             access: Default::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded: [false; 9],
+            expanded: [false; 10],
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -417,6 +435,9 @@ impl State {
             } else if *key == self.preferences.jump_reset_key && self.access.0[3].is_empty() {
                 self.modules.jump_reset = !self.modules.jump_reset;
                 self.panel_dirty = true;
+            } else if *key == self.preferences.omni_sprint_key && self.access.0[9].is_empty() {
+                self.modules.omni_sprint = !self.modules.omni_sprint;
+                self.panel_dirty = true;
             } else if *key == self.preferences.reach_key && self.access.0[2].is_empty() {
                 self.modules.reach = !self.modules.reach;
                 self.panel_dirty = true;
@@ -444,6 +465,7 @@ impl State {
             KeybindTarget::Aim => &mut self.preferences.aim_key,
             KeybindTarget::Reach => &mut self.preferences.reach_key,
             KeybindTarget::JumpReset => &mut self.preferences.jump_reset_key,
+            KeybindTarget::OmniSprint => &mut self.preferences.omni_sprint_key,
         }
     }
 
@@ -454,6 +476,7 @@ impl State {
             (KeybindTarget::Aim, &self.preferences.aim_key),
             (KeybindTarget::Reach, &self.preferences.reach_key),
             (KeybindTarget::JumpReset, &self.preferences.jump_reset_key),
+            (KeybindTarget::OmniSprint, &self.preferences.omni_sprint_key),
         ]
         .iter()
         .any(|(other, binding)| *other != target && key == *binding)
@@ -523,7 +546,7 @@ impl State {
     }
 
     /// Runtime enabled flags in panel order.
-    pub fn enabled_flags(&self) -> [bool; 9] {
+    pub fn enabled_flags(&self) -> [bool; 10] {
         let m = &self.modules;
         [
             m.clicker,
@@ -535,6 +558,7 @@ impl State {
             m.fullbright,
             m.player_esp,
             m.auto_totem,
+            m.omni_sprint,
         ]
     }
 
@@ -545,6 +569,7 @@ impl State {
             KeybindTarget::Aim => &self.preferences.aim_key,
             KeybindTarget::Reach => &self.preferences.reach_key,
             KeybindTarget::JumpReset => &self.preferences.jump_reset_key,
+            KeybindTarget::OmniSprint => &self.preferences.omni_sprint_key,
         }
     }
 
@@ -582,6 +607,12 @@ impl State {
                 self.panel_dirty = true;
                 return;
             }
+            "expand_omni_sprint" => {
+                self.expanded[9] = !self.expanded[9];
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
             "expand_esp" => {
                 self.expanded[7] = !self.expanded[7];
                 self.capturing_key = None;
@@ -596,18 +627,21 @@ impl State {
                 self.panel_dirty = true;
                 return;
             }
+            "omni_sprint" => replace(&mut self.modules.omni_sprint, value >= 0.5),
             "auto_totem" => replace(&mut self.modules.auto_totem, value >= 0.5),
             "clicker" => replace(&mut self.modules.clicker, value >= 0.5),
             "cps" => replace(
                 &mut self.preferences.cps,
                 value.round().clamp(f32::from(MIN_CPS), f32::from(MAX_CPS)) as u8,
             ),
-            "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key" => {
+            "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key"
+            | "omni_sprint_key" => {
                 self.capturing_key = Some(match event.id.as_str() {
                     "menu_key" => KeybindTarget::Menu,
                     "aim_key" => KeybindTarget::Aim,
                     "reach_key" => KeybindTarget::Reach,
                     "jump_reset_key" => KeybindTarget::JumpReset,
+                    "omni_sprint_key" => KeybindTarget::OmniSprint,
                     _ => KeybindTarget::Clicker,
                 });
                 self.panel_dirty = true;
@@ -682,7 +716,8 @@ impl State {
             }
             if !matches!(
                 event.id.as_str(),
-                "auto_totem"
+                "omni_sprint"
+                    | "auto_totem"
                     | "clicker"
                     | "aim"
                     | "reach"
@@ -748,6 +783,7 @@ impl State {
             &self.preferences.aim_key,
             &self.preferences.reach_key,
             &self.preferences.jump_reset_key,
+            &self.preferences.omni_sprint_key,
         ] {
             if !key.is_empty() && !keys.contains(key) {
                 keys.push(key.clone());
@@ -1009,6 +1045,23 @@ impl State {
             label: "AutoTotem",
             value: self.modules.auto_totem,
         });
+        controls.extend([
+            Control::Toggle {
+                id: "omni_sprint",
+                label: "Omni Sprint",
+                value: self.modules.omni_sprint,
+            },
+            Control::Keybind {
+                id: "omni_sprint_key",
+                label: "Omni Sprint key",
+                key: crate::panel::key_legend(&self.preferences.omni_sprint_key),
+                capturing: self.capturing_key == Some(KeybindTarget::OmniSprint),
+            },
+            Control::Button {
+                id: "expand_omni_sprint",
+                label: "Omni Sprint settings",
+            },
+        ]);
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
             toggle_key: &self.preferences.menu_key,

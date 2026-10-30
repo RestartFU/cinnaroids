@@ -114,6 +114,7 @@ impl Guest for Cinnaroids {
                 &p.clicker_key,
                 &p.aim_key,
                 &p.jump_reset_key,
+                &p.omni_sprint_key,
                 &p.reach_key,
             ]
             .into_iter()
@@ -143,7 +144,12 @@ impl Guest for Cinnaroids {
             || controls.events.iter().any(|event| {
                 matches!(
                     event.id.as_str(),
-                    "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key"
+                    "menu_key"
+                        | "clicker_key"
+                        | "aim_key"
+                        | "reach_key"
+                        | "jump_reset_key"
+                        | "omni_sprint_key"
                 )
             });
         if controls.panel_open && capture {
@@ -196,6 +202,14 @@ impl Guest for Cinnaroids {
             controls.keys_pressed.clear();
             controls.keys_held.clear();
             let _ = gameplay::set_packet_delay(modules.packet_delay_ms());
+            let sprint = modules.modules.omni_sprint
+                && controls.focused
+                && controls.gameplay
+                && !controls.panel_open;
+            if sprint && let Ok(Some(mut input)) = gameplay::read_movement_input() {
+                input.sprint = true;
+                let _ = gameplay::set_movement_input(Some(input));
+            }
 
             let snapshot = if controls.focused && controls.gameplay {
                 gameplay::read_frame().ok().flatten()

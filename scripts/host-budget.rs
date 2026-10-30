@@ -173,6 +173,7 @@ fn module_edits_preserve_the_surface_on_every_frame() {
         "reach",
         "jump_reset",
         "auto_totem",
+        "omni_sprint",
         "fake_lag",
         "netherite",
         "fullbright",
@@ -1639,6 +1640,7 @@ fn combined_workload(
         ("fake_lag", 1.),
         ("clicker", 1.),
         ("auto_totem", 1.),
+        ("omni_sprint", 1.),
     ];
     if esp {
         events.extend([("player_esp", 1.), ("fullbright", 1.)]);
@@ -1891,6 +1893,7 @@ fn combined_workload(
         )
         .unwrap();
         host.observe_gameplay(GameplayFacts {
+            movement_input: Some(mod_host::GameplayMovementInput { right: 1., forward: 0., jump: false, sneak: false, sprint: false }),
             camera: Some(GameplayCameraPose {
                 position: GameplayVector3 {
                     x: 0.,
@@ -2842,4 +2845,26 @@ fn auto_totem_cannot_enable_without_inventory_and_equipment_permissions() {
             Some(&ui::mod_panel::SurfaceValue::Bool(false))
         );
     }
+}
+
+/// The packaged module preserves admitted movement lanes and releases its request outside gameplay.
+#[test]
+fn omni_sprint_preserves_controls_and_releases_on_disable_or_panel_open() {
+    let (_directory, mut host, budget) = drawing_host(ModGrants {
+        controls: true, movement: true, settings: true, ..Default::default()
+    }, "{}");
+    metered_frame(&mut host, &budget, false, &[("omni_sprint", 1.)], GameplayFacts::default());
+    for (right, forward) in [(1., 0.), (-1., 0.), (0., -1.), (0.5, -0.5)] {
+        let input = mod_host::GameplayMovementInput { right, forward, jump: true, sneak: false, sprint: false };
+        metered_frame(&mut host, &budget, true, &[], GameplayFacts { movement_input: Some(input), ..Default::default() });
+        assert_eq!(host.movement_input(), Some(mod_host::GameplayMovementInput { sprint: true, ..input }));
+    }
+    metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
+    assert!(host.movement_input().is_none());
+    metered_frame(&mut host, &budget, false, &[("omni_sprint", 0.)], GameplayFacts::default());
+    metered_frame(&mut host, &budget, true, &[], GameplayFacts {
+        movement_input: Some(mod_host::GameplayMovementInput { right: 1., forward: 0., jump: false, sneak: false, sprint: false }),
+        ..Default::default()
+    });
+    assert!(host.movement_input().is_none());
 }
