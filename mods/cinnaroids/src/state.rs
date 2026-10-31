@@ -19,9 +19,11 @@ pub enum AimMode {
     WhileClicking,
 }
 
-/// Enabled flags are deliberately not part of persisted preferences.
+/// Saved module switches and panel preferences.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Preferences {
+    #[serde(flatten)]
+    pub enabled: Modules,
     pub cps: u8,
     pub menu_key: String,
     pub clicker_key: String,
@@ -50,6 +52,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Self {
+            enabled: Modules::default(),
             cps: 20,
             menu_key: PANEL_KEY.into(),
             clicker_key: String::new(),
@@ -83,6 +86,11 @@ impl Preferences {
         let Ok(Value::Object(values)) = serde_json::from_str(json) else {
             return preferences;
         };
+        for requirement in &crate::permissions::REQUIREMENTS {
+            if let Some(value) = values.get(requirement.id).and_then(Value::as_bool) {
+                *(requirement.flag)(&mut preferences.enabled) = value;
+            }
+        }
         if let Some(value) = values.get("cps").and_then(Value::as_u64) {
             preferences.cps = value.clamp(u64::from(MIN_CPS), u64::from(MAX_CPS)) as u8;
         }
@@ -289,7 +297,7 @@ pub fn clamp_column(column: usize, [x, y]: [f32; 2]) -> [f32; 2] {
     ]
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Modules {
     pub auto_totem: bool,
     pub clicker: bool,
@@ -334,8 +342,8 @@ pub struct State {
 impl State {
     pub fn new(preferences: Preferences) -> Self {
         Self {
+            modules: preferences.enabled.clone(),
             preferences,
-            modules: Modules::default(),
             access: Default::default(),
             capturing_key: None,
             panel_dirty: true,
@@ -427,19 +435,29 @@ impl State {
         for key in controls.keys.iter().filter(|key| !key.is_empty()) {
             if *key == self.preferences.clicker_key && self.access.0[0].is_empty() {
                 self.modules.clicker = !self.modules.clicker;
+                self.preferences.enabled.clicker = self.modules.clicker;
+                self.preferences_dirty = true;
                 self.clicker.reset();
                 self.panel_dirty = true;
             } else if *key == self.preferences.aim_key && self.access.0[1].is_empty() {
                 self.modules.aim = !self.modules.aim;
+                self.preferences.enabled.aim = self.modules.aim;
+                self.preferences_dirty = true;
                 self.panel_dirty = true;
             } else if *key == self.preferences.jump_reset_key && self.access.0[3].is_empty() {
                 self.modules.jump_reset = !self.modules.jump_reset;
+                self.preferences.enabled.jump_reset = self.modules.jump_reset;
+                self.preferences_dirty = true;
                 self.panel_dirty = true;
             } else if *key == self.preferences.omni_sprint_key && self.access.0[9].is_empty() {
                 self.modules.omni_sprint = !self.modules.omni_sprint;
+                self.preferences.enabled.omni_sprint = self.modules.omni_sprint;
+                self.preferences_dirty = true;
                 self.panel_dirty = true;
             } else if *key == self.preferences.reach_key && self.access.0[2].is_empty() {
                 self.modules.reach = !self.modules.reach;
+                self.preferences.enabled.reach = self.modules.reach;
+                self.preferences_dirty = true;
                 self.panel_dirty = true;
             }
         }
@@ -714,21 +732,13 @@ impl State {
             if matches!(event.id.as_str(), "clicker" | "cps") {
                 self.clicker.reset();
             }
-            if !matches!(
-                event.id.as_str(),
-                "omni_sprint"
-                    | "auto_totem"
-                    | "clicker"
-                    | "aim"
-                    | "reach"
-                    | "fake_lag"
-                    | "netherite"
-                    | "fullbright"
-                    | "jump_reset"
-                    | "player_esp"
-            ) {
-                self.preferences_dirty = true;
+            if let Some(requirement) = crate::permissions::REQUIREMENTS
+                .iter()
+                .find(|requirement| requirement.id == event.id)
+            {
+                *(requirement.flag)(&mut self.preferences.enabled) = value >= 0.5;
             }
+            self.preferences_dirty = true;
         }
     }
 

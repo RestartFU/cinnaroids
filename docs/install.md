@@ -12,6 +12,6 @@ To update while keeping the same registration and preferences, replace the insta
 
 Updates preserve existing permission approvals. For AutoTotem, open the Cinnaroids permissions and approve **Inventory requests** and **Player status**, then reload the mod. Reloading alone does not approve new permissions. Modules with missing required permissions stay off; their dimmed rows explain which permissions are needed. Shortcuts also respect those permissions.
 
-Use **Disable** in Mods to unload Cinnaroids. Enabled registrations persist across client restarts; the individual gameplay modules start disabled when the component initializes. Settings belong to Cinnabar's companion settings file beside the installed component.
+Use **Disable** in Mods to unload Cinnaroids. Enabled registrations persist across client restarts; individual gameplay module switches also persist and restore when their required permissions are granted. Settings belong to Cinnabar's companion settings file beside the installed component.
 
 If migrating from the old launcher, close it and disable its old registration before importing the WASM. The launcher and its shell installer are no longer distributed. Old launcher paths and automatic preference migration are not used by the Mods import flow; keep a copy of your old component settings if you want to migrate them manually.

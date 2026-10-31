@@ -22,7 +22,7 @@ Slider values can also be typed: click the current number, enter a value, and pr
 
 To change a module's binding, click its keycap, then press the next keyboard key. Each module has its own binding; a key already assigned to another module cannot be reused. Left-click is reserved for panel controls and is ignored during key capture. Previously saved left-click bindings clear when settings load. The configured **Menu key** is reserved for the panel. **Escape** clears a module binding during key capture and displays **None**; the cleared binding saves across restarts. For **Menu key**, Escape cancels capture and keeps the current binding. Outside key capture, Escape closes the panel. Closing the panel or leaving the game window cancels key capture.
 
-Enabled switches are runtime state and start off for a new session. Disable the registration in Cinnabar’s Mods screen to unload the component; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
+Enabled switches save with your preferences and restore across reloads and restarts when their required permissions are granted. Disable the registration in Cinnabar’s Mods screen to unload the component; saved preferences are preserved. Opening the module interface releases gameplay input so its controls can be used normally.
 
 Aim assist reads player coordinates, selects a target within six blocks and a 30-degree cone, and smoothly steers toward the chest. **Horizontal only** preserves your vertical aim while steering left or right; it defaults to off and saves with your preferences. Target selection still uses the same cone. Strength zero produces no motion. The API exposes positions without visibility or team information, so the module cannot filter occluded players or teammates. Menus, loss of cursor capture, and server-controlled cameras pause assistance.
 
@@ -42,7 +42,7 @@ Player ESP requires a Cinnabar build containing actor mask outline/glow composit
 
 ## Runtime and settings
 
-Cinnabar owns the registration, permissions and component lifecycle. Preferences save to the component's fixed companion settings file. Runtime enabled switches start off whenever the component initializes. The WASM has no WASI or ambient filesystem, network or operating-system input access.
+Cinnabar owns the registration, permissions and component lifecycle. Preferences save to the component's fixed companion settings file. Enabled switches restore when the component initializes, subject to required permissions. The WASM has no WASI or ambient filesystem, network or operating-system input access.
 
 Requested permissions cover inventory actions, the HUD, player snapshots, camera, controls, interaction, movement, settings, packet delay, terrain, Fullbright, world drawing, entity highlighting, protected entity observations and through-wall rendering. Netherite Finder needs terrain and world drawing, and through-wall rendering to show cubes behind blocks; without it the cubes respect world depth. Show real position needs packet delay and world drawing. Importing the file does not grant them automatically; review them in Mods. Features using a denied permission cannot operate.
 

@@ -63,7 +63,7 @@ fn horizontal_only_defaults_off_and_persists_panel_changes() {
 }
 
 #[test]
-fn preferences_restore_without_enabling_any_module() {
+fn preferences_restore_saved_module_switches() {
     let preferences = Preferences::from_json(
         r#"{"cps":18,"aim_strength":70,"aim_mode":"continuous","reach_blocks":5.2,"dark_mode":false,"columns":[[10,-20],[5000,0],[0,0],[900,0]],"collapsed":[true],"clicker_key":"KeyV","clicker":true,"aim":true,"reach":true,"cinnabar_path":"unused"}"#,
     );
@@ -86,10 +86,10 @@ fn preferences_restore_without_enabling_any_module() {
     );
     assert_eq!(state.preferences.collapsed, [true, false, false, false]);
     assert_eq!(state.preferences.clicker_key, "KeyV");
-    assert!(!state.modules.clicker && !state.modules.aim && !state.modules.reach);
+    assert!(state.modules.clicker && state.modules.aim && state.modules.reach);
     let json = serde_json::to_value(&state.preferences).unwrap();
     assert_eq!(json["netherite_range"], 64);
-    assert!(json.get("aim").is_none());
+    assert_eq!(json["aim"], true);
     assert!(json.get("dark_mode").is_none());
 }
 
@@ -115,7 +115,7 @@ fn enabling_clicker_keeps_aim_and_reach_independent() {
     assert!(state.modules.clicker && state.modules.aim && state.modules.reach);
     controls(&mut state, &[], &[("clicker", 0.0)]);
     assert!(!state.modules.clicker && state.modules.aim && state.modules.reach);
-    assert!(!state.preferences_dirty);
+    assert!(state.preferences_dirty);
 }
 
 #[test]
@@ -479,7 +479,7 @@ fn netherite_finder_searches_its_saved_range_only_while_enabled() {
     state.preferences_dirty = false;
     controls(&mut state, &[], &[("netherite", 1.0)]);
     assert_eq!(state.finder_range(), Some(64));
-    assert!(!state.preferences_dirty, "enablement is runtime state");
+    assert!(state.preferences_dirty, "enablement is saved");
     controls(&mut state, &[], &[("netherite_range", 500.0)]);
     // Terrain searches reach the terrain distance limit and no further.
     assert_eq!(
@@ -491,7 +491,7 @@ fn netherite_finder_searches_its_saved_range_only_while_enabled() {
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored = State::permitted(Preferences::from_json(&saved));
     assert_eq!(restored.preferences.netherite_range, 128);
-    assert_eq!(restored.finder_range(), None);
+    assert_eq!(restored.finder_range(), Some(128));
     assert_eq!(
         Preferences::from_json(r#"{"netherite_range":999}"#).netherite_range,
         128
@@ -758,7 +758,7 @@ fn fake_lag_delay_is_bounded_persisted_and_disabled_by_its_toggle() {
         state.preferences.fake_lag_ms,
         mod_api::MAX_PACKET_DELAY_MS as u16
     );
-    assert_eq!(state.packet_delay_ms(), 0);
+    assert_eq!(state.packet_delay_ms(), mod_api::MAX_PACKET_DELAY_MS);
     controls(
         &mut state,
         &[],
@@ -784,11 +784,9 @@ fn fake_lag_delay_is_bounded_persisted_and_disabled_by_its_toggle() {
     assert_eq!(state.preferences.fake_lag_ms, 800);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     assert_eq!(Preferences::from_json(&saved).fake_lag_ms, 800);
-    assert!(
-        serde_json::from_str::<Value>(&saved)
-            .unwrap()
-            .get("fake_lag")
-            .is_none()
+    assert_eq!(
+        serde_json::from_str::<Value>(&saved).unwrap()["fake_lag"],
+        false
     );
 }
 
@@ -845,15 +843,16 @@ fn real_position_preference_requires_live_nonzero_fake_lag() {
 }
 
 #[test]
-fn fullbright_is_runtime_only_and_can_be_disabled_independently() {
+fn fullbright_is_persisted_and_can_be_disabled_independently() {
     let mut state = State::permitted(Preferences::from_json(r#"{"fullbright":true}"#));
-    assert!(!state.modules.fullbright);
+    assert!(state.modules.fullbright);
     assert!(state.fullbright_dirty);
+    controls(&mut state, &[], &[("fullbright", 0.0)]);
     state.fullbright_dirty = false;
     controls(&mut state, &[], &[("fullbright", 1.0)]);
     assert!(state.modules.fullbright && state.fullbright_dirty);
     assert!(!state.modules.netherite && !state.modules.clicker);
-    assert!(!state.preferences_dirty);
+    assert!(state.preferences_dirty);
     state.fullbright_dirty = false;
     controls(&mut state, &[], &[("netherite", 1.0)]);
     assert!(state.modules.fullbright && state.modules.netherite);
@@ -864,7 +863,7 @@ fn fullbright_is_runtime_only_and_can_be_disabled_independently() {
     assert!(!state.modules.fullbright && state.fullbright_dirty);
     assert!(state.modules.netherite);
     let saved = serde_json::to_value(&state.preferences).unwrap();
-    assert!(saved.get("fullbright").is_none());
+    assert_eq!(saved["fullbright"], false);
 }
 
 #[test]
@@ -886,7 +885,7 @@ fn jump_reset_is_off_by_default_and_can_be_disabled_in_the_panel() {
     let mut state = state_with_bindings();
     assert!(!state.modules.jump_reset);
     controls(&mut state, &[BOUND_JUMP_RESET_KEY], &[]);
-    assert!(state.modules.jump_reset && !state.preferences_dirty);
+    assert!(state.modules.jump_reset && state.preferences_dirty);
     controls(&mut state, &[], &[("jump_reset", 0.0)]);
     assert!(!state.modules.jump_reset);
 }
@@ -898,7 +897,7 @@ fn jump_reset_preferences_are_bounded_and_binding_is_independent() {
     );
     assert_eq!(restored.jump_reset_window_ticks, MAX_WINDOW_TICKS);
     assert_ne!(restored.jump_reset_key, restored.aim_key);
-    assert!(!State::permitted(restored).modules.jump_reset);
+    assert!(State::permitted(restored).modules.jump_reset);
     let mut state = state_with_bindings();
     controls(
         &mut state,
@@ -1261,14 +1260,14 @@ fn duplicate_saved_module_shortcuts_clear_without_assigning_new_keys() {
 }
 
 #[test]
-fn esp_preferences_round_trip_clamp_and_do_not_restore_enablement() {
+fn esp_preferences_round_trip_clamp_and_restore_enablement() {
     let p = Preferences::from_json(
         r#"{"player_esp":true,"esp_range":999,"esp_color":999,"esp_names":false,"esp_distance":false,"esp_health":false}"#,
     );
     assert_eq!(p.esp_range, 128);
     assert_eq!(p.esp_color, 3);
     assert!(!p.esp_names && !p.esp_distance && !p.esp_health);
-    assert!(!State::permitted(p.clone()).modules.player_esp);
+    assert!(State::permitted(p.clone()).modules.player_esp);
     assert_eq!(
         Preferences::from_json(&serde_json::to_string(&p).unwrap()),
         p
@@ -1276,7 +1275,7 @@ fn esp_preferences_round_trip_clamp_and_do_not_restore_enablement() {
     let mut s = state();
     controls(&mut s, &[], &[("player_esp", 1.), ("expand_esp", 1.)]);
     assert!(s.modules.player_esp && s.expanded[7]);
-    assert!(!s.preferences_dirty);
+    assert!(s.preferences_dirty);
     controls(
         &mut s,
         &[],
@@ -1310,15 +1309,15 @@ fn refused_attack_waits_for_an_admitted_release_and_a_fresh_cadence() {
 }
 
 #[test]
-fn auto_totem_is_a_runtime_toggle_and_does_not_persist_enabled_state() {
+fn auto_totem_persists_enabled_state() {
     let mut state = state();
     assert!(!state.modules.auto_totem);
     state.preferences_dirty = false;
     controls(&mut state, &[], &[("auto_totem", 1.)]);
     assert!(state.modules.auto_totem);
-    assert!(!state.preferences_dirty);
+    assert!(state.preferences_dirty);
     assert!(
-        !State::permitted(state.preferences.clone())
+        State::permitted(state.preferences.clone())
             .modules
             .auto_totem
     );
@@ -1327,7 +1326,7 @@ fn auto_totem_is_a_runtime_toggle_and_does_not_persist_enabled_state() {
 }
 
 #[test]
-fn omni_sprint_saves_its_shortcut_but_starts_disabled() {
+fn omni_sprint_saves_its_shortcut_and_enabled_state() {
     let mut state = state();
     controls(
         &mut state,
@@ -1339,7 +1338,7 @@ fn omni_sprint_saves_its_shortcut_but_starts_disabled() {
     assert!(state.reserved_keys().contains(&"KeyO".into()));
     let preferences = Preferences::from_json(&serde_json::to_string(&state.preferences).unwrap());
     assert_eq!(preferences.omni_sprint_key, "KeyO");
-    assert!(!State::new(preferences).modules.omni_sprint);
+    assert!(State::permitted(preferences).modules.omni_sprint);
     controls(&mut state, &[], &[("omni_sprint_key", 1.0)]);
     controls(&mut state, &["Escape"], &[]);
     assert!(state.preferences.omni_sprint_key.is_empty());
@@ -1358,4 +1357,80 @@ fn omni_sprint_binding_conflicts_preserve_existing_assignments() {
             assert!(preferences.omni_sprint_key.is_empty());
         }
     }
+}
+
+#[test]
+fn every_panel_switch_round_trips_both_enabled_and_disabled() {
+    for requirement in &crate::permissions::REQUIREMENTS {
+        let mut state = state();
+        for enabled in [true, false] {
+            state.preferences_dirty = false;
+            controls(
+                &mut state,
+                &[],
+                &[(requirement.id, if enabled { 1. } else { 0. })],
+            );
+            assert!(state.preferences_dirty, "{}", requirement.id);
+            let json = serde_json::to_string(&state.preferences).unwrap();
+            let mut restored = State::permitted(Preferences::from_json(&json));
+            assert_eq!(
+                *(requirement.flag)(&mut restored.modules),
+                enabled,
+                "{}",
+                requirement.id
+            );
+            assert_eq!(
+                restored
+                    .enabled_flags()
+                    .iter()
+                    .filter(|flag| **flag)
+                    .count(),
+                usize::from(enabled)
+            );
+        }
+    }
+}
+
+#[test]
+fn shortcut_switches_save_both_edges() {
+    for (id, key) in [
+        ("clicker", BOUND_CLICKER_KEY),
+        ("aim", BOUND_AIM_KEY),
+        ("reach", BOUND_REACH_KEY),
+        ("jump_reset", BOUND_JUMP_RESET_KEY),
+        ("omni_sprint", "KeyO"),
+    ] {
+        let mut state = state_with_bindings();
+        state.preferences.omni_sprint_key = "KeyO".into();
+        for enabled in [true, false] {
+            state.preferences_dirty = false;
+            controls(&mut state, &[key], &[]);
+            assert!(state.preferences_dirty, "{id}");
+            let json = serde_json::to_value(&state.preferences).unwrap();
+            assert_eq!(json[id], enabled, "{id}");
+        }
+    }
+}
+
+#[test]
+fn missing_and_invalid_switches_default_off_independently() {
+    for json in ["{}", "broken", r#"{"aim":"true","clicker":1,"reach":null}"#] {
+        assert_eq!(Preferences::from_json(json).enabled, Modules::default());
+    }
+    let prefs = Preferences::from_json(r#"{"aim":true,"clicker":"true","reach":false}"#);
+    assert!(prefs.enabled.aim);
+    assert!(!prefs.enabled.clicker && !prefs.enabled.reach);
+}
+
+#[test]
+fn denied_saved_switches_stay_inactive_without_losing_preferences() {
+    let mut state = State::new(Preferences::from_json(r#"{"aim":true,"fullbright":true}"#));
+    state.set_permissions(&[]);
+    assert_eq!(state.enabled_flags(), [false; 10]);
+    controls(&mut state, &[], &[("aim", 1.), ("cps", 15.)]);
+    assert_eq!(state.enabled_flags(), [false; 10]);
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let restored = State::permitted(Preferences::from_json(&saved));
+    assert!(restored.modules.aim && restored.modules.fullbright);
+    assert_eq!(restored.preferences.cps, 15);
 }

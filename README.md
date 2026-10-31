@@ -6,7 +6,7 @@ Clicker, aim assist, reach, AutoTotem, FakeLag, Player ESP, Netherite Finder, Fu
 
 Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest), then open **Settings → Mods → Import** in an updated Cinnabar. Select the file, review its requested permissions, and enable it. Cinnabar manages loading and settings; no launcher is needed. [Installation and updates](docs/install.md).
 
-**F7** opens the panel. Module shortcuts start unbound, and modules start disabled. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
+**F7** opens the panel. Module shortcuts start unbound. Modules default to disabled and remember their switches across reloads and restarts. Change bindings and preferences in the panel. [Module behavior](docs/modules.md).
 
 The panel is a classic ClickGUI: Combat, Network, Render and Settings columns float over the softened world. Click a module to toggle it, and use its arrow to open settings beneath it; several can stay open at once. Drag a column by its header to move it, or click the header to collapse it; positions and collapsed columns are saved. The **Settings** column contains the menu key and **Reset layout**. Press Escape while setting a module keybind to clear it; Escape cancels capture for the Menu key.
 
