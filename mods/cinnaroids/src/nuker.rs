@@ -1,12 +1,10 @@
 //! Nearby mining policy; the host owns ordinary block picks and destroy admission.
 
-use std::f32::consts::{PI, TAU};
-
 use mod_api::bindings::cinnabar::extension::terrain::{
     Geometry, Position, ReadResult, Region, RegionQuery, ResolvedShape, ShapeBinding, Stamp,
 };
 
-/// Radius measured from the eye, bounded independently of the host's ordinary block reach.
+/// Radius measured from the manually selected block, bounded independently of the host's ordinary block reach.
 pub const MAX_RANGE: u8 = 5;
 pub const DEFAULT_RANGE: u8 = 3;
 /// Small subscriptions bound ordinary terrain import and selection work per callback.
@@ -15,23 +13,21 @@ const CELLS: usize = (TILE * TILE * TILE) as usize;
 /// Move on when a target stays unchanged, including server-refused and very slow breaks.
 pub const MAX_HOLD_SECONDS: f32 = 30.;
 
-/// Input-owned camera observation; angles use the SDK's actor YXZ radians.
+/// Input-owned mining observation; the block under the crosshair seeds each hold.
 #[derive(Clone, Copy)]
 pub struct Frame {
     pub session: u64,
     pub terrain_session: u64,
     pub dimension: i32,
     pub eye: [f32; 3],
-    pub yaw: f32,
-    pub pitch: f32,
+    pub block: Option<[i32; 3]>,
     pub seconds: f32,
 }
 
-/// A single bounded camera turn and an ordinary mining hold, never an attack press.
+/// A mining destination; the host still requires physical attack input.
 #[derive(Default, Debug, PartialEq)]
 pub struct Action {
-    pub rotation: Option<[f32; 2]>,
-    pub mine: bool,
+    pub point: Option<[f32; 3]>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -59,7 +55,6 @@ pub struct Nuker {
     stamp: Option<Stamp>,
     candidates: Vec<Target>,
     target: Option<Target>,
-    aligned: u8,
     held_seconds: f32,
 }
 
@@ -69,16 +64,29 @@ impl Nuker {
         *self = Self::default();
     }
 
-    /// Renews the current small subscription, recentering after movement or a world change.
+    /// Renews a small subscription around the block selected at the start of this hold.
     pub fn query(&mut self, frame: Frame, range: u8) -> Option<(RegionQuery, Option<Stamp>)> {
         if !frame
             .eye
             .iter()
             .all(|v| v.is_finite() && v.abs() < (i32::MAX - 16) as f32)
-            || !frame.yaw.is_finite()
-            || !frame.pitch.is_finite()
             || !frame.seconds.is_finite()
             || frame.seconds < 0.
+        {
+            self.reset();
+            return None;
+        }
+        if self.context.is_some_and(|c| {
+            c.session != frame.session
+                || c.terrain_session != frame.terrain_session
+                || c.dimension != frame.dimension
+        }) {
+            self.reset();
+        }
+        let center = self.context.map(|context| context.center).or(frame.block)?;
+        if center
+            .iter()
+            .any(|v| v.unsigned_abs() >= (i32::MAX - 16) as u32)
         {
             self.reset();
             return None;
@@ -87,7 +95,7 @@ impl Nuker {
             session: frame.session,
             terrain_session: frame.terrain_session,
             dimension: frame.dimension,
-            center: frame.eye.map(|v| v.floor() as i32),
+            center,
             range: range.clamp(1, MAX_RANGE),
         };
         if self.context != Some(context) {
@@ -123,7 +131,6 @@ impl Nuker {
         };
         match answer {
             ReadResult::Pending => {
-                self.aligned = 0;
                 return Action::default();
             }
             ReadResult::Unchanged(stamp) if self.stamp.map(stamp_key) == Some(stamp_key(stamp)) => {
@@ -142,16 +149,13 @@ impl Nuker {
         }
         let distance = |target: &Target| {
             target
-                .point
+                .position
                 .iter()
-                .zip(frame.eye)
-                .map(|(a, b)| (a - b).powi(2))
+                .zip(context.center)
+                .map(|(a, b)| (*a as f32 - b as f32).powi(2))
                 .sum::<f32>()
         };
-        let eligible = |target: &&Target| {
-            let distance = distance(target);
-            distance > 0.01 && distance <= f32::from(context.range).powi(2)
-        };
+        let eligible = |target: &&Target| distance(target) <= f32::from(context.range).powi(2);
         let selected = self
             .target
             .filter(|previous| {
@@ -173,35 +177,19 @@ impl Nuker {
             });
         if selected != self.target {
             self.target = selected;
-            self.aligned = 0;
             self.held_seconds = 0.;
         }
         let Some(target) = selected else {
             self.advance();
             return Action::default();
         };
-        let [dx, dy, dz] = std::array::from_fn(|i| target.point[i] - frame.eye[i]);
-        let yaw = ((-dx).atan2(-dz) - frame.yaw + PI).rem_euclid(TAU) - PI;
-        let pitch = dy.atan2(dx.hypot(dz)) - frame.pitch;
-        if yaw.abs() < 0.01 && pitch.abs() < 0.01 {
-            self.aligned = self.aligned.saturating_add(1);
-        } else {
-            self.aligned = 0;
-        }
-        let mine = self.aligned >= 2;
-        if mine {
-            self.held_seconds += frame.seconds.min(1.);
-        }
+        self.held_seconds += frame.seconds.min(1.);
         if self.held_seconds >= MAX_HOLD_SECONDS {
             self.advance();
             return Action::default();
         }
-        let length = yaw.hypot(pitch);
-        let limit = (6. * frame.seconds.min(0.1)).min(mod_api::MAX_CAMERA_DELTA_RADIANS);
-        let scale = if length > limit { limit / length } else { 1. };
         Action {
-            rotation: (length > 1e-6 && limit > 0.).then_some([yaw * scale, pitch * scale]),
-            mine,
+            point: Some(target.point),
         }
     }
 
@@ -211,7 +199,6 @@ impl Nuker {
         self.stamp = None;
         self.candidates.clear();
         self.target = None;
-        self.aligned = 0;
         self.held_seconds = 0.;
     }
 }

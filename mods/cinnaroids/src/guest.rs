@@ -206,8 +206,9 @@ impl Guest for Cinnaroids {
                 publish_preferences(&mut modules, &fuel);
             }
             let config = modules.aim_config();
-            let attack_needed = !modules.modules.nuker
-                && (modules.modules.clicker || (config.enabled && config.only_when_clicking));
+            let attack_needed = modules.modules.nuker
+                || modules.modules.clicker
+                || (config.enabled && config.only_when_clicking);
             let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
                 let mut bindings = bindings.borrow_mut();
                 bindings.read();
@@ -253,7 +254,10 @@ impl Guest for Cinnaroids {
                         frame.frame_seconds,
                     )
                 });
-            if modules.attack_pulse(cadence) && gameplay::pulse_attack().is_err() {
+            if !modules.modules.nuker
+                && modules.attack_pulse(cadence)
+                && gameplay::pulse_attack().is_err()
+            {
                 modules.attack_refused();
             }
 
@@ -303,7 +307,7 @@ impl Guest for Cinnaroids {
                     && !controls.panel_open,
                 controls.seconds,
             );
-            if modules.modules.nuker {
+            if modules.modules.nuker && bindings_ready && attack_held {
                 AIM.with(|aim| aim.borrow_mut().reset());
                 mine_nearby(
                     Some(modules.preferences.nuker_range),
@@ -390,7 +394,7 @@ impl FrameFuel {
     }
 }
 
-/// Renews one small terrain tile before turning or requesting a normal crosshair mining hold.
+/// Renews one small terrain tile while the physical mining control is held.
 fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &FrameFuel) {
     NUKER.with(|nuker| {
         let mut nuker = nuker.borrow_mut();
@@ -414,8 +418,10 @@ fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &
             terrain_session: world.session,
             dimension: snapshot.dimension,
             eye: [snapshot.eye.x, snapshot.eye.y, snapshot.eye.z],
-            yaw: snapshot.yaw,
-            pitch: snapshot.pitch,
+            block: gameplay::read_block_target()
+                .ok()
+                .flatten()
+                .map(|point| [point.x, point.y, point.z].map(|v| v.floor() as i32)),
             seconds: snapshot.frame_seconds,
         };
         let Some((query, stamp)) = nuker.query(frame, range) else {
@@ -426,13 +432,8 @@ fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &
             return;
         };
         let action = nuker.update(frame, &query, answer);
-        if let Some([yaw, pitch]) = action.rotation
-            && gameplay::rotate(yaw, pitch).is_err()
-        {
-            nuker.reset();
-            return;
-        }
-        if action.mine && gameplay::set_block_mining(true).is_err() {
+        let point = action.point.map(|[x, y, z]| gameplay::Vector3 { x, y, z });
+        if gameplay::set_block_mining_target(point).is_err() {
             nuker.reset();
         }
     });
