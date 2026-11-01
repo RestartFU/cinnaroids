@@ -565,6 +565,7 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         ModGrants {
             controls: true,
             settings: true,
+            fullbright: true,
             ..Default::default()
         },
     )
@@ -578,7 +579,6 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
     assert!(!host.panel().unwrap().capture_key);
     let mut controls = empty_controls();
     controls.focused = true;
-    controls.gameplay = true;
     controls.keys_pressed.push("F7".into());
     most = most.max(metered_callback(&mut host, &budget, |host| {
         host.frame_with_controls(false, None, controls).unwrap();
@@ -614,7 +614,6 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         let mut controls = empty_controls();
         controls.focused = true;
         controls.panel_open = host.panel_open();
-        controls.gameplay = !controls.panel_open;
         controls.keys_pressed.push(key.into());
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, None, controls).unwrap();

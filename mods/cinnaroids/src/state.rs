@@ -835,13 +835,11 @@ impl State {
     pub fn panel_open_request(
         &self,
         focused: bool,
-        gameplay: bool,
         open: bool,
         capturing: bool,
         keys: &[String],
     ) -> Option<bool> {
-        (focused && (gameplay || open) && !capturing && keys.contains(&self.preferences.menu_key))
-            .then_some(!open)
+        (focused && !capturing && keys.contains(&self.preferences.menu_key)).then_some(!open)
     }
 
     pub fn reserved_keys(&self) -> Vec<String> {

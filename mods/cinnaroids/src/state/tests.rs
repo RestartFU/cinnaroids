@@ -38,44 +38,29 @@ fn state_with_bindings() -> State {
 }
 
 #[test]
-fn menu_shortcut_requests_ownership_only_on_focused_edges_outside_capture() {
+fn menu_shortcut_requests_ownership_without_gameplay_observations() {
     let mut state = state();
     let key = vec![PANEL_KEY.into()];
     assert_eq!(
-        state.panel_open_request(true, true, false, false, &key),
+        state.panel_open_request(true, false, false, &key),
         Some(true)
     );
     assert_eq!(
-        state.panel_open_request(true, false, true, false, &key),
+        state.panel_open_request(true, true, false, &key),
         Some(false)
     );
+    assert_eq!(state.panel_open_request(true, false, false, &[]), None);
+    assert_eq!(state.panel_open_request(false, false, false, &key), None);
+    assert_eq!(state.panel_open_request(false, true, false, &key), None);
+    assert_eq!(state.panel_open_request(true, true, true, &key), None);
     assert_eq!(
-        state.panel_open_request(true, true, false, false, &[]),
-        None
-    );
-    assert_eq!(
-        state.panel_open_request(false, true, false, false, &key),
-        None
-    );
-    assert_eq!(
-        state.panel_open_request(true, false, false, false, &key),
-        None
-    );
-    assert_eq!(
-        state.panel_open_request(true, false, true, true, &key),
-        None
-    );
-    assert_eq!(
-        state.panel_open_request(true, false, true, false, &["Escape".into()]),
+        state.panel_open_request(true, true, false, &["Escape".into()]),
         None
     );
     state.preferences.menu_key = "F6".into();
+    assert_eq!(state.panel_open_request(true, false, false, &key), None);
     assert_eq!(
-        state.panel_open_request(true, true, false, false, &key),
-        None
-    );
-    assert_eq!(
-        state.panel_open_request(true, true, false, false, &["F6".into()]),
+        state.panel_open_request(true, false, false, &["F6".into()]),
         Some(true)
     );
 }

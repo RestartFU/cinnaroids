@@ -174,7 +174,6 @@ impl Guest for Cinnaroids {
             let mut modules = modules.borrow_mut();
             if let Some(open) = modules.panel_open_request(
                 controls.focused,
-                controls.gameplay,
                 controls.panel_open,
                 capture,
                 &controls.keys_pressed,
