@@ -565,6 +565,7 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         ModGrants {
             controls: true,
             settings: true,
+            fullbright: true,
             ..Default::default()
         },
     )
@@ -575,7 +576,14 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
     most = most.max(metered_callback(&mut host, &budget, |host| {
         host.frame_with_controls(false, None, controls).unwrap();
     }));
-    assert_eq!(host.panel().unwrap().toggle_key, "F7");
+    assert!(!host.panel().unwrap().capture_key);
+    let mut controls = empty_controls();
+    controls.focused = true;
+    controls.keys_pressed.push("F7".into());
+    most = most.max(metered_callback(&mut host, &budget, |host| {
+        host.frame_with_controls(false, None, controls).unwrap();
+    }));
+    assert!(host.panel_open());
     let mut controls = empty_controls();
     controls.focused = true;
     controls.panel_open = true;
@@ -595,13 +603,23 @@ fn menu_rebinding_publishes_and_saves_within_the_real_host_budget() {
         host.frame_with_controls(false, None, controls).unwrap();
     }));
     assert!(host.is_active());
-    assert_eq!(host.panel().unwrap().toggle_key, "F6");
+    assert!(host.panel_open(), "rebinding must keep the panel open");
     assert!(!host.panel().unwrap().capture_key);
     assert!(host.reserved_keys().contains(&"F6".into()));
     assert!(!host.reserved_keys().contains(&"F7".into()));
     let preferences: serde_json::Value =
         serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
     assert_eq!(preferences["menu_key"], "F6");
+    for (key, open) in [("F6", false), ("F7", false), ("F6", true), ("F6", false)] {
+        let mut controls = empty_controls();
+        controls.focused = true;
+        controls.panel_open = host.panel_open();
+        controls.keys_pressed.push(key.into());
+        most = most.max(metered_callback(&mut host, &budget, |host| {
+            host.frame_with_controls(false, None, controls).unwrap();
+        }));
+        assert_eq!(host.panel_open(), open, "shortcut {key}");
+    }
     println!(
         "menu_rebinding_publishes_and_saves_within_the_real_host_budget: peak {most} fuel (target {FRAME_FUEL})"
     );
@@ -642,7 +660,7 @@ fn single_file_import_declares_metadata_and_loads_with_its_requested_grants() {
         host.frame_with_controls(false, None, controls).unwrap();
     }));
     assert!(host.is_active());
-    assert_eq!(host.panel().unwrap().toggle_key, "F7");
+    assert!(!host.panel().unwrap().capture_key);
     assert_eq!(host.reserved_keys(), ["F7"]);
     println!(
         "single_file_import_declares_metadata_and_loads_with_its_requested_grants: peak {most} fuel (target {FRAME_FUEL})"

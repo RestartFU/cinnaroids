@@ -34,10 +34,7 @@ const _: () =
 enum PanelUpdate {
     #[default]
     Idle,
-    Shell {
-        json: String,
-        key: String,
-    },
+    Shell(String),
     Controls(String),
     BuildRoute {
         builder: Box<crate::panel::Bindings>,
@@ -52,7 +49,7 @@ type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
 
 thread_local! {
     static PANEL_BINDINGS_DIRTY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static PANEL_KEY: RefCell<Option<String>> = const { RefCell::new(None) };
+    static PANEL_INSTALLED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static SETTINGS_PENDING: RefCell<Option<String>> = const { RefCell::new(None) };
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
     static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
@@ -90,7 +87,7 @@ impl Guest for Cinnaroids {
         ESP_PENDING.with(|pending| *pending.borrow_mut() = None);
         WORK_TURN.with(|first| first.set(0));
         SETTINGS_PENDING.with(|pending| *pending.borrow_mut() = None);
-        PANEL_KEY.with(|key| *key.borrow_mut() = None);
+        PANEL_INSTALLED.with(|installed| installed.set(false));
         PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
         PANEL_PENDING.with(|pending| *pending.borrow_mut() = PanelUpdate::Idle);
         ESP_MASK.with(|mask| *mask.borrow_mut() = None);
@@ -113,6 +110,7 @@ impl Guest for Cinnaroids {
             [
                 "MouseLeft",
                 "Escape",
+                &p.menu_key,
                 &p.clicker_key,
                 &p.aim_key,
                 &p.jump_reset_key,
@@ -168,8 +166,23 @@ impl Guest for Cinnaroids {
                 controls.keys_pressed = edges.keys_pressed;
             }
         }
+        if controls.panel_open && input::read_native_editing().unwrap_or(true) {
+            // Native editors consume keyboard edges even though physical reads include them.
+            controls.keys_pressed.retain(|key| key == "MouseLeft");
+        }
         MODULES.with(|modules| {
             let mut modules = modules.borrow_mut();
+            if let Some(open) = modules.panel_open_request(
+                controls.focused,
+                controls.panel_open,
+                capture,
+                &controls.keys_pressed,
+            ) && panel::toggle().is_ok()
+            {
+                controls.panel_open = open;
+                // Ownership commits after this callback; do not run gameplay on the edge.
+                controls.gameplay = false;
+            }
             let events: Vec<_> = std::mem::take(&mut controls.events)
                 .into_iter()
                 .map(|event| Event {
@@ -340,7 +353,7 @@ impl Guest for Cinnaroids {
                         player_esp(&modules, drawn, &fuel);
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
-                    3 => publish_panel(&mut modules, &fuel, controls.panel_open),
+                    3 => publish_panel(&mut modules, &fuel),
                     4 => publish_preferences(&mut modules, &fuel),
                     _ => {}
                 }
@@ -551,7 +564,7 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
 /// Publishes changed control values separately from slower geometry and visual bindings.
 fn publish_controls(modules: &mut State, fuel: &FrameFuel) {
     if !modules.panel_dirty
-        || PANEL_KEY.with(|key| key.borrow().as_ref() != Some(&modules.preferences.menu_key))
+        || !PANEL_INSTALLED.with(|installed| installed.get())
         || !fuel.controls()
     {
         return;
@@ -562,10 +575,7 @@ fn publish_controls(modules: &mut State, fuel: &FrameFuel) {
         // Older control payloads must never overwrite these newer values later.
         PANEL_PENDING.with(|pending| {
             let mut pending = pending.borrow_mut();
-            if matches!(
-                *pending,
-                PanelUpdate::Controls(_) | PanelUpdate::Shell { .. }
-            ) {
+            if matches!(*pending, PanelUpdate::Controls(_) | PanelUpdate::Shell(_)) {
                 *pending = PanelUpdate::Idle;
             }
         });
@@ -574,17 +584,9 @@ fn publish_controls(modules: &mut State, fuel: &FrameFuel) {
 }
 
 /// Completes a coherent panel snapshot even if controls change again during serialization.
-fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
+fn publish_panel(modules: &mut State, fuel: &FrameFuel) {
     PANEL_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
-        // A changed menu shortcut replaces the input shell before older visual work.
-        if open
-            && modules.panel_dirty
-            && PANEL_KEY.with(|key| key.borrow().as_ref() != Some(&modules.preferences.menu_key))
-        {
-            *pending = PanelUpdate::Idle;
-            PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
-        }
         for _ in 0..48 {
             let cost = match &*pending {
                 PanelUpdate::BuildRoute { builder, .. } if builder.finishing() => 12_000,
@@ -613,26 +615,23 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
                     }
                 }
                 PanelUpdate::Idle if modules.panel_dirty => {
-                    let key = modules.preferences.menu_key.clone();
-                    let installed =
-                        PANEL_KEY.with(|current| current.borrow().as_ref() == Some(&key));
+                    let installed = PANEL_INSTALLED.with(|installed| installed.get());
                     let next = if installed {
                         PanelUpdate::Controls(crate::panel::control_patch(modules))
                     } else {
-                        // The host requires a full panel to change its menu shortcut.
                         let Ok(json) = modules.panel_shell_json() else {
                             break;
                         };
-                        PanelUpdate::Shell { json, key }
+                        PanelUpdate::Shell(json)
                     };
                     modules.panel_dirty = false;
                     next
                 }
-                PanelUpdate::Shell { json, key, .. } => {
+                PanelUpdate::Shell(json) => {
                     if panel::set_content(json).is_err() {
                         break;
                     }
-                    PANEL_KEY.with(|current| *current.borrow_mut() = Some(key.clone()));
+                    PANEL_INSTALLED.with(|installed| installed.set(true));
                     PanelUpdate::BuildRoute {
                         builder: Box::new(crate::panel::Bindings::new(modules)),
                         json: r#"{"surface":"clickgui"}"#.into(),

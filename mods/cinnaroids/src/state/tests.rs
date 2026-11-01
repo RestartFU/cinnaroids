@@ -38,6 +38,34 @@ fn state_with_bindings() -> State {
 }
 
 #[test]
+fn menu_shortcut_requests_ownership_without_gameplay_observations() {
+    let mut state = state();
+    let key = vec![PANEL_KEY.into()];
+    assert_eq!(
+        state.panel_open_request(true, false, false, &key),
+        Some(true)
+    );
+    assert_eq!(
+        state.panel_open_request(true, true, false, &key),
+        Some(false)
+    );
+    assert_eq!(state.panel_open_request(true, false, false, &[]), None);
+    assert_eq!(state.panel_open_request(false, false, false, &key), None);
+    assert_eq!(state.panel_open_request(false, true, false, &key), None);
+    assert_eq!(state.panel_open_request(true, true, true, &key), None);
+    assert_eq!(
+        state.panel_open_request(true, true, false, &["Escape".into()]),
+        None
+    );
+    state.preferences.menu_key = "F6".into();
+    assert_eq!(state.panel_open_request(true, false, false, &key), None);
+    assert_eq!(
+        state.panel_open_request(true, false, false, &["F6".into()]),
+        Some(true)
+    );
+}
+
+#[test]
 fn horizontal_only_defaults_off_and_persists_panel_changes() {
     assert!(!Preferences::from_json("{}").aim_horizontal_only);
     assert!(!Preferences::from_json(r#"{"aim_horizontal_only":"true"}"#).aim_horizontal_only);
@@ -451,7 +479,7 @@ fn panel_has_every_control_without_native_chrome_and_only_rebuilds_after_change(
         assert!(json.get(removed).is_none(), "{removed}");
     }
     assert!(json["surface"]["document"].is_string());
-    assert_eq!(json["toggle_key"], PANEL_KEY);
+    assert!(json.get("toggle_key").is_none());
     assert!(
         json["controls"]
             .as_array()
@@ -943,7 +971,7 @@ fn menu_binding_capture_updates_panel_reservations_and_saved_preferences() {
     assert!(!state.reserved_keys().contains(&PANEL_KEY.into()));
     assert!(state.reserved_keys().contains(&"F6".into()));
     let panel: Value = serde_json::from_str(&state.panel_json().unwrap()).unwrap();
-    assert_eq!(panel["toggle_key"], "F6");
+    assert!(panel.get("toggle_key").is_none());
     let saved = serde_json::to_string(&state.preferences).unwrap();
     assert_eq!(Preferences::from_json(&saved), state.preferences);
 }

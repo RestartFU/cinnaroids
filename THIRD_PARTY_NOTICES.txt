@@ -4,7 +4,7 @@ Cinnaroids — Third-party notices
 Cinnaroids is a WASM module for Cinnabar. Its own source and original branding
 assets are covered by LICENSE.txt. The Cinnabar mod-api SDK is covered by the
 PolyForm Noncommercial License 1.0.0 in licenses/mod-api-0.1.31/LICENSE.
-SDK source: https://github.com/cinnabar-mc/cinnabar/tree/30985a760c7d683d3d0b2b290f48b2c4657eedd9/crates/mod-api
+SDK source: https://github.com/cinnabar-mc/cinnabar/tree/6b1fda10bbfbf77550a5d7586a459b9fe0549cc8/crates/mod-api
 
 The packaged WASM embeds this notice, the project license, and the unchanged
 license files for every external package in the current Cargo.lock. Retained
@@ -29,7 +29,7 @@ embed-resource 3.0.11 — MIT
 gpui 0.2.2 — Apache-2.0
 raw-window-handle 0.6.2 — MIT OR Apache-2.0 OR Zlib
 serde 1.0.229 — MIT OR Apache-2.0
-serde_json 1.0.151 — MIT OR Apache-2.0
+serde_json 1.0.150 — MIT OR Apache-2.0
 windows-sys 0.61.2 — MIT OR Apache-2.0
 
 Full Cargo.lock package inventory
@@ -2173,11 +2173,11 @@ Repository: https://github.com/KodrAus/serde_fmt.git
 Published authors: Ashley Mannix <ashleymannix@live.com.au>
 Retained files: licenses/serde_fmt-1.1.0/LICENSE-APACHE, licenses/serde_fmt-1.1.0/LICENSE-MIT
 
-serde_json 1.0.151
+serde_json 1.0.150
 License: MIT OR Apache-2.0
 Repository: https://github.com/serde-rs/json
 Published authors: Erick Tryzelaar <erick.tryzelaar@gmail.com>; David Tolnay <dtolnay@gmail.com>
-Retained files: licenses/serde_json-1.0.151/LICENSE-APACHE, licenses/serde_json-1.0.151/LICENSE-MIT
+Retained files: licenses/serde_json-1.0.150/LICENSE-APACHE, licenses/serde_json-1.0.150/LICENSE-MIT
 
 serde_json_lenient 0.2.4
 License: MIT/Apache-2.0

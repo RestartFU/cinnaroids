@@ -831,6 +831,17 @@ impl State {
         self.clicker.refused = true;
     }
 
+    /// Requests panel ownership on the saved shortcut, leaving capture and Escape to editing.
+    pub fn panel_open_request(
+        &self,
+        focused: bool,
+        open: bool,
+        capturing: bool,
+        keys: &[String],
+    ) -> Option<bool> {
+        (focused && !capturing && keys.contains(&self.preferences.menu_key)).then_some(!open)
+    }
+
     pub fn reserved_keys(&self) -> Vec<String> {
         let mut keys = vec![self.preferences.menu_key.clone()];
         for key in [
@@ -1145,7 +1156,6 @@ impl State {
         ]);
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
-            toggle_key: &self.preferences.menu_key,
             capture_key: self.capturing_key.is_some(),
             reference_size: crate::panel::REFERENCE,
             motion: true,
@@ -1274,7 +1284,6 @@ fn legacy_key(key: u64) -> Option<String> {
 /// title, theme or native layout of its own.
 #[derive(Serialize)]
 struct Panel<'a> {
-    toggle_key: &'a str,
     capture_key: bool,
     reference_size: [f32; 2],
     motion: bool,
