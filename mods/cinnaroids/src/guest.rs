@@ -559,10 +559,13 @@ fn publish_controls(modules: &mut State, fuel: &FrameFuel) {
     let json = crate::panel::control_patch(modules);
     if panel::update_content(&json).is_ok() {
         modules.panel_dirty = false;
-        // A preempted older control patch must never overwrite these newer values later.
+        // Older control payloads must never overwrite these newer values later.
         PANEL_PENDING.with(|pending| {
             let mut pending = pending.borrow_mut();
-            if matches!(*pending, PanelUpdate::Controls(_)) {
+            if matches!(
+                *pending,
+                PanelUpdate::Controls(_) | PanelUpdate::Shell { .. }
+            ) {
                 *pending = PanelUpdate::Idle;
             }
         });
