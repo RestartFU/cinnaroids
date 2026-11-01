@@ -94,7 +94,7 @@ pub(super) fn append(json: &mut String, state: &State) -> Result<(), serde_json:
 }
 
 /// Stage a minimal valid surface; the same callback replaces it from the embedded catalog.
-/// Keeping the reference size here preserves native fitting and the current menu shortcut.
+/// Keeping the reference size here preserves native fitting.
 /// Panels require a surface; the native title, theme and layout fields no longer exist.
 pub(crate) fn append_shell(json: &mut String) {
     json.pop();
@@ -107,9 +107,7 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     let p = &state.preferences;
     let m = &state.modules;
     let capturing = |target| state.capturing_key == Some(target);
-    json.push_str(r#"{"toggle_key":""#);
-    json.push_str(&p.menu_key);
-    json.push_str(r#"","capture_key":"#);
+    json.push_str(r#"{"capture_key":"#);
     flag(json, state.capturing_key.is_some());
     json.push_str(r#","reference_size":[760,420],"motion":true,"#);
     json.push_str(WIDGET_COLORS_JSON);

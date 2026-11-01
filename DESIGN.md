@@ -149,6 +149,8 @@ Transitions run on bound scalars, with no delays or loops.
 ### Delivery
 `scripts/generate-panel.py` is the single source of geometry, color, and transitions, emitted to `mods/cinnaroids/ui/panel.json` and embedded in the component. `panel.rs` publishes only live scalar bindings and the control shell. The shell is hand-assembled from static fragments to stay within the 100k per-frame guest fuel budget, so keep it that way.
 
+The guest owns the menu shortcut: it reads the saved physical key and calls `panel::toggle()`. Panel JSON has no `toggle_key` metadata. Key capture and native text editing take priority over shortcuts; changing the menu key updates the controls and reservations without replacing the panel shell.
+
 Cinnabar routes the controls but no longer formats them, so `panel.rs` also publishes each control's feedback: `#c<index>_on` toggle progress (eased 0.1s), `#c<index>_text` values in the host's old format, and `#c<index>_fill` slider fractions. Hover and press tints are native button states. A row's trailing value is its first slider's number plus a fixed unit label measured from the embedded font. The surface allows 256 bindings and uses 132.
 
 Cinnabar still draws the slider value editor and the dropdown popup. The panel's `widget_colors` (`panel::WIDGET_COLORS`) keep them on the dark compact palette Cinnabar used for this panel before `dark` and `style` were removed.
