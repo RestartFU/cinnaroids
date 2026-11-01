@@ -187,6 +187,11 @@ impl Guest for Cinnaroids {
             });
             // Charge the entire bounded event batch's destruction before optional work.
             drop(events);
+            // A panel edit saves before binding observations and disabled drawing cleanup.
+            let phase = WORK_TURN.with(|turn| turn.get());
+            if controls.panel_open {
+                publish_preferences(&mut modules, &fuel);
+            }
             let config = modules.aim_config();
             let attack_needed = !modules.modules.nuker
                 && (modules.modules.clicker || (config.enabled && config.only_when_clicking));
@@ -216,7 +221,7 @@ impl Guest for Cinnaroids {
                 let _ = gameplay::set_movement_input(Some(input));
             }
 
-            let snapshot = if controls.focused && controls.gameplay {
+            let snapshot = if controls.focused && controls.gameplay && !controls.panel_open {
                 gameplay::read_frame().ok().flatten()
             } else {
                 None
@@ -296,11 +301,8 @@ impl Guest for Cinnaroids {
                 NUKER.with(|nuker| nuker.borrow_mut().reset());
                 assist_aim(config, snapshot.as_ref(), attack_held);
             }
-            // A closed panel still needs fresh toggle values before long drawing teardown.
-            // One turn per eight callbacks preserves time for drawings during held shortcuts.
-            let phase = WORK_TURN.with(|turn| turn.get());
             if phase == 3 || phase == 7 {
-                publish_preferences(&mut modules, &fuel, true);
+                publish_preferences(&mut modules, &fuel);
             }
             if controls.panel_open || phase == 6 {
                 publish_controls(&mut modules, &fuel);
@@ -319,7 +321,7 @@ impl Guest for Cinnaroids {
             // With the panel owning input, drawings are ineligible and settings can save
             // immediately. During gameplay they compete on the same schedule as drawings.
             if controls.panel_open && fuel.publishes(35_000) {
-                publish_preferences(&mut modules, &fuel, false);
+                publish_preferences(&mut modules, &fuel);
             }
             // Every optional producer gets a first turn, independent of other dirty queues.
             // Bindings and gameplay policies above have bounded mandatory work every callback.
@@ -339,7 +341,7 @@ impl Guest for Cinnaroids {
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
                     3 => publish_panel(&mut modules, &fuel, controls.panel_open),
-                    4 => publish_preferences(&mut modules, &fuel, false),
+                    4 => publish_preferences(&mut modules, &fuel),
                     _ => {}
                 }
             }
@@ -503,7 +505,7 @@ fn assist_aim(
 }
 
 /// Publishes bounded settings and authority changes in their own scheduled turn.
-fn publish_preferences(modules: &mut State, fuel: &FrameFuel, before_drawings: bool) {
+fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
     if modules.fullbright_dirty && !modules.access.0[6].is_empty() {
         modules.fullbright_dirty = false;
     }
@@ -523,8 +525,7 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel, before_drawings: b
         for _ in 0..2 {
             // Small preference units may use the publication reserve. A full event and
             // binding batch can leave too little for the ordinary drawing ceiling.
-            let limit = if before_drawings { 85_000 } else { 77_000 };
-            if !fuel.allows_until(8_000, limit) {
+            if !fuel.allows_until(8_000, 77_000) {
                 break;
             }
             if let Some(json) = &*pending {
