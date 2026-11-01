@@ -207,6 +207,7 @@ fn left_clicks_cannot_capture_any_binding_even_when_opening_the_keycap() {
         ("reach_key", KeybindTarget::Reach),
         ("jump_reset_key", KeybindTarget::JumpReset),
         ("omni_sprint_key", KeybindTarget::OmniSprint),
+        ("nuker_key", KeybindTarget::Nuker),
     ] {
         let mut state = state();
         state.reservations_dirty = false;
@@ -561,6 +562,10 @@ fn panel_exposes_all_controls_without_category_sections() {
             "omni_sprint",
             "omni_sprint_key",
             "expand_omni_sprint",
+            "nuker",
+            "nuker_range",
+            "nuker_key",
+            "expand_nuker",
         ]
     );
 }
@@ -638,7 +643,13 @@ fn every_module_has_a_persisted_independent_binding() {
         Preferences::from_json(&serde_json::to_string(&saved).unwrap()),
         saved
     );
-    for field in ["aim_key", "reach_key", "jump_reset_key", "omni_sprint_key"] {
+    for field in [
+        "aim_key",
+        "reach_key",
+        "jump_reset_key",
+        "omni_sprint_key",
+        "nuker_key",
+    ] {
         for invalid in ["MouseLeft", "Escape", "Key:V"] {
             let prefs = Preferences::from_json(&format!(r#"{{"{field}":"{invalid}"}}"#));
             assert_eq!(prefs, Preferences::default());
@@ -654,6 +665,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         ("reach_key", KeybindTarget::Reach),
         ("jump_reset_key", KeybindTarget::JumpReset),
         ("omni_sprint_key", KeybindTarget::OmniSprint),
+        ("nuker_key", KeybindTarget::Nuker),
     ] {
         let mut state = state();
         state.modules.aim = true;
@@ -667,6 +679,7 @@ fn capture_each_module_consumes_the_edge_without_any_toggle() {
         match target {
             KeybindTarget::Menu => unreachable!(),
             KeybindTarget::OmniSprint => assert!(state.modules.omni_sprint),
+            KeybindTarget::Nuker => assert!(state.modules.nuker),
             KeybindTarget::Clicker => {
                 assert!(state.modules.clicker && state.modules.aim && !state.modules.reach)
             }
@@ -968,14 +981,14 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
-    assert_eq!(state.expanded, [false; 10]);
+    assert_eq!(state.expanded, [false; 11]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
         [
-            false, false, true, false, false, false, false, false, false, false
+            false, false, true, false, false, false, false, false, false, false, false
         ]
     );
     assert!(!state.modules.reach);
@@ -986,7 +999,7 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     assert_eq!(
         state.expanded,
         [
-            false, true, true, false, false, false, false, false, false, false
+            false, true, true, false, false, false, false, false, false, false, false
         ],
         "independent rows"
     );
@@ -994,7 +1007,7 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     assert_eq!(
         state.expanded,
         [
-            false, true, false, false, false, false, false, false, false, false
+            false, true, false, false, false, false, false, false, false, false, false
         ]
     );
     assert!(!state.preferences_dirty);
@@ -1426,11 +1439,49 @@ fn missing_and_invalid_switches_default_off_independently() {
 fn denied_saved_switches_stay_inactive_without_losing_preferences() {
     let mut state = State::new(Preferences::from_json(r#"{"aim":true,"fullbright":true}"#));
     state.set_permissions(&[]);
-    assert_eq!(state.enabled_flags(), [false; 10]);
+    assert_eq!(state.enabled_flags(), [false; 11]);
     controls(&mut state, &[], &[("aim", 1.), ("cps", 15.)]);
-    assert_eq!(state.enabled_flags(), [false; 10]);
+    assert_eq!(state.enabled_flags(), [false; 11]);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored = State::permitted(Preferences::from_json(&saved));
     assert!(restored.modules.aim && restored.modules.fullbright);
     assert_eq!(restored.preferences.cps, 15);
+}
+
+#[test]
+fn nuker_defaults_off_and_saves_radius_shortcut_and_enabled_state() {
+    let prefs = Preferences::default();
+    assert!(!prefs.enabled.nuker);
+    assert_eq!(prefs.nuker_range, crate::nuker::DEFAULT_RANGE);
+    assert!(prefs.nuker_key.is_empty());
+    let mut state = state();
+    controls(
+        &mut state,
+        &[],
+        &[("nuker", 1.), ("nuker_range", 99.), ("nuker_key", 1.)],
+    );
+    controls(&mut state, &["KeyN"], &[]);
+    let restored = Preferences::from_json(&serde_json::to_string(&state.preferences).unwrap());
+    assert!(restored.enabled.nuker);
+    assert_eq!(restored.nuker_range, crate::nuker::MAX_RANGE);
+    assert_eq!(restored.nuker_key, "KeyN");
+    assert!(state.reserved_keys().iter().any(|key| key == "KeyN"));
+    controls(&mut state, &["KeyN"], &[]);
+    assert!(!state.modules.nuker);
+    controls(&mut state, &[], &[("nuker_key", 1.)]);
+    controls(&mut state, &["Escape"], &[]);
+    assert!(state.preferences.nuker_key.is_empty());
+}
+
+#[test]
+fn nuker_bindings_share_conflict_rules_and_leave_a_menu_fallback() {
+    let prefs =
+        Preferences::from_json(r#"{"clicker_key":"KeyN","nuker_key":"KeyN","nuker_range":0}"#);
+    assert!(prefs.nuker_key.is_empty());
+    assert_eq!(prefs.nuker_range, 1);
+    let prefs = Preferences::from_json(
+        r#"{"menu_key":"F7","clicker_key":"F7","aim_key":"F6","reach_key":"F5","jump_reset_key":"F4","omni_sprint_key":"F3","nuker_key":"F2"}"#,
+    );
+    assert_eq!(prefs.menu_key, "F1");
+    assert_eq!(prefs.nuker_key, "F2");
 }

@@ -11,7 +11,7 @@ pub struct Requirement {
 }
 
 /// Module order matches the panel's module rows. Optional presentation is not required.
-pub const REQUIREMENTS: [Requirement; 10] = [
+pub const REQUIREMENTS: [Requirement; 11] = [
     Requirement {
         id: "clicker",
         groups: &[&["controls"], &["interaction"], &["players", "terrain"]],
@@ -71,11 +71,22 @@ pub const REQUIREMENTS: [Requirement; 10] = [
         groups: &[&["controls"], &["movement"]],
         flag: |m| &mut m.omni_sprint,
     },
+    Requirement {
+        id: "nuker",
+        groups: &[
+            &["controls"],
+            &["terrain"],
+            &["player_state"],
+            &["camera"],
+            &["interaction"],
+        ],
+        flag: |m| &mut m.nuker,
+    },
 ];
 
 /// Missing-permission explanations; an empty string means the module is available.
 #[derive(Clone, Debug)]
-pub struct Access(pub [String; 10]);
+pub struct Access(pub [String; 11]);
 
 impl Default for Access {
     fn default() -> Self {
@@ -212,10 +223,11 @@ mod tests {
             reach_key: "KeyR".into(),
             jump_reset_key: "KeyJ".into(),
             omni_sprint_key: "KeyO".into(),
+            nuker_key: "KeyN".into(),
             ..Default::default()
         });
         state.set_permissions(&[]);
-        let keys = ["KeyC", "KeyA", "KeyR", "KeyJ", "KeyO"].map(String::from);
+        let keys = ["KeyC", "KeyA", "KeyR", "KeyJ", "KeyO", "KeyN"].map(String::from);
         state.controls(Controls {
             focused: true,
             panel_open: false,

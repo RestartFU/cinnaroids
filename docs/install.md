@@ -1,10 +1,12 @@
 # Install Cinnaroids
 
-1. Update Cinnabar to a build with [movement input observation and overrides](https://github.com/cinnabar-mc/cinnabar/pull/2519) and **Settings → Mods → Import**.
+1. Update Cinnabar to a build with [crosshair mining requests](https://github.com/cinnabar-mc/cinnabar/pull/2640) and **Settings → Mods → Import**.
 2. Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest). The same file works on all Cinnabar desktop platforms.
 3. In Cinnabar, open **Settings → Mods → Import** and select the WASM file.
 4. Review and approve its requested permissions, then select **Enable**.
 5. Press **F7** to open the Cinnaroids panel.
+
+This component requires the updated host API even when Nuker is disabled.
 
 The release includes `cinnaroids.wasm.sha256` for verification. For example, put both downloads in the same directory and run `sha256sum --check cinnaroids.wasm.sha256` on Linux or `shasum -a 256 --check cinnaroids.wasm.sha256` on macOS. Copyright and license notices are embedded in the WASM.
 

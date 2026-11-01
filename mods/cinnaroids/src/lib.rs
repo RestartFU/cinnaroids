@@ -9,6 +9,7 @@ pub mod ghost;
 #[cfg(target_arch = "wasm32")]
 mod guest;
 pub mod jump_reset;
+pub mod nuker;
 mod panel;
 pub mod permissions;
 pub mod state;
