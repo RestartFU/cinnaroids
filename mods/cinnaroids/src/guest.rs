@@ -362,11 +362,11 @@ impl FrameFuel {
     }
     /// Panel payloads retain additional return and cleanup space as controls grow.
     fn panel(&self, cost: u64) -> bool {
-        self.allows_until(cost, 75_000)
+        self.allows_until(cost, 74_000)
     }
     /// Hot control values remain eligible alongside the maximum admitted input batch.
     fn controls(&self) -> bool {
-        self.allows_until(16_000, 89_000)
+        self.allows_until(16_000, 88_000)
     }
     /// Rechecks live fuel after every host import and bounded unit.
     fn allows_until(&self, cost: u64, limit: u64) -> bool {
@@ -523,9 +523,10 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
     SETTINGS_PENDING.with(|pending| {
         let mut pending = pending.borrow_mut();
         for _ in 0..2 {
-            // Small preference units may use the publication reserve. A full event and
-            // binding batch can leave too little for the ordinary drawing ceiling.
-            if !fuel.allows_until(8_000, 77_000) {
+            // Serializing all preferences costs more than transferring a staged string.
+            // Keep both units inside the publication and callback cleanup reserve.
+            let cost = if pending.is_some() { 2_000 } else { 22_000 };
+            if !fuel.allows_until(cost, 77_000) {
                 break;
             }
             if let Some(json) = &*pending {
