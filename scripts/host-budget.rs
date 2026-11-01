@@ -2007,6 +2007,7 @@ fn combined_workload(
                 });
             }
         }
+        let gameplay_owned = controls.focused && controls.gameplay && !controls.panel_open;
         let used = metered_callback(&mut host, &budget, |host| {
             host.frame_with_movement(
                 false,
@@ -2275,7 +2276,10 @@ fn combined_workload(
         let cancel = host.take_jump_cancel();
         if let Stress::Fair(victim, _) = stress {
             if !victim.panel() {
-                assert!(camera, "current aim sample runs even during catalog churn");
+                assert_eq!(
+                    camera, gameplay_owned,
+                    "aim follows gameplay ownership during catalog churn"
+                );
                 if victim == Queue::Bindings && frame >= stress.settled() + victim.bound() {
                     assert!(attack, "stable bindings deadline under continuous churn");
                 }
