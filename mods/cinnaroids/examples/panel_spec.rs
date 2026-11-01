@@ -11,6 +11,25 @@ fn main() -> Result<(), serde_json::Error> {
         state.modules.aim = true;
         state.modules.reach = true;
     }
+    if std::env::args().any(|arg| arg == "--nuker") {
+        let permissions = cinnaroids_mod::permissions::REQUIREMENTS
+            .iter()
+            .flat_map(|r| r.groups.iter().flat_map(|g| g.iter().copied()))
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .map(
+                |name| mod_api::bindings::cinnabar::extension::permissions::Permission {
+                    name: name.into(),
+                    label: name.into(),
+                    granted: true,
+                },
+            )
+            .collect::<Vec<_>>();
+        state.set_permissions(&permissions);
+        state.modules.nuker = true;
+        state.preferences.nuker_key = "KeyN".into();
+        state.expanded[10] = true;
+    }
     println!("{}", state.panel_json()?);
     Ok(())
 }

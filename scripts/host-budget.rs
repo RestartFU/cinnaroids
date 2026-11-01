@@ -174,6 +174,7 @@ fn module_edits_preserve_the_surface_on_every_frame() {
         "jump_reset",
         "auto_totem",
         "omni_sprint",
+        "nuker",
         "fake_lag",
         "netherite",
         "fullbright",
@@ -2867,4 +2868,154 @@ fn omni_sprint_preserves_controls_and_releases_on_disable_or_panel_open() {
         ..Default::default()
     });
     assert!(host.movement_input().is_none());
+}
+/// A small loaded terrain tile, refreshed when the fixture removes its solid blocks.
+struct MiningTile {
+    air: bool,
+    dirty: bool,
+}
+
+impl mod_host::TerrainSource for MiningTile {
+    fn check(
+        &mut self,
+        _: &mod_host::TerrainQuery,
+        retained: Option<&mod_host::TerrainRegion>,
+    ) -> mod_host::TerrainCheck {
+        if retained.is_some() && !self.dirty {
+            mod_host::TerrainCheck::Current
+        } else {
+            mod_host::TerrainCheck::Stale { cells: 27 }
+        }
+    }
+
+    fn sample(&mut self, query: &mod_host::TerrainQuery) -> mod_host::TerrainRefresh {
+        use mod_host::{
+            TerrainBlockState, TerrainRegion, TerrainShape, TerrainShapeBinding, TerrainStamp,
+        };
+        assert_eq!(
+            (
+                query.max.x - query.min.x,
+                query.max.y - query.min.y,
+                query.max.z - query.min.z
+            ),
+            (3, 3, 3)
+        );
+        self.dirty = false;
+        let block = |runtime_id, identifier: &str, shape| TerrainBlockState {
+            runtime_id,
+            identifier: Some(identifier.into()),
+            canonical_state: None,
+            tags: Vec::new(),
+            physics: None,
+            collision: TerrainShapeBinding::NotRequested,
+            selection: TerrainShapeBinding::Fixed(TerrainShape::Known(shape)),
+        };
+        mod_host::TerrainRefresh::Replace(Box::new(TerrainRegion {
+            stamp: TerrainStamp {
+                session: 2,
+                dimension: 0,
+                registry: 1,
+                revision: 1,
+            },
+            chunks: Vec::new(),
+            layer_count: 1,
+            loaded: vec![(1 << 27) - 1],
+            states: vec![if self.air { 0 } else { 1 }; 27],
+            palette: vec![block(0, "minecraft:air", 0), block(1, "minecraft:stone", 1)],
+            shape_offsets: vec![0, 0, 1],
+            shape_boxes: vec![0., 0., 0., 1., 1., 1.],
+            overrides: Vec::new(),
+        }))
+    }
+}
+
+/// Feeds the last committed camera turn back as the next presented gameplay observation.
+fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -> u64 {
+    host.observe_presentation(
+        Some(mod_host::WorldObservation {
+            session: 2,
+            dimension: 0,
+            world: "mining-fixture".into(),
+            position: (0., 0., 0.),
+            alive: true,
+            runtime_id: 99,
+        }),
+        None,
+        None,
+        Vec::new(),
+    )
+    .unwrap();
+    let mut controls = empty_controls();
+    controls.focused = true;
+    controls.gameplay = true;
+    metered_callback(host, budget, |host| {
+        host.frame_with_controls(
+            false,
+            Some(GameplaySnapshot {
+                session: 1,
+                dimension: 0,
+                eye: GameplayVector3 {
+                    x: 0.,
+                    y: 1.62,
+                    z: 0.,
+                },
+                yaw: angles[0],
+                pitch: angles[1],
+                attack_held: false,
+                frame_seconds: 1. / 60.,
+                players: Vec::new(),
+            }),
+            controls,
+        )
+        .unwrap();
+    })
+}
+
+#[test]
+fn nuker_uses_terrain_and_mining_imports_within_budget_and_releases_on_air_and_menus() {
+    let grants = mod_host::declarations(&std::path::PathBuf::from(
+        std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap(),
+    ))
+    .unwrap()
+    .requested
+    .unwrap()
+    .unwrap();
+    let (_directory, mut host, budget) = drawing_host(grants, r#"{"nuker":true,"nuker_range":5}"#);
+    let mut terrain = MiningTile {
+        air: false,
+        dirty: true,
+    };
+    let mut scheduler = mod_host::TerrainScheduler::default();
+    let mut angles = [0.; 2];
+    let mut held = false;
+    let mut most = 0;
+    for _ in 0..96 {
+        scheduler.refresh(&mut [&mut host], 27, &mut terrain);
+        most = most.max(mining_frame(&mut host, &budget, angles));
+        if let Some(delta) = host.take_camera_delta() {
+            angles[0] += delta.yaw;
+            angles[1] += delta.pitch;
+        }
+        let request = host.take_interaction();
+        held |= request.block_mining;
+        assert!(!request.attack_pulse);
+    }
+    assert!(
+        held,
+        "aligned terrain must request ordinary mining without a physical attack"
+    );
+    terrain.air = true;
+    terrain.dirty = true;
+    scheduler.refresh(&mut [&mut host], 27, &mut terrain);
+    mining_frame(&mut host, &budget, angles);
+    assert!(
+        !host.take_interaction().block_mining,
+        "removed blocks release immediately"
+    );
+    metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
+    assert!(
+        !host.take_interaction().block_mining,
+        "the panel releases mining"
+    );
+    println!("Nuker peak: {most} fuel (target {FRAME_FUEL})");
 }

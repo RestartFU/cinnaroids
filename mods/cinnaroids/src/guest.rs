@@ -57,6 +57,7 @@ thread_local! {
     static PANEL_PENDING: RefCell<PanelUpdate> = const { RefCell::new(PanelUpdate::Idle) };
     static WORK_TURN: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     static MODULES: RefCell<State> = RefCell::new(State::new(Preferences::default()));
+    static NUKER: RefCell<crate::nuker::Nuker> = RefCell::new(crate::nuker::Nuker::default());
     static AUTO_TOTEM: RefCell<crate::auto_totem::AutoTotem> = RefCell::new(crate::auto_totem::AutoTotem::default());
     static JUMP_RESET: RefCell<JumpReset> = RefCell::new(JumpReset::default());
     static ESP_CLEARING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -96,6 +97,7 @@ impl Guest for Cinnaroids {
         ESP_LABELS.with(|labels| *labels.borrow_mut() = None);
         BINDINGS.with(|bindings| *bindings.borrow_mut() = crate::bindings::Cache::default());
         AIM.with(|aim| aim.borrow_mut().reset());
+        NUKER.with(|nuker| nuker.borrow_mut().reset());
         AUTO_TOTEM.with(|totem| totem.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
         FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
@@ -115,6 +117,7 @@ impl Guest for Cinnaroids {
                 &p.aim_key,
                 &p.jump_reset_key,
                 &p.omni_sprint_key,
+                &p.nuker_key,
                 &p.reach_key,
             ]
             .into_iter()
@@ -132,6 +135,7 @@ impl Guest for Cinnaroids {
                 modules.borrow_mut().attack_pulse(None);
             });
             AIM.with(|aim| aim.borrow_mut().reset());
+            NUKER.with(|nuker| nuker.borrow_mut().reset());
             AUTO_TOTEM.with(|totem| totem.borrow_mut().reset());
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
@@ -150,6 +154,7 @@ impl Guest for Cinnaroids {
                         | "reach_key"
                         | "jump_reset_key"
                         | "omni_sprint_key"
+                        | "nuker_key"
                 )
             });
         if controls.panel_open && capture {
@@ -183,8 +188,8 @@ impl Guest for Cinnaroids {
             // Charge the entire bounded event batch's destruction before optional work.
             drop(events);
             let config = modules.aim_config();
-            let attack_needed =
-                modules.modules.clicker || (config.enabled && config.only_when_clicking);
+            let attack_needed = !modules.modules.nuker
+                && (modules.modules.clicker || (config.enabled && config.only_when_clicking));
             let (attack_held, jump_held, bindings_ready) = BINDINGS.with(|bindings| {
                 let mut bindings = bindings.borrow_mut();
                 bindings.read();
@@ -280,9 +285,28 @@ impl Guest for Cinnaroids {
                     && !controls.panel_open,
                 controls.seconds,
             );
-            assist_aim(config, snapshot.as_ref(), attack_held);
+            if modules.modules.nuker {
+                AIM.with(|aim| aim.borrow_mut().reset());
+                mine_nearby(
+                    Some(modules.preferences.nuker_range),
+                    snapshot.as_ref().filter(|_| !controls.panel_open),
+                    &fuel,
+                );
+            } else {
+                NUKER.with(|nuker| nuker.borrow_mut().reset());
+                assist_aim(config, snapshot.as_ref(), attack_held);
+            }
+            // A closed panel still needs fresh toggle values before long drawing teardown.
+            // One turn per eight callbacks preserves time for drawings during held shortcuts.
+            let phase = WORK_TURN.with(|turn| turn.get());
+            if phase == 3 || phase == 7 {
+                publish_preferences(&mut modules, &fuel, true);
+            }
+            if controls.panel_open || phase == 6 {
+                publish_controls(&mut modules, &fuel);
+            }
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
-            // Disabled drawings receive their teardown turn before any optional producer.
+            // Disabled drawings retire before optional visual producers.
             if modules.finder_range().is_none() {
                 netherite(None, drawn, false, &fuel);
             }
@@ -295,7 +319,7 @@ impl Guest for Cinnaroids {
             // With the panel owning input, drawings are ineligible and settings can save
             // immediately. During gameplay they compete on the same schedule as drawings.
             if controls.panel_open && fuel.publishes(35_000) {
-                publish_preferences(&mut modules, &fuel);
+                publish_preferences(&mut modules, &fuel, false);
             }
             // Every optional producer gets a first turn, independent of other dirty queues.
             // Bindings and gameplay policies above have bounded mandatory work every callback.
@@ -315,7 +339,7 @@ impl Guest for Cinnaroids {
                     }
                     2 if modules.show_real_position() => real_position(true, drawn, false, &fuel),
                     3 => publish_panel(&mut modules, &fuel, controls.panel_open),
-                    4 => publish_preferences(&mut modules, &fuel),
+                    4 => publish_preferences(&mut modules, &fuel, false),
                     _ => {}
                 }
             }
@@ -334,6 +358,14 @@ impl FrameFuel {
     fn publishes(&self, cost: u64) -> bool {
         self.allows_until(cost, 81_000)
     }
+    /// Panel payloads retain additional return and cleanup space as controls grow.
+    fn panel(&self, cost: u64) -> bool {
+        self.allows_until(cost, 75_000)
+    }
+    /// Hot control values remain eligible alongside the maximum admitted input batch.
+    fn controls(&self) -> bool {
+        self.allows_until(16_000, 89_000)
+    }
     /// Rechecks live fuel after every host import and bounded unit.
     fn allows_until(&self, cost: u64, limit: u64) -> bool {
         self.0
@@ -341,6 +373,54 @@ impl FrameFuel {
             .saturating_add(cost)
             <= limit
     }
+}
+
+/// Renews one small terrain tile before turning or requesting a normal crosshair mining hold.
+fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &FrameFuel) {
+    NUKER.with(|nuker| {
+        let mut nuker = nuker.borrow_mut();
+        let (Some(range), Some(snapshot)) = (range, snapshot) else {
+            nuker.reset();
+            return;
+        };
+        if !fuel.allows(25_000) {
+            return;
+        }
+        let Ok(Some(world)) = player_state::read_world() else {
+            nuker.reset();
+            return;
+        };
+        if world.dimension != snapshot.dimension {
+            nuker.reset();
+            return;
+        }
+        let frame = crate::nuker::Frame {
+            session: snapshot.session,
+            terrain_session: world.session,
+            dimension: snapshot.dimension,
+            eye: [snapshot.eye.x, snapshot.eye.y, snapshot.eye.z],
+            yaw: snapshot.yaw,
+            pitch: snapshot.pitch,
+            seconds: snapshot.frame_seconds,
+        };
+        let Some((query, stamp)) = nuker.query(frame, range) else {
+            return;
+        };
+        let Ok(answer) = terrain::read_region(query, stamp) else {
+            nuker.reset();
+            return;
+        };
+        let action = nuker.update(frame, &query, answer);
+        if let Some([yaw, pitch]) = action.rotation
+            && gameplay::rotate(yaw, pitch).is_err()
+        {
+            nuker.reset();
+            return;
+        }
+        if action.mine && gameplay::set_block_mining(true).is_err() {
+            nuker.reset();
+        }
+    });
 }
 
 /// Queries compact item matches and requests a swap only after a change or retry delay.
@@ -363,12 +443,11 @@ fn auto_totem(enabled: bool, seconds: f32) {
                 return;
             }
         };
-        if policy.observe(equipment.revisions, seconds) {
-            if let Some(slot) = policy.select(&equipment)
-                && let Err(error) = inventory::swap_offhand(slot)
-            {
-                let _ = hud::set_label(&format!("AutoTotem: {error}"));
-            }
+        if policy.observe(equipment.revisions, seconds)
+            && let Some(slot) = policy.select(&equipment)
+            && let Err(error) = inventory::swap_offhand(slot)
+        {
+            let _ = hud::set_label(&format!("AutoTotem: {error}"));
         }
     });
 }
@@ -424,7 +503,7 @@ fn assist_aim(
 }
 
 /// Publishes bounded settings and authority changes in their own scheduled turn.
-fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
+fn publish_preferences(modules: &mut State, fuel: &FrameFuel, before_drawings: bool) {
     if modules.fullbright_dirty && !modules.access.0[6].is_empty() {
         modules.fullbright_dirty = false;
     }
@@ -444,7 +523,8 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
         for _ in 0..2 {
             // Small preference units may use the publication reserve. A full event and
             // binding batch can leave too little for the ordinary drawing ceiling.
-            if !fuel.allows_until(8_000, 85_000) {
+            let limit = if before_drawings { 85_000 } else { 77_000 };
+            if !fuel.allows_until(8_000, limit) {
                 break;
             }
             if let Some(json) = &*pending {
@@ -466,6 +546,28 @@ fn publish_preferences(modules: &mut State, fuel: &FrameFuel) {
     });
 }
 
+/// Publishes changed control values separately from slower geometry and visual bindings.
+fn publish_controls(modules: &mut State, fuel: &FrameFuel) {
+    if !modules.panel_dirty
+        || PANEL_KEY.with(|key| key.borrow().as_ref() != Some(&modules.preferences.menu_key))
+        || !fuel.controls()
+    {
+        return;
+    }
+    let json = crate::panel::control_patch(modules);
+    if panel::update_content(&json).is_ok() {
+        modules.panel_dirty = false;
+        // A preempted older control patch must never overwrite these newer values later.
+        PANEL_PENDING.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            if matches!(*pending, PanelUpdate::Controls(_)) {
+                *pending = PanelUpdate::Idle;
+            }
+        });
+        PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(true));
+    }
+}
+
 /// Completes a coherent panel snapshot even if controls change again during serialization.
 fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
     PANEL_PENDING.with(|pending| {
@@ -478,29 +580,13 @@ fn publish_panel(modules: &mut State, fuel: &FrameFuel, open: bool) {
             *pending = PanelUpdate::Idle;
             PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(false));
         }
-        // An open panel's input state must not wait behind an older visual snapshot.
-        if open
-            && modules.panel_dirty
-            && matches!(
-                *pending,
-                PanelUpdate::BuildRoute { .. } | PanelUpdate::Route(_)
-            )
-            && PANEL_KEY.with(|key| key.borrow().as_ref() == Some(&modules.preferences.menu_key))
-            && fuel.publishes(24_000)
-        {
-            let json = crate::panel::control_patch(modules);
-            if panel::update_content(&json).is_ok() {
-                modules.panel_dirty = false;
-                PANEL_BINDINGS_DIRTY.with(|dirty| dirty.set(true));
-            }
-        }
         for _ in 0..48 {
             let cost = match &*pending {
                 PanelUpdate::BuildRoute { builder, .. } if builder.finishing() => 12_000,
                 PanelUpdate::BuildRoute { .. } => 3_000,
                 _ => 12_000,
             };
-            if !fuel.publishes(cost) {
+            if !fuel.panel(cost) {
                 break;
             }
             if let PanelUpdate::BuildRoute { builder, .. } = &mut *pending {

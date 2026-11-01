@@ -31,6 +31,8 @@ pub struct Preferences {
     pub reach_key: String,
     pub jump_reset_key: String,
     pub omni_sprint_key: String,
+    pub nuker_key: String,
+    pub nuker_range: u8,
     pub jump_reset_window_ticks: u8,
     pub aim_strength: u8,
     pub aim_mode: AimMode,
@@ -60,6 +62,8 @@ impl Default for Preferences {
             reach_key: String::new(),
             jump_reset_key: String::new(),
             omni_sprint_key: String::new(),
+            nuker_key: String::new(),
+            nuker_range: crate::nuker::DEFAULT_RANGE,
             jump_reset_window_ticks: DEFAULT_WINDOW_TICKS,
             aim_strength: 35,
             aim_mode: AimMode::WhileClicking,
@@ -137,6 +141,9 @@ impl Preferences {
         if let Some(value) = values.get("show_real_position").and_then(Value::as_bool) {
             preferences.show_real_position = value;
         }
+        if let Some(value) = values.get("nuker_range").and_then(Value::as_u64) {
+            preferences.nuker_range = value.clamp(1, u64::from(crate::nuker::MAX_RANGE)) as u8;
+        }
         if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
             preferences.netherite_range = value.clamp(1, crate::finder::MAX_RANGE as u64) as u8;
         }
@@ -186,6 +193,7 @@ impl Preferences {
             ("reach_key", &mut preferences.reach_key),
             ("jump_reset_key", &mut preferences.jump_reset_key),
             ("omni_sprint_key", &mut preferences.omni_sprint_key),
+            ("nuker_key", &mut preferences.nuker_key),
         ] {
             if let Some(binding) = values.get(field).and_then(Value::as_str)
                 && (binding.is_empty() || valid_binding(binding))
@@ -224,16 +232,29 @@ impl Preferences {
         {
             preferences.omni_sprint_key.clear();
         }
+        if !preferences.nuker_key.is_empty()
+            && [
+                &preferences.clicker_key,
+                &preferences.aim_key,
+                &preferences.reach_key,
+                &preferences.jump_reset_key,
+                &preferences.omni_sprint_key,
+            ]
+            .contains(&&preferences.nuker_key)
+        {
+            preferences.nuker_key.clear();
+        }
         if [
             &preferences.clicker_key,
             &preferences.aim_key,
             &preferences.reach_key,
             &preferences.jump_reset_key,
             &preferences.omni_sprint_key,
+            &preferences.nuker_key,
         ]
         .contains(&&preferences.menu_key)
         {
-            preferences.menu_key = [PANEL_KEY, "F6", "F5", "F4", "F3", "F2"]
+            preferences.menu_key = [PANEL_KEY, "F6", "F5", "F4", "F3", "F2", "F1"]
                 .into_iter()
                 .find(|key| {
                     ![
@@ -242,6 +263,7 @@ impl Preferences {
                         preferences.reach_key.as_str(),
                         preferences.jump_reset_key.as_str(),
                         preferences.omni_sprint_key.as_str(),
+                        preferences.nuker_key.as_str(),
                     ]
                     .contains(key)
                 })
@@ -309,6 +331,7 @@ pub struct Modules {
     pub player_esp: bool,
     pub jump_reset: bool,
     pub omni_sprint: bool,
+    pub nuker: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -319,6 +342,7 @@ pub enum KeybindTarget {
     Reach,
     JumpReset,
     OmniSprint,
+    Nuker,
 }
 
 #[derive(Clone, Debug)]
@@ -329,7 +353,7 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded: [bool; 10],
+    pub expanded: [bool; 11],
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -347,7 +371,7 @@ impl State {
             access: Default::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded: [false; 10],
+            expanded: [false; 11],
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -454,6 +478,11 @@ impl State {
                 self.preferences.enabled.omni_sprint = self.modules.omni_sprint;
                 self.preferences_dirty = true;
                 self.panel_dirty = true;
+            } else if *key == self.preferences.nuker_key && self.access.0[10].is_empty() {
+                self.modules.nuker = !self.modules.nuker;
+                self.preferences.enabled.nuker = self.modules.nuker;
+                self.preferences_dirty = true;
+                self.panel_dirty = true;
             } else if *key == self.preferences.reach_key && self.access.0[2].is_empty() {
                 self.modules.reach = !self.modules.reach;
                 self.preferences.enabled.reach = self.modules.reach;
@@ -484,6 +513,7 @@ impl State {
             KeybindTarget::Reach => &mut self.preferences.reach_key,
             KeybindTarget::JumpReset => &mut self.preferences.jump_reset_key,
             KeybindTarget::OmniSprint => &mut self.preferences.omni_sprint_key,
+            KeybindTarget::Nuker => &mut self.preferences.nuker_key,
         }
     }
 
@@ -495,6 +525,7 @@ impl State {
             (KeybindTarget::Reach, &self.preferences.reach_key),
             (KeybindTarget::JumpReset, &self.preferences.jump_reset_key),
             (KeybindTarget::OmniSprint, &self.preferences.omni_sprint_key),
+            (KeybindTarget::Nuker, &self.preferences.nuker_key),
         ]
         .iter()
         .any(|(other, binding)| *other != target && key == *binding)
@@ -564,7 +595,7 @@ impl State {
     }
 
     /// Runtime enabled flags in panel order.
-    pub fn enabled_flags(&self) -> [bool; 10] {
+    pub fn enabled_flags(&self) -> [bool; 11] {
         let m = &self.modules;
         [
             m.clicker,
@@ -577,6 +608,7 @@ impl State {
             m.player_esp,
             m.auto_totem,
             m.omni_sprint,
+            m.nuker,
         ]
     }
 
@@ -588,6 +620,7 @@ impl State {
             KeybindTarget::Reach => &self.preferences.reach_key,
             KeybindTarget::JumpReset => &self.preferences.jump_reset_key,
             KeybindTarget::OmniSprint => &self.preferences.omni_sprint_key,
+            KeybindTarget::Nuker => &self.preferences.nuker_key,
         }
     }
 
@@ -625,6 +658,12 @@ impl State {
                 self.panel_dirty = true;
                 return;
             }
+            "expand_nuker" => {
+                self.expanded[10] = !self.expanded[10];
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
             "expand_omni_sprint" => {
                 self.expanded[9] = !self.expanded[9];
                 self.capturing_key = None;
@@ -645,6 +684,11 @@ impl State {
                 self.panel_dirty = true;
                 return;
             }
+            "nuker" => replace(&mut self.modules.nuker, value >= 0.5),
+            "nuker_range" => replace(
+                &mut self.preferences.nuker_range,
+                value.round().clamp(1., f32::from(crate::nuker::MAX_RANGE)) as u8,
+            ),
             "omni_sprint" => replace(&mut self.modules.omni_sprint, value >= 0.5),
             "auto_totem" => replace(&mut self.modules.auto_totem, value >= 0.5),
             "clicker" => replace(&mut self.modules.clicker, value >= 0.5),
@@ -653,13 +697,14 @@ impl State {
                 value.round().clamp(f32::from(MIN_CPS), f32::from(MAX_CPS)) as u8,
             ),
             "menu_key" | "clicker_key" | "aim_key" | "reach_key" | "jump_reset_key"
-            | "omni_sprint_key" => {
+            | "omni_sprint_key" | "nuker_key" => {
                 self.capturing_key = Some(match event.id.as_str() {
                     "menu_key" => KeybindTarget::Menu,
                     "aim_key" => KeybindTarget::Aim,
                     "reach_key" => KeybindTarget::Reach,
                     "jump_reset_key" => KeybindTarget::JumpReset,
                     "omni_sprint_key" => KeybindTarget::OmniSprint,
+                    "nuker_key" => KeybindTarget::Nuker,
                     _ => KeybindTarget::Clicker,
                 });
                 self.panel_dirty = true;
@@ -794,6 +839,7 @@ impl State {
             &self.preferences.reach_key,
             &self.preferences.jump_reset_key,
             &self.preferences.omni_sprint_key,
+            &self.preferences.nuker_key,
         ] {
             if !key.is_empty() && !keys.contains(key) {
                 keys.push(key.clone());
@@ -1070,6 +1116,31 @@ impl State {
             Control::Button {
                 id: "expand_omni_sprint",
                 label: "Omni Sprint settings",
+            },
+        ]);
+        controls.extend([
+            Control::Toggle {
+                id: "nuker",
+                label: "Nuker",
+                value: self.modules.nuker,
+            },
+            Control::Slider {
+                id: "nuker_range",
+                label: "Nuker radius",
+                value: f32::from(self.preferences.nuker_range),
+                min: 1.,
+                max: f32::from(crate::nuker::MAX_RANGE),
+                step: 1.,
+            },
+            Control::Keybind {
+                id: "nuker_key",
+                label: "Nuker key",
+                key: crate::panel::key_legend(&self.preferences.nuker_key),
+                capturing: self.capturing_key == Some(KeybindTarget::Nuker),
+            },
+            Control::Button {
+                id: "expand_nuker",
+                label: "Nuker settings",
             },
         ]);
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;

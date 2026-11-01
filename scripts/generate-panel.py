@@ -60,6 +60,7 @@ MODULES = [
       ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
     ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
     ("omni_sprint", "Omni Sprint", "combat", 38, 40, 39, []),
+    ("nuker", "Nuker", "combat", 41, 44, 43, [("slider", 42, "Radius", "blk")]),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 

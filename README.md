@@ -1,6 +1,6 @@
 # Cinnaroids
 
-Clicker, aim assist, reach, AutoTotem, FakeLag, Player ESP, Netherite Finder, Fullbright, Auto Jump Reset and Omni Sprint for Cinnabar, controlled in-game with **F7**.
+Clicker, aim assist, reach, AutoTotem, FakeLag, Player ESP, Netherite Finder, Fullbright, Auto Jump Reset, Omni Sprint and Nuker for Cinnabar, controlled in-game with **F7**.
 
 ![Cinnaroids](assets/screenshot.png)
 
