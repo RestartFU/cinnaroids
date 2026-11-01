@@ -1,25 +1,26 @@
 use super::*;
-use mod_api::bindings::cinnabar::extension::terrain::{BlockState, ShapeOverride};
 
-/// A stationary view facing the next full block north of the eye.
+/// A physical mining frame with a block selected north of the eye.
 fn frame() -> Frame {
     Frame {
         session: 1,
         terrain_session: 1,
         dimension: 0,
         eye: [0.5, 2.5, 0.5],
-        yaw: 0.,
-        pitch: 0.,
+        block: Some([0, 2, -1]),
         seconds: 0.016,
     }
 }
 
-/// A loaded small tile with one full selection cube and otherwise known air.
-fn region(query: &RegionQuery, block: [i32; 3]) -> Region {
+/// A loaded small tile containing full selection cubes and known air.
+fn region(query: &RegionQuery, blocks: &[[i32; 3]]) -> Region {
+    use mod_api::bindings::cinnabar::extension::terrain::BlockState;
     let mut states = vec![0; CELLS];
-    let cell =
-        ((block[0] - query.min.x) * TILE + block[2] - query.min.z) * TILE + block[1] - query.min.y;
-    states[cell as usize] = 1;
+    for block in blocks {
+        let cell = ((block[0] - query.min.x) * TILE + block[2] - query.min.z) * TILE + block[1]
+            - query.min.y;
+        states[cell as usize] = 1;
+    }
     let state = |runtime_id, identifier: &str, shape| BlockState {
         runtime_id,
         identifier: Some(identifier.into()),
@@ -48,121 +49,104 @@ fn region(query: &RegionQuery, block: [i32; 3]) -> Region {
 }
 
 #[test]
-fn pending_and_unaligned_frames_never_mine_and_removal_releases_immediately() {
+fn manual_target_seeds_radius_and_removal_moves_to_a_neighbor_without_turning() {
     let mut policy = Nuker::default();
     let f = frame();
-    let (query, stamp) = policy.query(f, 3).unwrap();
-    assert!(stamp.is_none());
+    let (query, _) = policy.query(f, 3).unwrap();
+    let mut answer = region(&query, &[[0, 2, -1], [1, 2, -1]]);
     assert_eq!(
-        policy.update(f, &query, ReadResult::Pending),
-        Action::default()
-    );
-    let mut answer = region(&query, [0, 2, -1]);
-    let stamp = answer.stamp;
-    assert!(
-        !policy
+        policy
             .update(f, &query, ReadResult::Changed(answer.clone()))
-            .mine
+            .point,
+        Some([0.5, 2.5, -0.5])
     );
-    assert_eq!(
-        policy.query(f, 3).unwrap().1.map(stamp_key),
-        Some(stamp_key(stamp))
-    );
-    assert!(policy.update(f, &query, ReadResult::Unchanged(stamp)).mine);
-    answer.states.fill(0);
+    answer = region(&query, &[[1, 2, -1]]);
     answer.stamp.revision += 1;
     assert_eq!(
-        policy.update(f, &query, ReadResult::Changed(answer)),
-        Action::default()
+        policy.update(f, &query, ReadResult::Changed(answer)).point,
+        Some([1.5, 2.5, -0.5])
     );
-    assert!(policy.query(f, 3).unwrap().1.is_none());
 }
 
 #[test]
-fn camera_turns_are_bounded_and_hold_waits_for_the_presented_view() {
+fn a_hold_requires_a_manual_block_and_reset_releases_its_anchor() {
     let mut policy = Nuker::default();
     let mut f = frame();
-    let (query, _) = policy.query(f, 3).unwrap();
-    let answer = region(&query, [1, 2, 0]);
-    let stamp = answer.stamp;
-    let first = policy.update(f, &query, ReadResult::Changed(answer));
-    assert!(!first.mine);
-    assert!(first.rotation.unwrap()[0] < 0.);
-    let mut action = first;
-    let mut mined = false;
-    for _ in 0..100 {
-        if let Some([yaw, pitch]) = action.rotation {
-            assert!(yaw.hypot(pitch) <= mod_api::MAX_CAMERA_DELTA_RADIANS + 1e-6);
-            f.yaw += yaw;
-            f.pitch += pitch;
-        }
-        policy.query(f, 3).unwrap();
-        action = policy.update(f, &query, ReadResult::Unchanged(stamp));
-        if action.mine {
-            mined = true;
-            break;
-        }
-    }
-    assert!(mined);
-    assert!((f.yaw + PI / 2.).abs() < 0.01);
+    f.block = None;
+    assert!(policy.query(f, 3).is_none());
+    f.block = Some([0, 2, -1]);
+    policy.query(f, 3).unwrap();
+    f.block = None;
+    assert!(
+        policy.query(f, 3).is_some(),
+        "keep mining neighbors after the original disappears"
+    );
+    policy.reset();
+    assert!(policy.query(f, 3).is_none());
 }
 
 #[test]
-fn unknown_unloaded_empty_shapes_and_invalid_palette_entries_are_skipped() {
-    for kind in 0..5 {
+fn pending_unknown_unloaded_and_empty_shapes_do_not_request_mining() {
+    for kind in 0..6 {
         let mut policy = Nuker::default();
         let f = frame();
         let (query, _) = policy.query(f, 3).unwrap();
-        let mut answer = region(&query, [0, 2, -1]);
+        let mut answer = region(&query, &[[0, 2, -1]]);
         match kind {
             0 => answer.loaded.fill(0),
             1 => answer.palette[1].selection = ShapeBinding::Fixed(ResolvedShape::Unavailable),
             2 => answer.palette[1].selection = ShapeBinding::Fixed(ResolvedShape::Known(0)),
             3 => answer.states.fill(u16::MAX),
-            _ => answer.palette[1].identifier = None,
+            4 => answer.palette[1].identifier = None,
+            _ => {
+                assert_eq!(
+                    policy.update(f, &query, ReadResult::Pending),
+                    Action::default()
+                );
+                continue;
+            }
         }
         assert_eq!(
             policy.update(f, &query, ReadResult::Changed(answer)),
             Action::default()
         );
-        assert!(policy.target.is_none());
     }
 }
 
 #[test]
-fn position_dependent_shapes_supply_the_actual_aim_point() {
+fn radius_is_centered_on_the_manually_selected_block_and_stays_fixed_during_a_hold() {
     let mut policy = Nuker::default();
-    let f = frame();
-    let (query, _) = policy.query(f, 3).unwrap();
-    let mut answer = region(&query, [0, 2, -1]);
-    answer.palette[1].selection = ShapeBinding::PerCell;
-    answer.overrides.push(ShapeOverride {
-        slot: 10,
-        collision: None,
-        selection: Some(ResolvedShape::Known(1)),
-    });
-    answer.shape_boxes = vec![0.1, 0., 0., 0.2, 1., 1.];
-    let action = policy.update(f, &query, ReadResult::Changed(answer));
-    assert!((policy.target.unwrap().point[0] - 0.15).abs() < 1e-6);
-    assert!(action.rotation.unwrap()[0] > 0.);
-    assert!(!action.mine);
+    let mut f = frame();
+    let (query, _) = policy.query(f, 1).unwrap();
+    let answer = region(&query, &[[1, 3, 0]]);
+    assert_eq!(
+        policy.update(f, &query, ReadResult::Changed(answer)),
+        Action::default()
+    );
+    f.eye[0] += 2.;
+    f.block = Some([4, 2, -1]);
+    policy.query(f, 1).unwrap();
+    assert_eq!(policy.context.unwrap().center, [0, 2, -1]);
 }
 
 #[test]
-fn changed_world_movement_range_and_invalid_input_discard_old_work() {
+fn context_changes_and_invalid_input_discard_old_targets() {
     for kind in 0..5 {
         let mut policy = Nuker::default();
         let mut f = frame();
         let (query, _) = policy.query(f, 3).unwrap();
-        let answer = region(&query, [0, 2, -1]);
-        policy.update(f, &query, ReadResult::Changed(answer));
+        policy.update(
+            f,
+            &query,
+            ReadResult::Changed(region(&query, &[[0, 2, -1]])),
+        );
         let mut range = 3;
         match kind {
             0 => f.session += 1,
             1 => f.dimension += 1,
-            2 => f.eye[0] += 1.,
+            2 => f.terrain_session += 1,
             3 => range = 1,
-            _ => f.yaw = f32::NAN,
+            _ => f.eye[0] = f32::NAN,
         }
         let next = policy.query(f, range);
         assert!(policy.target.is_none());
@@ -176,10 +160,10 @@ fn unchanged_blocks_time_out_and_scan_moves_to_another_small_tile() {
     let mut f = frame();
     f.seconds = 1.;
     let (query, _) = policy.query(f, MAX_RANGE).unwrap();
-    let answer = region(&query, [0, 2, -1]);
+    let answer = region(&query, &[[0, 2, -1]]);
     let stamp = answer.stamp;
     policy.update(f, &query, ReadResult::Changed(answer));
-    for _ in 0..MAX_HOLD_SECONDS as usize {
+    for _ in 0..(MAX_HOLD_SECONDS as usize - 1) {
         policy.update(f, &query, ReadResult::Unchanged(stamp));
     }
     assert!(policy.target.is_none());
@@ -189,36 +173,23 @@ fn unchanged_blocks_time_out_and_scan_moves_to_another_small_tile() {
         (next.min.x, next.min.y, next.min.z),
         (query.min.x, query.min.y, query.min.z)
     );
-    assert_eq!(
-        (
-            next.max.x - next.min.x,
-            next.max.y - next.min.y,
-            next.max.z - next.min.z
-        ),
-        (TILE, TILE, TILE)
-    );
 }
 
 #[test]
-fn terrain_and_camera_epochs_are_distinct_and_unknown_answers_cannot_resume_a_hold() {
+fn position_dependent_shapes_supply_the_mining_point() {
+    use mod_api::bindings::cinnabar::extension::terrain::ShapeOverride;
     let mut policy = Nuker::default();
-    let mut f = frame();
-    f.terrain_session = 2;
+    let f = frame();
     let (query, _) = policy.query(f, 3).unwrap();
-    let mut answer = region(&query, [0, 2, -1]);
-    answer.stamp.session = 2;
-    let stamp = answer.stamp;
-    policy.update(f, &query, ReadResult::Changed(answer));
-    assert!(policy.update(f, &query, ReadResult::Unchanged(stamp)).mine);
-    assert_eq!(
-        policy.update(f, &query, ReadResult::Pending),
-        Action::default()
-    );
-    assert!(!policy.update(f, &query, ReadResult::Unchanged(stamp)).mine);
-    f.terrain_session += 1;
-    assert!(policy.query(f, 3).unwrap().1.is_none());
-    assert_eq!(
-        policy.update(f, &query, ReadResult::Unchanged(stamp)),
-        Action::default()
-    );
+    let mut answer = region(&query, &[[0, 2, -1]]);
+    answer.palette[1].selection = ShapeBinding::PerCell;
+    let slot = ((0 - query.min.x) * TILE + (-1 - query.min.z)) * TILE + (2 - query.min.y);
+    answer.overrides.push(ShapeOverride {
+        slot: slot as u32,
+        collision: None,
+        selection: Some(ResolvedShape::Known(1)),
+    });
+    answer.shape_boxes = vec![0.1, 0., 0., 0.2, 1., 1.];
+    let action = policy.update(f, &query, ReadResult::Changed(answer));
+    assert!((action.point.unwrap()[0] - 0.15).abs() < 1e-6);
 }

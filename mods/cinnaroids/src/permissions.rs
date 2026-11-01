@@ -77,7 +77,6 @@ pub const REQUIREMENTS: [Requirement; 11] = [
             &["controls"],
             &["terrain"],
             &["player_state"],
-            &["camera"],
             &["interaction"],
         ],
         flag: |m| &mut m.nuker,
