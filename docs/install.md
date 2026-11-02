@@ -1,6 +1,6 @@
 # Install Cinnaroids
 
-1. Update Cinnabar to a build containing the [directed block-mining API](https://github.com/cinnabar-mc/cinnabar/pull/2669) and **Settings → Mods → Import**. The SDK revision is pinned in the source manifest.
+1. Update Cinnabar to a build containing the [batch block-destruction API](https://github.com/cinnabar-mc/cinnabar/pull/2696) and **Settings → Mods → Import**. The SDK revision is pinned in the source manifest.
 2. Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest). The same file works on all Cinnabar desktop platforms.
 3. In Cinnabar, open **Settings → Mods → Import** and select the WASM file.
 4. Review and approve its requested permissions, then select **Enable**.

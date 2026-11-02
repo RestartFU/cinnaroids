@@ -10,7 +10,7 @@ const FRAME_FUEL: u64 = 100_000;
 /// Attaches shared accounting so every tested callback can be measured independently.
 fn frame_budget(host: &mut ModHost) -> CallbackBudget {
     let budget = CallbackBudget::new(mod_api::TOTAL_MOD_FRAME_FUEL);
-    host.set_frame_authority(budget.clone(), false, false, 0);
+    host.set_frame_authority(budget.clone(), false, false);
     budget
 }
 
@@ -2906,7 +2906,7 @@ impl mod_host::TerrainSource for MiningTile {
         if retained.is_some() && !self.dirty {
             mod_host::TerrainCheck::Current
         } else {
-            mod_host::TerrainCheck::Stale { cells: 27 }
+            mod_host::TerrainCheck::Stale { cells: 1 }
         }
     }
 
@@ -2920,7 +2920,7 @@ impl mod_host::TerrainSource for MiningTile {
                 query.max.y - query.min.y,
                 query.max.z - query.min.z
             ),
-            (3, 3, 3)
+            (1, 1, 1)
         );
         self.dirty = false;
         let block = |runtime_id, identifier: &str, shape| TerrainBlockState {
@@ -2937,12 +2937,12 @@ impl mod_host::TerrainSource for MiningTile {
                 session: 2,
                 dimension: 0,
                 registry: 1,
-                revision: 1,
+                revision: if self.air { 2 } else { 1 },
             },
             chunks: Vec::new(),
             layer_count: 1,
-            loaded: vec![(1 << 27) - 1],
-            states: vec![if self.air { 0 } else { 1 }; 27],
+            loaded: vec![1],
+            states: vec![if self.air { 0 } else { 1 }],
             palette: vec![block(0, "minecraft:air", 0), block(1, "minecraft:stone", 1)],
             shape_offsets: vec![0, 0, 1],
             shape_boxes: vec![0., 0., 0., 1., 1., 1.],
@@ -2951,7 +2951,7 @@ impl mod_host::TerrainSource for MiningTile {
     }
 }
 
-/// Feeds the last committed camera turn back as the next presented gameplay observation.
+/// Presents a physical mining hold over the original block without camera assistance.
 fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -> u64 {
     host.observe_presentation(
         Some(mod_host::WorldObservation {
@@ -2967,7 +2967,19 @@ fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -
         Vec::new(),
     )
     .unwrap();
+    host.observe_gameplay(GameplayFacts {
+        attack_held: true,
+        block_target: Some(GameplayVector3 {
+            x: 0.5,
+            y: 0.5,
+            z: -0.5,
+        }),
+        ..Default::default()
+    })
+    .unwrap();
     let mut controls = empty_controls();
+    controls.keys_held = vec!["MouseLeft".into()];
+    controls.keys_admitted = controls.keys_held.clone();
     controls.focused = true;
     controls.gameplay = true;
     metered_callback(host, budget, |host| {
@@ -2983,7 +2995,7 @@ fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -
                 },
                 yaw: angles[0],
                 pitch: angles[1],
-                attack_held: false,
+                attack_held: true,
                 frame_seconds: 1. / 60.,
                 players: Vec::new(),
             }),
@@ -2994,7 +3006,7 @@ fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -
 }
 
 #[test]
-fn nuker_uses_terrain_and_mining_imports_within_budget_and_releases_on_air_and_menus() {
+fn nuker_submits_the_entire_radius_after_the_original_break_within_budget() {
     let grants = mod_host::declarations(&std::path::PathBuf::from(
         std::env::var_os("CINNAROIDS_BUDGET_COMPONENT").unwrap(),
     ))
@@ -3008,36 +3020,31 @@ fn nuker_uses_terrain_and_mining_imports_within_budget_and_releases_on_air_and_m
         dirty: true,
     };
     let mut scheduler = mod_host::TerrainScheduler::default();
-    let mut angles = [0.; 2];
-    let mut held = false;
     let mut most = 0;
     for _ in 0..96 {
-        scheduler.refresh(&mut [&mut host], 27, &mut terrain);
-        most = most.max(mining_frame(&mut host, &budget, angles));
-        if let Some(delta) = host.take_camera_delta() {
-            angles[0] += delta.yaw;
-            angles[1] += delta.pitch;
-        }
-        let request = host.take_interaction();
-        held |= request.block_mining;
-        assert!(!request.attack_pulse);
+        scheduler.refresh(&mut [&mut host], 1, &mut terrain);
+        most = most.max(mining_frame(&mut host, &budget, [0.; 2]));
+        assert!(host.take_camera_delta().is_none());
+        let output = host.take_interaction();
+        assert!(output.block_breaks.is_empty());
+        assert!(!output.block_mining && !output.attack_pulse);
     }
-    assert!(
-        held,
-        "aligned terrain must request ordinary mining without a physical attack"
-    );
     terrain.air = true;
     terrain.dirty = true;
-    scheduler.refresh(&mut [&mut host], 27, &mut terrain);
-    mining_frame(&mut host, &budget, angles);
+    scheduler.refresh(&mut [&mut host], 1, &mut terrain);
+    most = most.max(mining_frame(&mut host, &budget, [0.; 2]));
+    let batch = host.take_interaction().block_breaks;
+    assert_eq!(batch.len(), 514);
+    assert!(batch.iter().all(|p| {
+        let distance = p.x * p.x + p.y * p.y + (p.z + 1) * (p.z + 1);
+        distance > 0 && distance <= 25
+    }));
+    mining_frame(&mut host, &budget, [0.; 2]);
     assert!(
-        !host.take_interaction().block_mining,
-        "removed blocks release immediately"
+        host.take_interaction().block_breaks.is_empty(),
+        "one batch per hold"
     );
     metered_frame(&mut host, &budget, false, &[], GameplayFacts::default());
-    assert!(
-        !host.take_interaction().block_mining,
-        "the panel releases mining"
-    );
+    assert!(host.take_interaction().block_breaks.is_empty());
     println!("Nuker peak: {most} fuel (target {FRAME_FUEL})");
 }

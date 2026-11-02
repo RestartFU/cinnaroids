@@ -394,7 +394,7 @@ impl FrameFuel {
     }
 }
 
-/// Renews one small terrain tile while the physical mining control is held.
+/// Watches the manually selected block and submits its surrounding area after it breaks.
 fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &FrameFuel) {
     NUKER.with(|nuker| {
         let mut nuker = nuker.borrow_mut();
@@ -432,9 +432,15 @@ fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &
             return;
         };
         let action = nuker.update(frame, &query, answer);
-        let point = action.point.map(|[x, y, z]| gameplay::Vector3 { x, y, z });
-        if gameplay::set_block_mining_target(point).is_err() {
-            nuker.reset();
+        if !action.blocks.is_empty() {
+            let blocks = action
+                .blocks
+                .into_iter()
+                .map(|[x, y, z]| gameplay::BlockPosition { x, y, z })
+                .collect::<Vec<_>>();
+            if gameplay::break_blocks(&blocks).is_err() {
+                nuker.reset();
+            }
         }
     });
 }
