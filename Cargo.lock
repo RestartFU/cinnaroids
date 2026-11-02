@@ -120,7 +120,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mod-api"
 version = "0.1.31"
-source = "git+https://github.com/cinnabar-mc/cinnabar?rev=bc6b88530091ee42b8b9dae0629cf1fb05c4d595#bc6b88530091ee42b8b9dae0629cf1fb05c4d595"
+source = "git+https://github.com/cinnabar-mc/cinnabar?rev=d2e43350f5ac991633d989446fa3ce5def2ddd26#d2e43350f5ac991633d989446fa3ce5def2ddd26"
 dependencies = [
  "serde",
  "serde_json",
