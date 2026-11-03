@@ -179,6 +179,7 @@ fn module_edits_preserve_the_surface_on_every_frame() {
         "netherite",
         "fullbright",
         "player_esp",
+        "ore_esp",
     ] {
         for enabled in [true, false] {
             let mut updated = false;
@@ -296,6 +297,11 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("fullbright", 1.0),
             ("netherite", 1.0),
             ("netherite_range", 128.0),
+            ("expand_ore_esp", 1.0),
+            ("ore_esp", 1.0),
+            ("ore_range", 128.0),
+            ("ore_quartz", 1.0),
+            ("ore_esp", 0.0),
             ("reset_layout", 1.0),
             ("aim", 1.0),
             ("clicker", 1.0),
@@ -338,7 +344,11 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                         .any(|control| control.id() == "aim_horizontal_only")
                 );
             }
-            if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
+            if (id == "netherite" && value >= 0.5)
+                || id == "netherite_range"
+                || (id == "ore_esp" && value >= 0.5)
+                || id == "ore_range"
+            {
                 // The finder searches and draws only over focused gameplay, not in the panel.
                 assert_eq!(drawn_instances(&host), 0);
                 assert!(host.fullbright(), "Finder does not disable Fullbright");
@@ -347,6 +357,12 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 let preferences: serde_json::Value =
                     serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
                 assert_eq!(preferences["netherite_range"], 128);
+            }
+            if id == "ore_quartz" {
+                let preferences: serde_json::Value =
+                    serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+                assert_eq!(preferences["ore_range"], 128);
+                assert_eq!(preferences["ores"][9], true);
             }
             if id == "fullbright" {
                 assert_eq!(host.fullbright(), value >= 0.5);
@@ -979,6 +995,143 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
         "Netherite Finder, 256 cubes: peak {most}, {setup} setup, {panel} panel, \
          {drawing} drawing, {steady} steady, \
          {moving} moving, {clearing} clearing (frame budget {FRAME_FUEL})"
+    );
+}
+
+/// Loaded terrain answering Netherite Finder with [`Debris`] and each Ore ESP search with
+/// `ores` blocks of its own, in a slab south of the player.
+struct Ores {
+    debris: Debris,
+    ores: usize,
+    /// The distinct ore searches answered since the last check.
+    searches: std::collections::BTreeSet<Vec<String>>,
+}
+
+impl Ores {
+    /// The blocks the `search`th ore search finds.
+    fn blocks(&self, search: usize, limit: usize) -> Vec<TerrainPosition> {
+        (0..self.ores.min(limit) as i32)
+            .map(|index| TerrainPosition {
+                x: index % 32 - 16,
+                y: index / 32 % 16,
+                z: 2 + search as i32,
+            })
+            .collect()
+    }
+}
+
+impl BlockSearchSource for Ores {
+    fn find(&mut self, search: &BlockSearch) -> Result<FoundBlocks, TerrainReadError> {
+        if search
+            .identifiers
+            .contains(&"minecraft:ancient_debris".to_string())
+        {
+            return self.debris.find(search);
+        }
+        assert!(search.identifiers.len() <= mod_api::MAX_FOUND_BLOCK_IDENTIFIERS);
+        let index = usize::from(!search.identifiers.contains(&"minecraft:diamond_ore".into()));
+        self.searches.insert(search.identifiers.clone());
+        Ok(FoundBlocks {
+            session: 2,
+            dimension: 0,
+            positions: self.blocks(index, search.limit as usize),
+        })
+    }
+}
+
+#[test]
+fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            settings: true,
+            terrain: true,
+            world_draw: true,
+            render_through_walls: true,
+            ..Default::default()
+        },
+        r#"{"netherite_range":128,"ore_range":128,"ores":[true,true,true,true,true,true,true,true,true,true]}"#,
+    );
+    let setup = metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("netherite", 1.), ("ore_esp", 1.)],
+        GameplayFacts::default(),
+    );
+    // Each ore search finds 128 blocks, so both merge into Ore ESP's 256 cubes.
+    let mut terrain = Ores {
+        debris: Debris {
+            count: mod_api::MAX_FOUND_BLOCKS,
+            shift: 0,
+        },
+        ores: 128,
+        searches: Default::default(),
+    };
+    let run = |host: &mut ModHost, terrain: &mut Ores, frames: usize| {
+        let mut most = 0;
+        for _ in 0..frames {
+            mod_host::refresh_block_searches(&mut [&mut *host], &mut *terrain);
+            most = most.max(metered_frame(
+                host,
+                &budget,
+                true,
+                &[],
+                GameplayFacts::default(),
+            ));
+        }
+        most
+    };
+    let expected = |terrain: &Ores| {
+        let mut blocks: Vec<_> = terrain
+            .debris
+            .blocks(256)
+            .into_iter()
+            .chain(terrain.blocks(0, 256))
+            .chain(terrain.blocks(1, 256))
+            .map(|block| [block.x as i64, block.y as i64, block.z as i64])
+            .collect();
+        blocks.sort_unstable();
+        blocks
+    };
+    // 512 cubes at sixteen shared placements per frame, after each finder's comparison.
+    let drawing = run(&mut host, &mut terrain, 80);
+    assert_eq!(
+        terrain.searches.len(),
+        2,
+        "every non-Nether ore in two searches"
+    );
+    assert!(terrain.searches.iter().all(|search| search.len() == 8));
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+    let steady = run(&mut host, &mut terrain, 30);
+    // Every debris block moves, while ore cubes stay.
+    terrain.debris.shift = 1;
+    let moving = run(&mut host, &mut terrain, 80);
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+
+    // Disabling Ore ESP removes only its cubes; then the finder's.
+    let mut clearing = 0;
+    for (id, remaining) in [("ore_esp", 256), ("netherite", 0)] {
+        for frame in 0..40 {
+            let events = [(id, 0.)];
+            clearing = clearing.max(metered_frame(
+                &mut host,
+                &budget,
+                false,
+                if frame == 0 { &events[..] } else { &[] },
+                GameplayFacts::default(),
+            ));
+        }
+        assert_eq!(drawn_instances(&host), remaining, "{id}");
+    }
+    let most = [setup, drawing, steady, moving, clearing]
+        .into_iter()
+        .max()
+        .unwrap();
+    println!(
+        "Ore ESP and Netherite Finder, 512 cubes: peak {most}, {setup} setup, \
+         {drawing} drawing, {steady} steady, {moving} moving, {clearing} clearing \
+         (frame budget {FRAME_FUEL})"
     );
 }
 

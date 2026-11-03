@@ -40,6 +40,9 @@ COLUMNS = [
     ("render", "Render", DRAG_PAD),
     ("menu", "Settings", DRAG_PAD),
 ]
+# Ore ESP's ore switches, in `ores::ORES` order; tests assert both stay aligned.
+ORES = ["Diamond", "Emerald", "Gold", "Iron", "Redstone", "Lapis lazuli", "Copper", "Coal",
+        "Nether gold", "Nether quartz"]
 # id, label, column, toggle, expand, key, settings. The first slider also supplies the
 # row's trailing value; Reach publishes its own fixed-decimal value instead.
 MODULES = [
@@ -61,6 +64,9 @@ MODULES = [
     ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
     ("omni_sprint", "Omni Sprint", "combat", 38, 40, 39, []),
     ("nuker", "Nuker", "combat", 41, 44, 43, [("slider", 42, "Radius", "blk")]),
+    ("ore_esp", "Ore ESP", "render", 45, 57, None,
+     [("slider", 46, "Range", "blocks")]
+     + [("toggle", 47 + offset, title) for offset, title in enumerate(ORES)]),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
 

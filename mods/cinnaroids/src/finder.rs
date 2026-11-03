@@ -1,4 +1,5 @@
 //! Netherite Finder: the nearest loaded matching blocks, drawn as solid cubes through walls.
+//! Ore ESP draws its selected ores with the same retained cubes in another colour.
 //!
 //! Cinnabar reports positions through `terrain.find-blocks`; Cinnaroids owns the selection,
 //! colour and geometry. Each cube is a retained `world-draw` instance of one shared unit cube,
@@ -14,16 +15,19 @@ use mod_api::bindings::cinnabar::{
 
 /// Blocks the finder searches for.
 pub const IDENTIFIERS: [&str; 2] = ["minecraft:ancient_debris", "minecraft:netherite_block"];
-/// Linear RGBA of every highlighted cube, matching the earlier host highlight.
+/// Linear RGBA of every Netherite Finder cube, matching the earlier host highlight.
 pub const COLOR: [f32; 4] = [1.0, 0.12, 0.55, 1.0];
 /// Largest range setting: terrain searches reach this far from the player's feet.
 pub const MAX_RANGE: f32 = mod_api::MAX_TERRAIN_DISTANCE as f32;
-/// Most cubes drawn at once. Cinnabar can return 1024 blocks; comparing an answer with the
-/// drawn cubes costs fuel for every block, so the finder keeps the nearest 256.
+/// Most cubes one finder draws at once. Cinnabar can return 1024 blocks; comparing an answer
+/// with the drawn cubes costs fuel for every block, so each finder keeps the nearest 256.
 pub const LIMIT: usize = 256;
+/// Netherite Finder and Ore ESP, each retaining up to [`LIMIT`] cubes.
+pub const FINDERS: usize = 2;
 const _: () = assert!(LIMIT <= mod_api::MAX_FOUND_BLOCKS);
-const _: () = assert!(LIMIT + crate::ghost::INSTANCES <= mod_api::MAX_DRAW_INSTANCES);
-/// Cube placements added, moved or removed per callback; each is one drawing call.
+const _: () = assert!(FINDERS * LIMIT + crate::ghost::INSTANCES <= mod_api::MAX_DRAW_INSTANCES);
+/// Cube placements added, moved or removed per callback, shared by every finder; each is one
+/// drawing call.
 pub const SYNC_CALLS: usize = 16;
 /// Maximum comparison units per callback; fuel is checked before every position.
 pub const COMPARE_BLOCKS: usize = 64;
@@ -73,15 +77,16 @@ pub fn position(key: [i32; 3]) -> Position {
     }
 }
 
-/// A pink cube at a block, through walls when that authority is granted.
+/// A cube of linear RGBA `color` at a block, through walls when that authority is granted.
 pub fn cube_instance(
     geometry: Handle,
     dimension: i32,
     position: Position,
     through_walls: bool,
+    color: [f32; 4],
 ) -> Instance {
     let mut instance = mod_api::drawing::instance(geometry, anchor(dimension, position));
-    instance.tint = COLOR.into();
+    instance.tint = color.into();
     instance.depth = if through_walls {
         Depth::Always
     } else {
@@ -146,8 +151,8 @@ pub struct Finder {
     /// The uploaded cube; dropped after a drawing error so it is recreated.
     pub geometry: Option<Handle>,
     elapsed: f32,
-    /// Session, dimension, range and depth authority of the current search.
-    context: Option<(u64, i32, u8, bool)>,
+    /// Session, dimension, search and depth authority of the current search.
+    context: Option<(u64, i32, u32, bool)>,
     /// The dimension and depth authority the selection was found with.
     placement: (i32, bool),
     cubes: Cubes,
@@ -194,16 +199,17 @@ impl Finder {
     /// Whether to apply this frame's search answer: on the frame after a context or setting
     /// change, then on a short cadence. The search is renewed every frame regardless, since one
     /// left out of a callback is unsubscribed. A changed search answers nothing until the client
-    /// has scanned for it, so the frame that starts it keeps the cubes already drawn.
+    /// has scanned for it, so the frame that starts it keeps the cubes already drawn. `search`
+    /// identifies the range and searched blocks.
     pub fn due(
         &mut self,
         session: u64,
         dimension: i32,
-        range: u8,
+        search: u32,
         through_walls: bool,
         seconds: f32,
     ) -> bool {
-        let context = Some((session, dimension, range, through_walls));
+        let context = Some((session, dimension, search, through_walls));
         if self.context != context {
             self.context = context;
             self.elapsed = REFRESH_SECONDS;

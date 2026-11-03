@@ -1,0 +1,80 @@
+use super::*;
+
+fn position(x: i32, y: i32, z: i32) -> Position {
+    Position { x, y, z }
+}
+
+#[test]
+fn every_ore_fits_its_dimensions_searches() {
+    let all = mask(&[true; ORES.len()]);
+    let overworld = searches(all, 0);
+    assert_eq!(overworld.len(), MAX_SEARCHES);
+    assert!(
+        overworld
+            .iter()
+            .all(|search| search.len() <= mod_api::MAX_FOUND_BLOCK_IDENTIFIERS)
+    );
+    assert_eq!(overworld.concat().len(), 16);
+    assert!(
+        overworld
+            .concat()
+            .contains(&"minecraft:deepslate_diamond_ore".into())
+    );
+    assert!(!overworld.concat().contains(&"minecraft:quartz_ore".into()));
+    // The End and custom dimensions search the same ores as the Overworld.
+    assert_eq!(searches(all, 2), overworld);
+
+    let nether = searches(all, 1);
+    assert_eq!(
+        nether,
+        [vec![
+            String::from("minecraft:nether_gold_ore"),
+            "minecraft:quartz_ore".into()
+        ]]
+    );
+}
+
+#[test]
+fn only_selected_ores_are_searched() {
+    assert_eq!(mask(&DEFAULT), 0b11);
+    assert_eq!(
+        searches(mask(&DEFAULT), 0),
+        [[
+            "minecraft:diamond_ore",
+            "minecraft:deepslate_diamond_ore",
+            "minecraft:emerald_ore",
+            "minecraft:deepslate_emerald_ore"
+        ]
+        .map(String::from)
+        .to_vec()]
+    );
+    // No selected ore generates in the Nether, and nothing selected searches nothing.
+    assert!(searches(mask(&DEFAULT), 1).is_empty());
+    assert!(searches(0, 0).is_empty());
+    let mut quartz = [false; ORES.len()];
+    quartz[9] = true;
+    assert_eq!(
+        searches(mask(&quartz), 1).concat(),
+        ["minecraft:quartz_ore"]
+    );
+    assert!(searches(mask(&quartz), 0).is_empty());
+}
+
+#[test]
+fn answers_merge_nearest_first_up_to_the_limit() {
+    let origin = [0.5, 64.5, 0.5];
+    let near = vec![position(1, 64, 0), position(4, 64, 0), position(9, 64, 0)];
+    let far = vec![position(0, 66, 0), position(0, 70, 0)];
+    let merged = merge(vec![near.clone(), far.clone()], origin, 8);
+    let keys: Vec<_> = merged.iter().map(|p| (p.x, p.y, p.z)).collect();
+    assert_eq!(
+        keys,
+        [(1, 64, 0), (0, 66, 0), (4, 64, 0), (0, 70, 0), (9, 64, 0)]
+    );
+    assert_eq!(merge(vec![near.clone(), far], origin, 2).len(), 2);
+    // One answer is kept in its order, truncated; none is empty.
+    assert_eq!(merge(vec![near.clone()], origin, 2).len(), 2);
+    assert_eq!(merge(vec![near], origin, 2)[1].x, 4);
+    assert!(merge(Vec::new(), origin, 8).is_empty());
+    assert!(merge(vec![Vec::new(), Vec::new()], origin, 8).is_empty());
+}

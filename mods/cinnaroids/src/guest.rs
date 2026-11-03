@@ -23,11 +23,13 @@ use crate::{
     state::{Controls, Event, Preferences, State},
 };
 
-// Drawing calls one callback may make, which Cinnabar enforces by trapping: capability checks
-// for the finder, marker and ESP, the finder's cube geometry and placements, and the marker's
-// geometry and placements.
-const _: () =
-    assert!(4 + 1 + finder::SYNC_CALLS + 2 * crate::ghost::INSTANCES <= mod_api::MAX_RENDER_CALLS);
+// Drawing calls one callback may make, which Cinnabar enforces by trapping: one capability
+// check each for the finders, marker and ESP, each finder's cube geometry, the finders' shared
+// placements, and the marker's geometry and placements.
+const _: () = assert!(
+    3 + finder::FINDERS + finder::SYNC_CALLS + 2 * crate::ghost::INSTANCES
+        <= mod_api::MAX_RENDER_CALLS
+);
 
 /// Serialization and canonical-ABI publication each have a bounded turn.
 #[derive(Default)]
@@ -45,7 +47,11 @@ enum PanelUpdate {
 
 type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 
-type FinderAnswer = (u64, i32, bool, Vec<terrain::Position>);
+/// Ore ESP's selected-ore mask and dimension, with the identifier list of each search.
+type OreSearches = ((u16, i32), Vec<Vec<String>>);
+
+/// A due search answer: session, dimension, search key, depth authority and blocks.
+type FinderAnswer = (u64, i32, u32, bool, Vec<terrain::Position>);
 
 thread_local! {
     static PANEL_BINDINGS_DIRTY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -64,9 +70,14 @@ thread_local! {
     static ESP_LABELS: RefCell<Option<crate::esp::Labels>> = const { RefCell::new(None) };
     static BINDINGS: RefCell<crate::bindings::Cache> = RefCell::new(crate::bindings::Cache::default());
     static AIM: RefCell<AimAssist> = RefCell::new(AimAssist::default());
-    static FINDER_ANSWER: RefCell<Option<FinderAnswer>> = const { RefCell::new(None) };
-    static FINDER: RefCell<finder::Finder> = RefCell::new(finder::Finder::default());
+    /// Netherite Finder and Ore ESP, with their due answers.
+    static FINDER_ANSWERS: RefCell<[Option<FinderAnswer>; finder::FINDERS]> = RefCell::new(Default::default());
+    static FINDERS: RefCell<[finder::Finder; finder::FINDERS]> = RefCell::new(Default::default());
+    /// The finder whose cubes change first next callback.
+    static FINDER_TURN: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static FINDER_BLOCKS: Vec<String> = finder::IDENTIFIERS.map(String::from).to_vec();
+    /// Ore ESP's selected-ore mask and dimension, with their search identifier lists.
+    static ORE_SEARCHES: RefCell<Option<OreSearches>> = const { RefCell::new(None) };
     static MARKER: RefCell<Marker> = RefCell::new(Marker::default());
 }
 
@@ -97,8 +108,14 @@ impl Guest for Cinnaroids {
         NUKER.with(|nuker| nuker.borrow_mut().reset());
         AUTO_TOTEM.with(|totem| totem.borrow_mut().reset());
         JUMP_RESET.with(|reset| reset.borrow_mut().reset());
-        FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
-        FINDER.with(|finder| finder.borrow_mut().reset());
+        FINDER_ANSWERS.with(|answers| *answers.borrow_mut() = Default::default());
+        FINDERS.with(|finders| {
+            finders
+                .borrow_mut()
+                .iter_mut()
+                .for_each(finder::Finder::reset)
+        });
+        ORE_SEARCHES.with(|searches| *searches.borrow_mut() = None);
         MARKER.with(|marker| marker.borrow_mut().reset());
     }
 
@@ -138,7 +155,7 @@ impl Guest for Cinnaroids {
             JUMP_RESET.with(|reset| reset.borrow_mut().reset());
             let _ = gameplay::cancel_jump();
             clear_esp(&fuel);
-            netherite(None, None, false, &fuel);
+            finders([None; finder::FINDERS], None, &fuel);
             real_position(false, None, false, &fuel);
             return;
         };
@@ -325,9 +342,12 @@ impl Guest for Cinnaroids {
                 publish_controls(&mut modules, &fuel);
             }
             let drawn = snapshot.as_ref().filter(|_| !controls.panel_open);
-            // Disabled drawings retire before optional visual producers.
-            if modules.finder_range().is_none() {
-                netherite(None, drawn, false, &fuel);
+            // Disabled drawings retire before optional visual producers. Finders update once
+            // per callback: here while none is enabled, otherwise in their producer turn.
+            let requests = finder_requests(&modules);
+            let finding = requests.iter().any(Option::is_some);
+            if !finding {
+                finders(requests, drawn, &fuel);
             }
             if !modules.show_real_position() {
                 real_position(false, None, false, &fuel);
@@ -349,10 +369,7 @@ impl Guest for Cinnaroids {
             });
             for offset in 0..5 {
                 match (turn + offset) % 5 {
-                    0 if modules.finder_range().is_some() => {
-                        prepare_netherite(modules.finder_range(), drawn);
-                        netherite(modules.finder_range(), drawn, false, &fuel);
-                    }
+                    0 if finding => finders(requests, drawn, &fuel),
                     1 => {
                         player_esp(&modules, drawn, &fuel);
                     }
@@ -861,147 +878,261 @@ fn stale(error: &DrawError) -> bool {
     error.code == ErrorCode::StaleHandle
 }
 
-/// Renews the terrain subscription before optional work, so deferred drawing cannot
-/// unsubscribe a search. Only due answers cross into the retained drawing work queue.
-fn prepare_netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>) {
-    let (Some(range), Some(frame)) = (range, frame) else {
-        return;
-    };
+/// Netherite Finder's index in the finder tables.
+const NETHERITE: usize = 0;
+/// Each finder's cube colour, in [`finder::FINDERS`] order.
+const FINDER_COLORS: [[f32; 4]; finder::FINDERS] = [finder::COLOR, crate::ores::COLOR];
+
+/// Each finder's search while its module is enabled: the range and a key for the searched
+/// blocks, Ore ESP's selected-ore mask, in [`finder::FINDERS`] order.
+type Requests = [Option<(u8, u16)>; finder::FINDERS];
+
+/// The finder requests of the current module state.
+fn finder_requests(modules: &State) -> Requests {
+    [
+        modules.finder_range().map(|range| (range, 0)),
+        modules.ore_search(),
+    ]
+}
+
+/// Identifies a request's range and searched blocks for [`finder::Finder::due`].
+fn search_key((range, blocks): (u8, u16)) -> u32 {
+    u32::from(range) | (u32::from(blocks) << 8)
+}
+
+/// Updates every finder in one turn, with a single drawing-capability check. An enabled
+/// finder renews its searches before anything else, then takes a due answer and moves its
+/// retained cubes a bounded step toward it; a disabled finder removes its cubes. Outside
+/// focused gameplay, `frame` is none and the cubes stay as they are. Both finders share
+/// [`finder::SYNC_CALLS`] cube changes per callback; they alternate which goes first.
+fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameFuel) {
     let capabilities = drawing::capabilities();
-    if !capabilities.contains(Permissions::WORLD_DRAW) {
-        return;
-    }
-    FINDER_ANSWER.with(|answer| {
-        let mut answer = answer.borrow_mut();
-        if answer.as_ref().is_some_and(|(session, dimension, _, _)| {
-            (*session, *dimension) != (frame.session, frame.dimension)
-        }) {
-            *answer = None;
+    FINDERS.with(|finders| {
+        let mut finders = finders.borrow_mut();
+        if !capabilities.contains(Permissions::WORLD_DRAW) {
+            // Drawing authority changes reload the component; nothing was drawn.
+            finders.iter_mut().for_each(finder::Finder::reset);
+            FINDER_ANSWERS.with(|answers| *answers.borrow_mut() = Default::default());
+            return;
         }
-    });
-    FINDER.with(|finder| {
-        let mut finder = finder.borrow_mut();
         let through_walls = capabilities.contains(Permissions::RENDER_THROUGH_WALLS);
-        let found = FINDER_BLOCKS
-            .with(|blocks| terrain::find_blocks(blocks, f32::from(range), finder::LIMIT as u32));
-        let due = finder.due(
-            frame.session,
-            frame.dimension,
-            range,
-            through_walls,
-            frame.frame_seconds,
-        );
-        match found {
-            Ok(positions) if due => FINDER_ANSWER.with(|answer| {
-                *answer.borrow_mut() =
-                    Some((frame.session, frame.dimension, through_walls, positions));
-            }),
-            Err(terrain::ReadError::Denied) => {
-                FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
-                finder.clear();
-                if finder.notify_denied() {
-                    let _ = hud::set_label("Netherite Finder: terrain permission denied");
+        if let Some(frame) = frame {
+            for (kind, finder) in finders.iter_mut().enumerate() {
+                if let Some(request) = requests[kind] {
+                    search(kind, finder, request, frame, through_walls);
                 }
             }
-            _ => {}
+        }
+        let first = FINDER_TURN.with(|turn| {
+            let first = turn.get();
+            turn.set((first + 1) % finder::FINDERS);
+            first
+        });
+        let mut calls = finder::SYNC_CALLS;
+        for offset in 0..finder::FINDERS {
+            let kind = (first + offset) % finder::FINDERS;
+            if select(
+                kind,
+                &mut finders[kind],
+                requests[kind],
+                frame.is_some(),
+                fuel,
+            ) {
+                calls -= draw_cubes(kind, &mut finders[kind], calls, fuel);
+            }
         }
     });
 }
 
-/// Renews the finder's block search every frame and, on its cadence, takes a changed answer as
-/// the selection; then moves the retained cubes a bounded step toward it. `range` is set while
-/// the module is enabled. Outside focused gameplay the cubes stay as they are. A `busy` frame
-/// only renews the search.
-fn netherite(range: Option<u8>, frame: Option<&gameplay::Snapshot>, busy: bool, fuel: &FrameFuel) {
-    FINDER.with(|finder| {
-        let mut finder = finder.borrow_mut();
-        let capabilities = drawing::capabilities();
-        if !capabilities.contains(Permissions::WORLD_DRAW) {
-            // Drawing authority changes reload the component; nothing was drawn.
-            finder.reset();
-            return;
-        }
-        match (range, frame) {
-            (None, _) => {
-                FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
-                finder.clear_notice();
-                finder.clear();
-            }
-            (Some(_), None) => {
-                FINDER_ANSWER.with(|answer| *answer.borrow_mut() = None);
-                finder.pause();
-            }
-            (Some(_), Some(_)) => {
-                if busy {
-                    return;
-                }
-                if finder.synced() && FINDER_ANSWER.with(|answer| answer.borrow().is_some()) {
-                    if !fuel.allows(5_000) {
-                        return;
-                    }
-                    if let Some((_, dimension, through_walls, positions)) =
-                        FINDER_ANSWER.with(|answer| answer.borrow_mut().take())
-                    {
-                        finder.apply(dimension, through_walls, &positions);
-                    }
-                }
-            }
-        }
-        if busy && range.is_some() {
-            return;
-        }
-        if finder.comparing() {
-            for _ in 0..finder::COMPARE_BLOCKS {
-                // Includes the bounded 256-entry final partition on the last position.
-                if !finder.comparing() || !fuel.allows(7_000) {
-                    break;
-                }
-                finder.compare(1);
-            }
-            return;
-        }
-        if finder.synced() {
-            return;
-        }
-        if !fuel.allows(5_000) {
-            return;
-        }
-        let geometry = match finder.geometry {
-            Some(geometry) => geometry,
-            None if !finder.places() => return,
-            None => match drawing::create_geometry(&finder::cube()) {
-                Ok(geometry) => *finder.geometry.insert(geometry),
-                Err(_) => return,
-            },
-        };
-        let (dimension, through_walls) = finder.placement();
-        // One placement is reused for every call; only its anchor changes.
-        let mut placement: Option<Instance> = None;
-        for _ in 0..finder::SYNC_CALLS {
-            if !fuel.allows(3_000) {
-                break;
-            }
-            let synced = finder.sync(1, |change| match change {
-                Change::Create(position) | Change::Move(_, position) => {
-                    let instance = placement.get_or_insert_with(|| {
-                        finder::cube_instance(geometry, dimension, position, through_walls)
-                    });
-                    instance.anchor = finder::anchor(dimension, position);
-                    match change {
-                        Change::Move(handle, _) => drawing::update(handle, instance).map(|()| None),
-                        _ => drawing::create(instance).map(Some),
-                    }
-                }
-                Change::Remove(handle) => drawing::remove(handle).map(|()| None),
-            });
-            if let Err(error) = synced
-                && stale(&error)
-            {
-                finder.reset();
-                break;
-            }
+/// Renews one finder's searches, which every frame must do to keep them subscribed, and on its
+/// cadence queues the nearest-first answer. A denied search clears the finder and is reported
+/// once until the module is disabled.
+fn search(
+    kind: usize,
+    finder: &mut finder::Finder,
+    request: (u8, u16),
+    frame: &gameplay::Snapshot,
+    through_walls: bool,
+) {
+    let key = search_key(request);
+    FINDER_ANSWERS.with(|answers| {
+        let answer = &mut answers.borrow_mut()[kind];
+        if answer
+            .as_ref()
+            .is_some_and(|(session, dimension, search, _, _)| {
+                (*session, *dimension, *search) != (frame.session, frame.dimension, key)
+            })
+        {
+            *answer = None;
         }
     });
+    let due = finder.due(
+        frame.session,
+        frame.dimension,
+        key,
+        through_walls,
+        frame.frame_seconds,
+    );
+    let range = f32::from(request.0);
+    let found = if kind == NETHERITE {
+        FINDER_BLOCKS.with(|blocks| terrain::find_blocks(blocks, range, finder::LIMIT as u32))
+    } else {
+        find_ores(request.1, range, frame, due)
+    };
+    match found {
+        Ok(positions) if due => {
+            FINDER_ANSWERS.with(|answers| {
+                answers.borrow_mut()[kind] = Some((
+                    frame.session,
+                    frame.dimension,
+                    key,
+                    through_walls,
+                    positions,
+                ));
+            });
+        }
+        Err(terrain::ReadError::Denied) => {
+            FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind] = None);
+            finder.clear();
+            if finder.notify_denied() {
+                let _ = hud::set_label(match kind {
+                    NETHERITE => "Netherite Finder: terrain permission denied",
+                    _ => "Ore ESP: terrain permission denied",
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Renews Ore ESP's searches for the selected `ores` that generate in the player's dimension.
+/// When `due`, returns their answers merged nearest first; otherwise none.
+fn find_ores(
+    ores: u16,
+    range: f32,
+    frame: &gameplay::Snapshot,
+    due: bool,
+) -> Result<Vec<terrain::Position>, terrain::ReadError> {
+    ORE_SEARCHES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let context = (ores, frame.dimension);
+        if cache.as_ref().is_none_or(|(cached, _)| *cached != context) {
+            *cache = Some((context, crate::ores::searches(ores, frame.dimension)));
+        }
+        let (_, searches) = cache.as_ref().expect("ore searches");
+        let mut answers = Vec::with_capacity(searches.len());
+        let mut failure = None;
+        for blocks in searches {
+            match terrain::find_blocks(blocks, range, finder::LIMIT as u32) {
+                Ok(positions) => answers.push(positions),
+                Err(error) => {
+                    if failure.is_none() || matches!(error, terrain::ReadError::Denied) {
+                        failure = Some(error);
+                    }
+                }
+            }
+        }
+        match failure {
+            Some(error) => Err(error),
+            None if due => {
+                let eye = [frame.eye.x, frame.eye.y, frame.eye.z];
+                Ok(crate::ores::merge(answers, eye, finder::LIMIT))
+            }
+            None => Ok(Vec::new()),
+        }
+    })
+}
+
+/// Takes a due answer as the selection once the cubes show the last one, then compares it
+/// with the cubes within fuel. Returns whether cube changes may follow this callback.
+fn select(
+    kind: usize,
+    finder: &mut finder::Finder,
+    request: Option<(u8, u16)>,
+    gameplay: bool,
+    fuel: &FrameFuel,
+) -> bool {
+    match (request, gameplay) {
+        (None, _) => {
+            FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind] = None);
+            finder.clear_notice();
+            finder.clear();
+        }
+        (Some(_), false) => {
+            FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind] = None);
+            finder.pause();
+        }
+        (Some(_), true) => {
+            if finder.synced() && FINDER_ANSWERS.with(|answers| answers.borrow()[kind].is_some()) {
+                if !fuel.allows(5_000) {
+                    return false;
+                }
+                if let Some((_, dimension, _, through_walls, positions)) =
+                    FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind].take())
+                {
+                    finder.apply(dimension, through_walls, &positions);
+                }
+            }
+        }
+    }
+    if finder.comparing() {
+        for _ in 0..finder::COMPARE_BLOCKS {
+            // Includes the bounded 256-entry final partition on the last position.
+            if !finder.comparing() || !fuel.allows(7_000) {
+                break;
+            }
+            finder.compare(1);
+        }
+        return false;
+    }
+    !finder.synced()
+}
+
+/// Makes up to `calls` cube changes toward one finder's selection, uploading its cube first
+/// when needed. Returns the cube changes attempted.
+fn draw_cubes(kind: usize, finder: &mut finder::Finder, calls: usize, fuel: &FrameFuel) -> usize {
+    if calls == 0 || !fuel.allows(5_000) {
+        return 0;
+    }
+    let geometry = match finder.geometry {
+        Some(geometry) => geometry,
+        None if !finder.places() => return 0,
+        None => match drawing::create_geometry(&finder::cube()) {
+            Ok(geometry) => *finder.geometry.insert(geometry),
+            Err(_) => return 0,
+        },
+    };
+    let (dimension, through_walls) = finder.placement();
+    let color = FINDER_COLORS[kind];
+    // One placement is reused for every call; only its anchor changes.
+    let mut placement: Option<Instance> = None;
+    let mut made = 0;
+    while made < calls && !finder.synced() {
+        if !fuel.allows(3_000) {
+            break;
+        }
+        made += 1;
+        let synced = finder.sync(1, |change| match change {
+            Change::Create(position) | Change::Move(_, position) => {
+                let instance = placement.get_or_insert_with(|| {
+                    finder::cube_instance(geometry, dimension, position, through_walls, color)
+                });
+                instance.anchor = finder::anchor(dimension, position);
+                match change {
+                    Change::Move(handle, _) => drawing::update(handle, instance).map(|()| None),
+                    _ => drawing::create(instance).map(Some),
+                }
+            }
+            Change::Remove(handle) => drawing::remove(handle).map(|()| None),
+        });
+        if let Err(error) = synced
+            && stale(&error)
+        {
+            finder.reset();
+            break;
+        }
+    }
+    made
 }
 
 /// Draws FakeLag's last relayed position while the option is on and packets are delayed. A

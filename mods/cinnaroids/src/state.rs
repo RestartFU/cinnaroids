@@ -41,6 +41,9 @@ pub struct Preferences {
     pub fake_lag_ms: u16,
     pub show_real_position: bool,
     pub netherite_range: u8,
+    pub ore_range: u8,
+    /// Ore ESP's selected ores, in [`crate::ores::ORES`] order.
+    pub ores: [bool; crate::ores::ORES.len()],
     pub esp_range: u8,
     pub esp_color: u8,
     pub esp_names: bool,
@@ -72,6 +75,8 @@ impl Default for Preferences {
             fake_lag_ms: 100,
             show_real_position: false,
             netherite_range: 64,
+            ore_range: 64,
+            ores: crate::ores::DEFAULT,
             esp_range: 64,
             esp_color: 0,
             esp_names: true,
@@ -146,6 +151,16 @@ impl Preferences {
         }
         if let Some(value) = values.get("netherite_range").and_then(Value::as_u64) {
             preferences.netherite_range = value.clamp(1, crate::finder::MAX_RANGE as u64) as u8;
+        }
+        if let Some(value) = values.get("ore_range").and_then(Value::as_u64) {
+            preferences.ore_range = value.clamp(1, crate::finder::MAX_RANGE as u64) as u8;
+        }
+        if let Some(Value::Array(ores)) = values.get("ores") {
+            for (target, value) in preferences.ores.iter_mut().zip(ores) {
+                if let Some(value) = value.as_bool() {
+                    *target = value;
+                }
+            }
         }
         if let Some(value) = values.get("esp_range").and_then(Value::as_u64) {
             preferences.esp_range = value.clamp(1, crate::esp::MAX_RANGE as u64) as u8;
@@ -332,6 +347,7 @@ pub struct Modules {
     pub jump_reset: bool,
     pub omni_sprint: bool,
     pub nuker: bool,
+    pub ore_esp: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -353,7 +369,7 @@ pub struct State {
     pub capturing_key: Option<KeybindTarget>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
-    pub expanded: [bool; 11],
+    pub expanded: [bool; 12],
     pub drag: Option<Drag>,
     press_armed: bool,
     pointer: [f32; 2],
@@ -371,7 +387,7 @@ impl State {
             access: Default::default(),
             capturing_key: None,
             panel_dirty: true,
-            expanded: [false; 11],
+            expanded: [false; 12],
             drag: None,
             press_armed: false,
             pointer: [PAD_IDLE; 2],
@@ -595,7 +611,7 @@ impl State {
     }
 
     /// Runtime enabled flags in panel order.
-    pub fn enabled_flags(&self) -> [bool; 11] {
+    pub fn enabled_flags(&self) -> [bool; 12] {
         let m = &self.modules;
         [
             m.clicker,
@@ -609,6 +625,7 @@ impl State {
             m.auto_totem,
             m.omni_sprint,
             m.nuker,
+            m.ore_esp,
         ]
     }
 
@@ -654,6 +671,12 @@ impl State {
                 .position(|id| *id == event.id)
                 .unwrap();
                 self.expanded[index] = !self.expanded[index];
+                self.capturing_key = None;
+                self.panel_dirty = true;
+                return;
+            }
+            "expand_ore_esp" => {
+                self.expanded[11] = !self.expanded[11];
                 self.capturing_key = None;
                 self.panel_dirty = true;
                 return;
@@ -767,7 +790,15 @@ impl State {
                 &mut self.preferences.netherite_range,
                 value.round().clamp(1.0, crate::finder::MAX_RANGE) as u8,
             ),
-            _ => false,
+            "ore_esp" => replace(&mut self.modules.ore_esp, value >= 0.5),
+            "ore_range" => replace(
+                &mut self.preferences.ore_range,
+                value.round().clamp(1.0, crate::finder::MAX_RANGE) as u8,
+            ),
+            id => match crate::ores::ORES.iter().position(|ore| ore.id == id) {
+                Some(index) => replace(&mut self.preferences.ores[index], value >= 0.5),
+                None => false,
+            },
         };
         if changed {
             self.panel_dirty = true;
@@ -814,6 +845,16 @@ impl State {
         self.modules
             .netherite
             .then_some(self.preferences.netherite_range)
+    }
+
+    /// Ore ESP's range in blocks and selected-ore mask while the module is enabled.
+    pub fn ore_search(&self) -> Option<(u8, u16)> {
+        self.modules.ore_esp.then(|| {
+            (
+                self.preferences.ore_range,
+                crate::ores::mask(&self.preferences.ores),
+            )
+        })
     }
 
     pub fn attack_reach(&self, gameplay: bool) -> Option<f32> {
@@ -1154,6 +1195,35 @@ impl State {
                 label: "Nuker settings",
             },
         ]);
+        controls.extend([
+            Control::Toggle {
+                id: "ore_esp",
+                label: "Ore ESP",
+                value: self.modules.ore_esp,
+            },
+            Control::Slider {
+                id: "ore_range",
+                label: "Ore ESP range",
+                value: f32::from(self.preferences.ore_range),
+                min: 1.0,
+                max: crate::finder::MAX_RANGE,
+                step: 1.0,
+            },
+        ]);
+        controls.extend(
+            crate::ores::ORES
+                .iter()
+                .zip(self.preferences.ores)
+                .map(|(ore, value)| Control::Toggle {
+                    id: ore.id,
+                    label: ore.label,
+                    value,
+                }),
+        );
+        controls.push(Control::Button {
+            id: "expand_ore_esp",
+            label: "Ore ESP settings",
+        });
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
             capture_key: self.capturing_key.is_some(),

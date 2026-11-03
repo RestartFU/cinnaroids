@@ -63,7 +63,7 @@ fn cube_covers_one_whole_block_from_its_minimum_corner() {
 #[test]
 fn every_found_block_gets_a_pink_cube_through_walls() {
     for (position, through_walls) in [(position(-9, 4, -4), true), (position(120, -60, 7), false)] {
-        let instance = cube_instance(handle(), -1, position, through_walls);
+        let instance = cube_instance(handle(), -1, position, through_walls, COLOR);
         assert_eq!(instance.geometry.slot, handle().slot);
         assert_eq!(instance.tint, (1.0, 0.12, 0.55, 1.0));
         // Without through-wall authority the cubes respect world depth.
@@ -99,7 +99,7 @@ fn search_and_draw_bounds_fit_the_host_limits() {
     let GeometrySpec::Triangles(mesh) = cube() else {
         unreachable!()
     };
-    assert!(LIMIT * mesh.indices.len() <= mod_api::MAX_DRAW_VERTEX_WORK);
+    assert!(FINDERS * LIMIT * mesh.indices.len() <= mod_api::MAX_DRAW_VERTEX_WORK);
     let many: Vec<_> = (0..LIMIT as i32 + 10).map(|x| position(x, 0, 0)).collect();
     let mut finder = Finder::default();
     assert!(finder.apply(0, true, &many));

@@ -42,7 +42,7 @@ const MENU_BODY: i32 = 52;
 
 /// Module binding prefix, owning column and the height of its generated settings region.
 /// A column's first module never moves and so has no `_y` binding.
-const MODULES: [(&str, usize, i32); 11] = [
+const MODULES: [(&str, usize, i32); 12] = [
     ("clicker", 0, 60),
     ("aim", 0, 112),
     ("reach", 0, 60),
@@ -54,6 +54,7 @@ const MODULES: [(&str, usize, i32); 11] = [
     ("auto_totem", 0, 0),
     ("omni_sprint", 0, 30),
     ("nuker", 0, 60),
+    ("ore_esp", 2, 238),
 ];
 const KEYED: [(usize, KeybindTarget); 6] = [
     (0, KeybindTarget::Clicker),
@@ -69,8 +70,8 @@ const MODULE_END: usize = MODULES.len();
 const META_STEP: usize = MODULE_END + 1;
 const COLUMN_START: usize = META_STEP + 1;
 const COLUMN_END: usize = COLUMN_START + COLUMNS.len() - 1;
-const TOGGLE_COUNT: usize = 16;
-const SLIDER_COUNT: usize = 8;
+const TOGGLE_COUNT: usize = 17 + ORE_TOGGLES;
+const SLIDER_COUNT: usize = 9;
 const TOGGLE_START: usize = COLUMN_END + 1;
 const TOGGLE_END: usize = TOGGLE_START + TOGGLE_COUNT - 1;
 const SLIDER_START: usize = TOGGLE_END + 1;
@@ -269,6 +270,17 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         capturing(KeybindTarget::Nuker),
     );
     json.push_str(r#",{"kind":"button","id":"expand_nuker","label":"Nuker settings"}"#);
+    toggle(json, "ore_esp", "Ore ESP", m.ore_esp);
+    slider(
+        json,
+        r#""ore_range","label":"Ore ESP range""#,
+        f32::from(p.ore_range),
+        "1,\"max\":128,\"step\":1",
+    );
+    for (ore, value) in crate::ores::ORES.iter().zip(p.ores) {
+        toggle(json, ore.id, ore.label, value);
+    }
+    json.push_str(r#",{"kind":"button","id":"expand_ore_esp","label":"Ore ESP settings"}"#);
     json.push_str("] }");
     append_shell(json);
 }
@@ -485,10 +497,15 @@ fn text(json: &mut String, value: &str) {
     json.push('"');
 }
 
+/// Ore ESP's ore switches, panel indices from [`ORE_TOGGLE_START`] in [`crate::ores::ORES`] order.
+const ORE_TOGGLES: usize = crate::ores::ORES.len();
+const ORE_TOGGLE_START: usize = 47;
+
 /// Toggle controls by panel index; one eased progress drives each row wash, lift bar and switch.
 fn toggles(state: &State) -> [(usize, bool); TOGGLE_COUNT] {
     let (m, p) = (&state.modules, &state.preferences);
-    [
+    let mut toggles = [(0, false); TOGGLE_COUNT];
+    let fixed: [(usize, bool); TOGGLE_COUNT - ORE_TOGGLES] = [
         (1, m.clicker),
         (4, m.aim),
         (8, m.reach),
@@ -505,7 +522,13 @@ fn toggles(state: &State) -> [(usize, bool); TOGGLE_COUNT] {
         (37, m.auto_totem),
         (38, m.omni_sprint),
         (41, m.nuker),
-    ]
+        (45, m.ore_esp),
+    ];
+    toggles[..fixed.len()].copy_from_slice(&fixed);
+    for (offset, on) in p.ores.into_iter().enumerate() {
+        toggles[fixed.len() + offset] = (ORE_TOGGLE_START + offset, on);
+    }
+    toggles
 }
 
 /// Visible sliders by panel index with their value and range; the drag pads have no visuals.
@@ -540,6 +563,7 @@ fn sliders(state: &State) -> [(usize, f32, f32, f32); SLIDER_COUNT] {
             1.0,
             f32::from(crate::nuker::MAX_RANGE),
         ),
+        (46, f32::from(p.ore_range), 1.0, crate::finder::MAX_RANGE),
     ]
 }
 
@@ -721,7 +745,7 @@ pub fn key_label(key: &str) -> &str {
 /// A snapshot of panel scalars serialized one bounded row at a time.
 pub(crate) struct Bindings {
     state: State,
-    enabled: [bool; 11],
+    enabled: [bool; 12],
     toggles: [(usize, bool); TOGGLE_COUNT],
     sliders: [(usize, f32, f32, f32); SLIDER_COUNT],
     json: String,
