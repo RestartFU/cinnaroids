@@ -1041,24 +1041,23 @@ fn find_ores(
         }
         match failure {
             Some(error) => Err(error),
-            None if due => Ok(crate::ores::merge(
-                answers,
-                search_origin(frame),
-                finder::LIMIT,
-            )),
+            // Without the feet, a due answer waits for the next refresh.
+            None if due => feet(frame)
+                .map(|feet| crate::ores::merge(answers, feet, finder::LIMIT))
+                .ok_or(terrain::ReadError::Unavailable),
             None => Ok(Vec::new()),
         }
     })
 }
 
-/// The point searches measure from: the player's feet when player state is granted, so
-/// merged answers keep the host's nearest-first order. Otherwise the eye stands in, which
-/// can only change which blocks are kept at the cube limit.
-fn search_origin(frame: &gameplay::Snapshot) -> [f32; 3] {
-    match player_state::read_world() {
-        Ok(Some(world)) if world.dimension == frame.dimension => world.position.into(),
-        _ => [frame.eye.x, frame.eye.y, frame.eye.z],
-    }
+/// The player's feet in the frame's dimension, which terrain searches measure from, so
+/// answers merged from them keep the host's nearest-first order.
+fn feet(frame: &gameplay::Snapshot) -> Option<[f32; 3]> {
+    player_state::read_world()
+        .ok()
+        .flatten()
+        .filter(|world| world.dimension == frame.dimension)
+        .map(|world| world.position.into())
 }
 
 /// Takes a due answer as the selection once the cubes show the last one, then compares it

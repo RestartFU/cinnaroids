@@ -151,8 +151,8 @@ pub fn searches(mask: u16, dimension: i32) -> Vec<Vec<String>> {
     searches
 }
 
-/// Merges nearest-first answers into the nearest `limit` blocks to `origin`, comparing block
-/// centres. Takes at most `limit` steps, whatever the answers' lengths.
+/// Merges answers, each nearest first from `origin`, into the nearest `limit` blocks to it,
+/// comparing block centres. Takes at most `limit` steps, whatever the answers' lengths.
 pub fn merge(mut answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) -> Vec<Position> {
     if answers.len() <= 1 {
         let mut positions = answers.pop().unwrap_or_default();

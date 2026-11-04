@@ -270,6 +270,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 settings: true,
                 packet_delay: true,
                 terrain: true,
+                player_state: true,
                 world_draw: true,
                 render_through_walls: true,
                 fullbright: true,
@@ -1164,6 +1165,30 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
     assert_eq!(drawn_origins(&host), expected(&terrain));
     check_tints(&host);
 
+    // Turning off gold ore changes the Overworld searches, so their cached lists rebuild.
+    terrain.searches.clear();
+    let toggle = metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("ore_gold", 0.)],
+        GameplayFacts::default(),
+    );
+    let reselecting = run(&mut host, &mut terrain, 30);
+    assert_eq!(terrain.searches.len(), 2, "gold leaves both searches");
+    assert!(
+        terrain
+            .searches
+            .iter()
+            .flatten()
+            .all(|id| !id.contains("gold_ore"))
+    );
+    assert_eq!(
+        terrain.searches.iter().map(Vec::len).sum::<usize>(),
+        14,
+        "seven Overworld ores"
+    );
+
     // Disabling Ore ESP removes only its cubes; then the finder's.
     let mut clearing = 0;
     for (id, remaining) in [("ore_esp", 256), ("netherite", 0)] {
@@ -1179,14 +1204,14 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         }
         assert_eq!(drawn_instances(&host), remaining, "{id}");
     }
-    let most = [setup, drawing, steady, moving, clearing]
+    let most = [setup, drawing, steady, moving, toggle, reselecting, clearing]
         .into_iter()
         .max()
         .unwrap();
     println!(
         "Ore ESP and Netherite Finder, 512 cubes: peak {most}, {setup} setup, \
-         {drawing} drawing, {steady} steady, {moving} moving, {clearing} clearing \
-         (frame budget {FRAME_FUEL})"
+         {drawing} drawing, {steady} steady, {moving} moving, {toggle} toggle, \
+         {reselecting} reselecting, {clearing} clearing (frame budget {FRAME_FUEL})"
     );
 }
 

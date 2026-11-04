@@ -83,7 +83,12 @@ pub const REQUIREMENTS: [Requirement; 12] = [
     },
     Requirement {
         id: "ore_esp",
-        groups: &[&["controls"], &["terrain"], &["world_draw"]],
+        groups: &[
+            &["controls"],
+            &["terrain"],
+            &["player_state"],
+            &["world_draw"],
+        ],
         flag: |m| &mut m.ore_esp,
     },
 ];

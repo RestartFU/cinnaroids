@@ -78,3 +78,34 @@ fn answers_merge_nearest_first_up_to_the_limit() {
     assert!(merge(Vec::new(), origin, 8).is_empty());
     assert!(merge(vec![Vec::new(), Vec::new()], origin, 8).is_empty());
 }
+
+#[test]
+fn every_ore_block_identifier_is_pinned() {
+    let blocks: Vec<&str> = ORES
+        .iter()
+        .flat_map(|ore| ore.blocks.iter().copied())
+        .collect();
+    assert_eq!(
+        blocks,
+        [
+            "minecraft:diamond_ore",
+            "minecraft:deepslate_diamond_ore",
+            "minecraft:emerald_ore",
+            "minecraft:deepslate_emerald_ore",
+            "minecraft:gold_ore",
+            "minecraft:deepslate_gold_ore",
+            "minecraft:iron_ore",
+            "minecraft:deepslate_iron_ore",
+            "minecraft:redstone_ore",
+            "minecraft:deepslate_redstone_ore",
+            "minecraft:lapis_ore",
+            "minecraft:deepslate_lapis_ore",
+            "minecraft:copper_ore",
+            "minecraft:deepslate_copper_ore",
+            "minecraft:coal_ore",
+            "minecraft:deepslate_coal_ore",
+            "minecraft:nether_gold_ore",
+            "minecraft:quartz_ore",
+        ]
+    );
+}
