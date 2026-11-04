@@ -75,7 +75,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 45);
+    assert_eq!(controls.len(), 58);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
@@ -210,7 +210,7 @@ fn every_value_control_publishes_its_own_feedback() {
         }
         checked += 1;
     }
-    assert_eq!(checked, 16 + 8 + 7 + 2);
+    assert_eq!(checked, 27 + 9 + 7 + 2);
     assert_eq!(bindings["#c3_text"], "RShift");
     assert_eq!(bindings["#c7_text"], "Num7");
     assert_eq!(bindings["#c9_text"], "4.2");
@@ -297,8 +297,8 @@ fn hover_and_press_are_native_button_states() {
     }
     let mut count = 0;
     visit(&document["panel"], &mut count);
-    // Ten rows, eight disclosure arrows, six keycaps, two dropdowns and Reset layout.
-    assert_eq!(count, 11 + 9 + 7 + 2 + 1);
+    // Twelve rows, ten disclosure arrows, seven keycaps, two dropdowns and Reset layout.
+    assert_eq!(count, 12 + 10 + 7 + 2 + 1);
 }
 
 #[test]

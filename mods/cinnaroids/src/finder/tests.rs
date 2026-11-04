@@ -63,7 +63,7 @@ fn cube_covers_one_whole_block_from_its_minimum_corner() {
 #[test]
 fn every_found_block_gets_a_pink_cube_through_walls() {
     for (position, through_walls) in [(position(-9, 4, -4), true), (position(120, -60, 7), false)] {
-        let instance = cube_instance(handle(), -1, position, through_walls);
+        let instance = cube_instance(handle(), -1, position, through_walls, COLOR);
         assert_eq!(instance.geometry.slot, handle().slot);
         assert_eq!(instance.tint, (1.0, 0.12, 0.55, 1.0));
         // Without through-wall authority the cubes respect world depth.
@@ -99,7 +99,7 @@ fn search_and_draw_bounds_fit_the_host_limits() {
     let GeometrySpec::Triangles(mesh) = cube() else {
         unreachable!()
     };
-    assert!(LIMIT * mesh.indices.len() <= mod_api::MAX_DRAW_VERTEX_WORK);
+    assert!(FINDERS * LIMIT * mesh.indices.len() <= mod_api::MAX_DRAW_VERTEX_WORK);
     let many: Vec<_> = (0..LIMIT as i32 + 10).map(|x| position(x, 0, 0)).collect();
     let mut finder = Finder::default();
     assert!(finder.apply(0, true, &many));
@@ -226,6 +226,30 @@ fn a_changed_selection_moves_spare_cubes_before_adding_or_removing() {
 }
 
 #[test]
+fn a_dimension_transfer_drops_released_cubes_and_redraws_them() {
+    let mut finder = Finder::default();
+    let mut drawn = Drawn::default();
+    let blocks = [position(1, 2, 3), position(4, 5, 6)];
+    finder.geometry = Some(handle());
+    finder.apply(0, true, &blocks);
+    settle(&mut finder, &mut drawn);
+    assert_eq!(finder.cubes(), 2);
+    // The same blocks in another dimension: the host released the old cubes and geometry.
+    let mut redrawn = Drawn::default();
+    assert!(finder.apply(1, true, &blocks));
+    assert_eq!(finder.cubes(), 0);
+    assert!(finder.geometry.is_none());
+    settle(&mut finder, &mut redrawn);
+    assert_eq!(redrawn.blocks(), [(1, 2, 3), (4, 5, 6)]);
+    assert_eq!(redrawn.calls, 2, "two creations, no removals");
+    // Depth authority alone keeps the handles.
+    finder.geometry = Some(handle());
+    finder.apply(1, false, &blocks);
+    assert_eq!(finder.cubes(), 2);
+    assert!(finder.geometry.is_some());
+}
+
+#[test]
 fn a_failed_call_keeps_the_changes_made_before_it() {
     let mut finder = Finder::default();
     let mut drawn = Drawn::default();
@@ -332,6 +356,11 @@ fn applies_the_first_scanned_answer_after_changes_then_on_a_short_cadence() {
     assert!(!finder.due(1, 0, 64, true, f32::NAN));
     assert!(!finder.due(1, 0, 64, true, -1.0));
     assert!(finder.due(1, 0, 64, true, REFRESH_SECONDS));
+    assert!(!finder.due(1, 0, 64, true, 0.0));
+    // A postponed answer is due again on the next frame, then the cadence resumes.
+    assert!(finder.due(1, 0, 64, true, REFRESH_SECONDS));
+    finder.postpone();
+    assert!(finder.due(1, 0, 64, true, 0.0));
     assert!(!finder.due(1, 0, 64, true, 0.0));
     // A new range, session, dimension or depth authority applies on the following frame.
     for (session, dimension, range, through_walls) in [

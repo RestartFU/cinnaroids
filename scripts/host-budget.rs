@@ -94,7 +94,10 @@ fn drawing_host(grants: ModGrants, settings: &str) -> (tempfile::TempDir, ModHos
     (directory, host, budget)
 }
 
-/// One metered frame: the local player stands at the origin of world session 2, and `gameplay`
+/// The local player's feet in every metered frame, where terrain searches measure from.
+const FEET: (f32, f32, f32) = (0., 0., 0.);
+
+/// One metered frame: the local player stands at [`FEET`] in world session 2, and `gameplay`
 /// gives a focused gameplay frame, otherwise the panel is open with `events`. Returns the fuel
 /// the callback used.
 fn metered_frame(
@@ -109,7 +112,7 @@ fn metered_frame(
             session: 2,
             dimension: 0,
             world: "local-fixture".into(),
-            position: (0., 0., 0.),
+            position: FEET,
             alive: true,
             runtime_id: 99,
         }),
@@ -179,6 +182,7 @@ fn module_edits_preserve_the_surface_on_every_frame() {
         "netherite",
         "fullbright",
         "player_esp",
+        "ore_esp",
     ] {
         for enabled in [true, false] {
             let mut updated = false;
@@ -266,6 +270,7 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 settings: true,
                 packet_delay: true,
                 terrain: true,
+                player_state: true,
                 world_draw: true,
                 render_through_walls: true,
                 fullbright: true,
@@ -296,6 +301,11 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("fullbright", 1.0),
             ("netherite", 1.0),
             ("netherite_range", 128.0),
+            ("expand_ore_esp", 1.0),
+            ("ore_esp", 1.0),
+            ("ore_range", 128.0),
+            ("ore_quartz", 1.0),
+            ("ore_esp", 0.0),
             ("reset_layout", 1.0),
             ("aim", 1.0),
             ("clicker", 1.0),
@@ -338,7 +348,11 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                         .any(|control| control.id() == "aim_horizontal_only")
                 );
             }
-            if (id == "netherite" && value >= 0.5) || id == "netherite_range" {
+            if (id == "netherite" && value >= 0.5)
+                || id == "netherite_range"
+                || (id == "ore_esp" && value >= 0.5)
+                || id == "ore_range"
+            {
                 // The finder searches and draws only over focused gameplay, not in the panel.
                 assert_eq!(drawn_instances(&host), 0);
                 assert!(host.fullbright(), "Finder does not disable Fullbright");
@@ -347,6 +361,12 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
                 let preferences: serde_json::Value =
                     serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
                 assert_eq!(preferences["netherite_range"], 128);
+            }
+            if id == "ore_quartz" {
+                let preferences: serde_json::Value =
+                    serde_json::from_str(host.settings_snapshot().unwrap()).unwrap();
+                assert_eq!(preferences["ore_range"], 128);
+                assert_eq!(preferences["ores"][9], true);
             }
             if id == "fullbright" {
                 assert_eq!(host.fullbright(), value >= 0.5);
@@ -979,6 +999,246 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
         "Netherite Finder, 256 cubes: peak {most}, {setup} setup, {panel} panel, \
          {drawing} drawing, {steady} steady, \
          {moving} moving, {clearing} clearing (frame budget {FRAME_FUEL})"
+    );
+}
+
+/// Loaded terrain answering Netherite Finder with [`Debris`] and each Ore ESP search from
+/// `ores` blocks of its own, in a slab south of the player.
+struct Ores {
+    debris: Debris,
+    ores: usize,
+    /// The distinct ore searches answered since the last check.
+    searches: std::collections::BTreeSet<Vec<String>>,
+    /// The ore search that last included gold ore, which also finds one gold block.
+    gold: Option<usize>,
+}
+
+impl Ores {
+    /// The blocks the `search`th ore search finds, nearest [`FEET`] first like the host.
+    fn blocks(&self, search: usize, limit: usize) -> Vec<TerrainPosition> {
+        let mut blocks: Vec<_> = (0..self.ores as i32)
+            .map(|index| TerrainPosition {
+                x: index % 32 - 16,
+                y: index / 32 % 16,
+                z: 2 + search as i32,
+            })
+            .collect();
+        if self.gold == Some(search) {
+            // Beside the feet, below every other block, so Ore ESP always keeps it.
+            blocks.push(TerrainPosition {
+                x: 0,
+                y: -1,
+                z: 2 + search as i32,
+            });
+        }
+        blocks.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
+        blocks.truncate(limit);
+        blocks
+    }
+}
+
+/// Squared distance from [`FEET`] to a block's centre, the host's search order.
+fn feet_distance(block: &TerrainPosition) -> f64 {
+    [
+        (block.x, FEET.0),
+        (block.y, FEET.1),
+        (block.z, FEET.2),
+    ]
+    .into_iter()
+    .map(|(block, feet)| (f64::from(block) + 0.5 - f64::from(feet)).powi(2))
+    .sum()
+}
+
+impl BlockSearchSource for Ores {
+    fn find(&mut self, search: &BlockSearch) -> Result<FoundBlocks, TerrainReadError> {
+        if search
+            .identifiers
+            .contains(&"minecraft:ancient_debris".to_string())
+        {
+            return self.debris.find(search);
+        }
+        assert!(search.identifiers.len() <= mod_api::MAX_FOUND_BLOCK_IDENTIFIERS);
+        let index = usize::from(!search.identifiers.contains(&"minecraft:diamond_ore".into()));
+        self.searches.insert(search.identifiers.clone());
+        if search.identifiers.contains(&"minecraft:gold_ore".into()) {
+            self.gold = Some(index);
+        } else if self.gold == Some(index) {
+            self.gold = None;
+        }
+        Ok(FoundBlocks {
+            session: 2,
+            dimension: 0,
+            positions: self.blocks(index, search.limit as usize),
+        })
+    }
+}
+
+#[test]
+fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
+    let (_directory, mut host, budget) = drawing_host(
+        ModGrants {
+            controls: true,
+            settings: true,
+            terrain: true,
+            player_state: true,
+            world_draw: true,
+            render_through_walls: true,
+            ..Default::default()
+        },
+        r#"{"netherite_range":128,"ore_range":128,"ores":[true,true,true,true,true,true,true,true,true,true]}"#,
+    );
+    let setup = metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("netherite", 1.), ("ore_esp", 1.)],
+        GameplayFacts::default(),
+    );
+    // Each ore search finds its nearest 256 of 512 blocks; Ore ESP keeps the nearest 256 of both.
+    let mut terrain = Ores {
+        debris: Debris {
+            count: mod_api::MAX_FOUND_BLOCKS,
+            shift: 0,
+        },
+        ores: 512,
+        searches: Default::default(),
+        gold: None,
+    };
+    let run = |host: &mut ModHost, terrain: &mut Ores, frames: usize| {
+        let mut most = 0;
+        for _ in 0..frames {
+            mod_host::refresh_block_searches(&mut [&mut *host], &mut *terrain);
+            most = most.max(metered_frame(
+                host,
+                &budget,
+                true,
+                &[],
+                GameplayFacts::default(),
+            ));
+        }
+        most
+    };
+    let origin = |block: &TerrainPosition| [block.x as i64, block.y as i64, block.z as i64];
+    // The nearest 256 of both searches' blocks, from what the terrain last answered. A stable
+    // sort keeps the first search's blocks ahead at equal distances, as the merge does.
+    let ores = |terrain: &Ores| {
+        let mut ores: Vec<_> = terrain
+            .blocks(0, 256)
+            .into_iter()
+            .chain(terrain.blocks(1, 256))
+            .collect();
+        ores.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
+        ores.truncate(256);
+        let mut ores: Vec<_> = ores.iter().map(origin).collect();
+        ores.sort_unstable();
+        ores
+    };
+    let expected = |terrain: &Ores| {
+        let mut blocks: Vec<_> = terrain.debris.blocks(256).iter().map(origin).collect();
+        blocks.extend(ores(terrain));
+        blocks.sort_unstable();
+        blocks
+    };
+    // Ore ESP's cubes are cyan, Netherite Finder's pink.
+    let tints = |host: &ModHost| {
+        let mut tints: Vec<_> = host
+            .render()
+            .0
+            .retained
+            .iter()
+            .flat_map(|retained| retained.instances.values())
+            .map(|instance| match instance.anchor {
+                mod_render::retained::Anchor::World { origin, .. } => {
+                    (origin.map(|axis| axis as i64), instance.tint)
+                }
+                _ => panic!("world-anchored"),
+            })
+            .collect();
+        tints.sort_unstable_by_key(|(origin, _)| *origin);
+        tints
+    };
+    let check_tints = |host: &ModHost, terrain: &Ores| {
+        let ores = ores(terrain);
+        for (origin, tint) in tints(host) {
+            let ore = ores.binary_search(&origin).is_ok();
+            let color = if ore {
+                [0.1, 0.8, 1.0, 1.0]
+            } else {
+                [1.0, 0.12, 0.55, 1.0]
+            };
+            assert_eq!(tint, color, "{origin:?}, ore: {ore}");
+        }
+    };
+    // 512 cubes at sixteen shared placements per frame, after each finder's comparison.
+    let drawing = run(&mut host, &mut terrain, 80);
+    assert_eq!(
+        terrain.searches.len(),
+        2,
+        "every non-Nether ore in two searches"
+    );
+    assert!(terrain.searches.iter().all(|search| search.len() == 8));
+    let gold = [0, -1, 2 + terrain.gold.expect("gold searched") as i64];
+    assert!(drawn_origins(&host).contains(&gold), "the gold block is drawn");
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host, &terrain);
+    let steady = run(&mut host, &mut terrain, 30);
+    // Every debris block moves, while ore cubes stay.
+    terrain.debris.shift = 1;
+    let moving = run(&mut host, &mut terrain, 80);
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host, &terrain);
+
+    // Turning off gold ore changes the Overworld searches, so their cached lists rebuild.
+    terrain.searches.clear();
+    let toggle = metered_frame(
+        &mut host,
+        &budget,
+        false,
+        &[("ore_gold", 0.)],
+        GameplayFacts::default(),
+    );
+    let reselecting = run(&mut host, &mut terrain, 30);
+    assert_eq!(terrain.searches.len(), 2, "gold leaves both searches");
+    assert!(
+        terrain
+            .searches
+            .iter()
+            .flatten()
+            .all(|id| !id.contains("gold_ore"))
+    );
+    assert_eq!(
+        terrain.searches.iter().map(Vec::len).sum::<usize>(),
+        14,
+        "seven Overworld ores"
+    );
+    assert_eq!(terrain.gold, None);
+    assert!(!drawn_origins(&host).contains(&gold), "the gold cube is gone");
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host, &terrain);
+
+    // Disabling Ore ESP removes only its cubes; then the finder's.
+    let mut clearing = 0;
+    for (id, remaining) in [("ore_esp", 256), ("netherite", 0)] {
+        for frame in 0..40 {
+            let events = [(id, 0.)];
+            clearing = clearing.max(metered_frame(
+                &mut host,
+                &budget,
+                false,
+                if frame == 0 { &events[..] } else { &[] },
+                GameplayFacts::default(),
+            ));
+        }
+        assert_eq!(drawn_instances(&host), remaining, "{id}");
+    }
+    let most = [setup, drawing, steady, moving, toggle, reselecting, clearing]
+        .into_iter()
+        .max()
+        .unwrap();
+    println!(
+        "Ore ESP and Netherite Finder, 512 cubes: peak {most}, {setup} setup, \
+         {drawing} drawing, {steady} steady, {moving} moving, {toggle} toggle, \
+         {reselecting} reselecting, {clearing} clearing (frame budget {FRAME_FUEL})"
     );
 }
 
@@ -1673,6 +1933,13 @@ fn combined_workload(
     if jump_reset {
         events.push(("jump_reset", 1.));
     }
+    // Ore ESP adds 256 cubes of its own, above the Finder's.
+    let ores = if stress == Stress::Ores {
+        events.push(("ore_esp", 1.));
+        256
+    } else {
+        0
+    };
     let mut most = metered_frame(&mut host, &budget, false, &events, GameplayFacts::default());
     // Supported non-modifier desktop keys, excluding the reserved menu key F7.
     let mut keys: Vec<String> =
@@ -1778,6 +2045,8 @@ fn combined_workload(
     let completed = (mod_api::MAX_INPUT_BINDINGS as u64).div_ceil(4) - 1;
     let frames = if stress == Stress::Maximum || stress.recurring() {
         1000
+    } else if stress == Stress::Ores {
+        600
     } else {
         160
     };
@@ -1888,7 +2157,8 @@ fn combined_workload(
                     (frame % 32) as i32
                 }
             } else {
-                (if stress == Stress::Maximum {
+                // Terrain settles before the toggle checks, so their blocks are exact.
+                (if matches!(stress, Stress::Maximum | Stress::Ores) {
                     frame.min(100)
                 } else if stress.recurring() {
                     frame.min(stress.settled())
@@ -2259,19 +2529,49 @@ fn combined_workload(
             if [290, 490, 590, 690, 790, 990].contains(&frame) {
                 assert_eq!(
                     drawn_instances(&host),
-                    261,
+                    261 + ores,
                     "drawing convergence at {frame}"
                 );
                 assert_eq!(shown_labels(&host), 6, "label convergence at {frame}");
                 assert_eq!(host.render().0.masks.len(), 1);
                 assert!(host.fullbright());
                 let origins = drawn_origins(&host);
-                for point in debris.blocks(256) {
+                let ore_blocks = if ores > 0 {
+                    debris.ores(0, 256)
+                } else {
+                    Vec::new()
+                };
+                for point in debris.blocks(256).into_iter().chain(ore_blocks) {
                     assert!(
                         origins.contains(&[point.x as i64, point.y as i64, point.z as i64]),
                         "terrain convergence at {frame}"
                     );
                 }
+            }
+        }
+        if stress == Stress::Ores {
+            // Disabling Ore ESP removes only its cubes; re-enabling searches and draws them again.
+            let ore_cubes = |host: &_| {
+                let origins = drawn_origins(host);
+                debris
+                    .ores(0, 256)
+                    .into_iter()
+                    .filter(|point| {
+                        origins.contains(&[point.x as i64, point.y as i64, point.z as i64])
+                    })
+                    .count()
+            };
+            if frame == ORE_ESP_OFF - 1 || frame == ORE_ESP_ON + ORE_ESP_REDRAW {
+                assert_eq!(
+                    drawn_instances(&host),
+                    261 + ores,
+                    "Ore ESP cubes at {frame}"
+                );
+                assert_eq!(ore_cubes(&host), 256, "Ore ESP search results at {frame}");
+            }
+            if frame == ORE_ESP_OFF + ORE_ESP_TEARDOWN {
+                assert_eq!(drawn_instances(&host), 261, "Ore ESP teardown at {frame}");
+                assert_eq!(ore_cubes(&host), 0, "Ore ESP teardown at {frame}");
             }
         }
         if frame == 80 {
@@ -2302,7 +2602,9 @@ fn combined_workload(
                     assert!(attack, "stable bindings deadline under continuous churn");
                 }
             }
-        } else if !matches!(stress, Stress::Maximum | Stress::Shortcut(_)) {
+        } else if !matches!(stress, Stress::Maximum | Stress::Shortcut(_))
+            && !stress.panel_toggled(frame)
+        {
             assert_eq!(attack, frame > completed);
             assert_eq!(
                 camera,
@@ -2315,6 +2617,7 @@ fn combined_workload(
         }
         let origins = drawn_origins(&host);
         if (!esp || frame >= completed)
+            && !stress.panel_toggled(frame)
             && !stress.collisions()
             && !matches!(stress, Stress::Fair(_, _) | Stress::Shortcut(_))
         {
@@ -2346,7 +2649,7 @@ fn combined_workload(
         }
     }
     if !matches!(stress, Stress::Fair(_, _)) {
-        assert_eq!(drawn_instances(&host), 256 + 5);
+        assert_eq!(drawn_instances(&host), 256 + 5 + ores);
     }
     if stress == Stress::Churn {
         assert!(
@@ -2379,6 +2682,18 @@ fn combined_workload(
     );
 }
 
+/// The [`Stress::Ores`] callbacks that disable and re-enable Ore ESP from the panel.
+const ORE_ESP_OFF: u64 = 300;
+const ORE_ESP_ON: u64 = 420;
+/// Callbacks gameplay assists and the marker take to resume after a toggle closes the panel.
+const ORE_ESP_RESUME: u64 = 3;
+/// Callbacks Ore ESP has to remove its 256 cubes after it is disabled, at most 16 per callback
+/// and within the fuel the other modules leave.
+const ORE_ESP_TEARDOWN: u64 = 48;
+/// Callbacks Ore ESP has to search, merge and redraw its 256 cubes after it is re-enabled,
+/// with every module at maximum settings.
+const ORE_ESP_REDRAW: u64 = 120;
+
 /// Adversarial and lifecycle variants of the same full gameplay load.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stress {
@@ -2394,6 +2709,9 @@ enum Stress {
     MissingMesh,
     Shortcut(u64),
     Fair(Queue, u64),
+    /// Ore ESP with every ore selected joins the load, merging two full answers, and is
+    /// disabled and re-enabled from the panel midway.
+    Ores,
 }
 impl Stress {
     /// Shift the stable input across every phase of the eight-callback schedule.
@@ -2417,15 +2735,20 @@ impl Stress {
     }
     /// Settings retain the byte cap when adding the reserved shortcut used by churn cases.
     fn settings(self) -> String {
-        if !self.recurring() {
+        if !self.recurring() && self != Self::Ores {
             return maximum_settings(matches!(
                 self,
                 Self::Maximum | Self::Tall | Self::MissingMesh
             ));
         }
         let mut settings: serde_json::Value =
-            serde_json::from_str(&maximum_settings(true)).unwrap();
-        settings["reach_key"] = "KeyJ".into();
+            serde_json::from_str(&maximum_settings(self.recurring())).unwrap();
+        if self == Self::Ores {
+            settings["ore_range"] = 128.into();
+            settings["ores"] = vec![true; 10].into();
+        } else {
+            settings["reach_key"] = "KeyJ".into();
+        }
         settings["padding"] = "".into();
         let mut json = serde_json::to_string(&settings).unwrap();
         let needed = mod_api::MAX_SETTINGS_BYTES - json.len();
@@ -2473,8 +2796,24 @@ impl Stress {
             }
         }
     }
+    /// Whether an Ore ESP toggle opened the panel within the last few callbacks, pausing
+    /// gameplay assists and the FakeLag marker until gameplay resumes.
+    fn panel_toggled(self, frame: u64) -> bool {
+        self == Self::Ores
+            && [ORE_ESP_OFF, ORE_ESP_ON]
+                .iter()
+                .any(|toggle| (*toggle..*toggle + ORE_ESP_RESUME).contains(&frame))
+    }
     /// Actual panel control events toggle each drawing producer under the full input load.
     fn toggles(self, frame: u64) -> Vec<(&'static str, f32)> {
+        if self == Self::Ores {
+            return match frame {
+                ORE_ESP_OFF | ORE_ESP_ON => {
+                    vec![("ore_esp", if frame == ORE_ESP_ON { 1. } else { 0. })]
+                }
+                _ => Vec::new(),
+            };
+        }
         if self != Self::Maximum {
             return Vec::new();
         }
@@ -2560,13 +2899,32 @@ impl StressTerrain {
                 .collect(),
         }
     }
+    /// The `search`th Ore ESP search's blocks: the Finder's, 40 or 80 blocks higher, so every
+    /// block of the first search is nearer the feet than any of the second's.
+    fn ores(&self, search: usize, limit: usize) -> Vec<TerrainPosition> {
+        let mut blocks = self.blocks(limit);
+        for block in &mut blocks {
+            block.y += 40 * (search as i32 + 1);
+        }
+        blocks
+    }
 }
 impl BlockSearchSource for StressTerrain {
     fn find(&mut self, search: &BlockSearch) -> Result<FoundBlocks, TerrainReadError> {
+        let limit = search.limit as usize;
+        let positions = if search
+            .identifiers
+            .contains(&"minecraft:ancient_debris".into())
+        {
+            self.blocks(limit)
+        } else {
+            let first = search.identifiers.contains(&"minecraft:diamond_ore".into());
+            self.ores(usize::from(!first), limit)
+        };
         Ok(FoundBlocks {
             session: 2,
             dimension: 0,
-            positions: self.blocks(search.limit as usize),
+            positions,
         })
     }
 }
@@ -2575,6 +2933,11 @@ impl BlockSearchSource for StressTerrain {
 #[test]
 fn maximum_everything_and_drawing_lifecycles_fit_with_headroom() {
     combined_workload(true, true, true, true, true, Stress::Maximum);
+}
+/// Ore ESP's two-answer merge fits beside every other module at maximum settings.
+#[test]
+fn ore_esp_fits_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Ores);
 }
 /// Each independently reported boundary remains covered alongside all enabled modules.
 #[test]

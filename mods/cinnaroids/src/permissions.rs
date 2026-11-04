@@ -11,7 +11,7 @@ pub struct Requirement {
 }
 
 /// Module order matches the panel's module rows. Optional presentation is not required.
-pub const REQUIREMENTS: [Requirement; 11] = [
+pub const REQUIREMENTS: [Requirement; 12] = [
     Requirement {
         id: "clicker",
         groups: &[&["controls"], &["interaction"], &["players", "terrain"]],
@@ -81,11 +81,21 @@ pub const REQUIREMENTS: [Requirement; 11] = [
         ],
         flag: |m| &mut m.nuker,
     },
+    Requirement {
+        id: "ore_esp",
+        groups: &[
+            &["controls"],
+            &["terrain"],
+            &["player_state"],
+            &["world_draw"],
+        ],
+        flag: |m| &mut m.ore_esp,
+    },
 ];
 
 /// Missing-permission explanations; an empty string means the module is available.
 #[derive(Clone, Debug)]
-pub struct Access(pub [String; 11]);
+pub struct Access(pub [String; 12]);
 
 impl Default for Access {
     fn default() -> Self {

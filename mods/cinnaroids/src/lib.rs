@@ -10,6 +10,7 @@ pub mod ghost;
 mod guest;
 pub mod jump_reset;
 pub mod nuker;
+pub mod ores;
 mod panel;
 pub mod permissions;
 pub mod state;

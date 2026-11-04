@@ -534,6 +534,50 @@ fn netherite_finder_searches_its_saved_range_only_while_enabled() {
 }
 
 #[test]
+fn ore_esp_searches_its_saved_range_and_ores_only_while_enabled() {
+    let mut state = state();
+    assert_eq!(state.ore_search(), None);
+    assert_eq!(state.preferences.ores, crate::ores::DEFAULT);
+    controls(&mut state, &[], &[("ore_esp", 1.0)]);
+    assert_eq!(state.ore_search(), Some((64, 0b11)));
+    state.preferences_dirty = false;
+    state.panel_dirty = false;
+    controls(
+        &mut state,
+        &[],
+        &[
+            ("ore_range", 500.0),
+            ("ore_emerald", 0.0),
+            ("ore_quartz", 1.0),
+        ],
+    );
+    assert_eq!(state.ore_search(), Some((128, 0b10_0000_0001)));
+    assert!(state.preferences_dirty && state.panel_dirty);
+    assert!(state.modules.ore_esp && !state.modules.netherite);
+
+    let saved = serde_json::to_string(&state.preferences).unwrap();
+    let restored = State::permitted(Preferences::from_json(&saved));
+    assert_eq!(restored.preferences.ores, state.preferences.ores);
+    assert_eq!(restored.ore_search(), Some((128, 0b10_0000_0001)));
+    // Invalid entries keep their defaults independently; extra entries are ignored.
+    let ores = Preferences::from_json(
+        r#"{"ores":[false,"x",true,null,1,false,false,false,false,true,true]}"#,
+    )
+    .ores;
+    let mut expected = crate::ores::DEFAULT;
+    expected[0] = false;
+    expected[2] = true;
+    expected[9] = true;
+    assert_eq!(ores, expected);
+    assert_eq!(Preferences::from_json(r#"{"ore_range":0}"#).ore_range, 1);
+
+    // An ore switch changes only the selection, never the module.
+    controls(&mut state, &[], &[("ore_esp", 0.0), ("ore_gold", 1.0)]);
+    assert_eq!(state.ore_search(), None);
+    assert!(state.preferences.ores[2] && !state.preferences.enabled.ore_esp);
+}
+
+#[test]
 fn panel_exposes_all_controls_without_category_sections() {
     use std::collections::HashSet;
 
@@ -594,6 +638,19 @@ fn panel_exposes_all_controls_without_category_sections() {
             "nuker_range",
             "nuker_key",
             "expand_nuker",
+            "ore_esp",
+            "ore_range",
+            "ore_diamond",
+            "ore_emerald",
+            "ore_gold",
+            "ore_iron",
+            "ore_redstone",
+            "ore_lapis",
+            "ore_copper",
+            "ore_coal",
+            "ore_nether_gold",
+            "ore_quartz",
+            "expand_ore_esp",
         ]
     );
 }
@@ -1009,14 +1066,14 @@ fn adding_the_menu_binding_preserves_legacy_module_shortcuts() {
 fn disclosure_does_not_enable_modules_or_persist_navigation() {
     let mut state = state();
     let preferences = state.preferences.clone();
-    assert_eq!(state.expanded, [false; 11]);
+    assert_eq!(state.expanded, [false; 12]);
     state.panel_dirty = false;
     state.reservations_dirty = false;
     controls(&mut state, &[], &[("expand_reach", 1.0)]);
     assert_eq!(
         state.expanded,
         [
-            false, false, true, false, false, false, false, false, false, false, false
+            false, false, true, false, false, false, false, false, false, false, false, false
         ]
     );
     assert!(!state.modules.reach);
@@ -1027,7 +1084,7 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     assert_eq!(
         state.expanded,
         [
-            false, true, true, false, false, false, false, false, false, false, false
+            false, true, true, false, false, false, false, false, false, false, false, false
         ],
         "independent rows"
     );
@@ -1035,7 +1092,7 @@ fn disclosure_does_not_enable_modules_or_persist_navigation() {
     assert_eq!(
         state.expanded,
         [
-            false, true, false, false, false, false, false, false, false, false, false
+            false, true, false, false, false, false, false, false, false, false, false, false
         ]
     );
     assert!(!state.preferences_dirty);
@@ -1467,9 +1524,9 @@ fn missing_and_invalid_switches_default_off_independently() {
 fn denied_saved_switches_stay_inactive_without_losing_preferences() {
     let mut state = State::new(Preferences::from_json(r#"{"aim":true,"fullbright":true}"#));
     state.set_permissions(&[]);
-    assert_eq!(state.enabled_flags(), [false; 11]);
+    assert_eq!(state.enabled_flags(), [false; 12]);
     controls(&mut state, &[], &[("aim", 1.), ("cps", 15.)]);
-    assert_eq!(state.enabled_flags(), [false; 11]);
+    assert_eq!(state.enabled_flags(), [false; 12]);
     let saved = serde_json::to_string(&state.preferences).unwrap();
     let restored = State::permitted(Preferences::from_json(&saved));
     assert!(restored.modules.aim && restored.modules.fullbright);
