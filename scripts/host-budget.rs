@@ -1009,6 +1009,8 @@ struct Ores {
     ores: usize,
     /// The distinct ore searches answered since the last check.
     searches: std::collections::BTreeSet<Vec<String>>,
+    /// The ore search that last included gold ore, which also finds one gold block.
+    gold: Option<usize>,
 }
 
 impl Ores {
@@ -1021,6 +1023,14 @@ impl Ores {
                 z: 2 + search as i32,
             })
             .collect();
+        if self.gold == Some(search) {
+            // Beside the feet, below every other block, so Ore ESP always keeps it.
+            blocks.push(TerrainPosition {
+                x: 0,
+                y: -1,
+                z: 2 + search as i32,
+            });
+        }
         blocks.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
         blocks.truncate(limit);
         blocks
@@ -1050,6 +1060,11 @@ impl BlockSearchSource for Ores {
         assert!(search.identifiers.len() <= mod_api::MAX_FOUND_BLOCK_IDENTIFIERS);
         let index = usize::from(!search.identifiers.contains(&"minecraft:diamond_ore".into()));
         self.searches.insert(search.identifiers.clone());
+        if search.identifiers.contains(&"minecraft:gold_ore".into()) {
+            self.gold = Some(index);
+        } else if self.gold == Some(index) {
+            self.gold = None;
+        }
         Ok(FoundBlocks {
             session: 2,
             dimension: 0,
@@ -1087,6 +1102,7 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         },
         ores: 512,
         searches: Default::default(),
+        gold: None,
     };
     let run = |host: &mut ModHost, terrain: &mut Ores, frames: usize| {
         let mut most = 0;
@@ -1103,19 +1119,23 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         most
     };
     let origin = |block: &TerrainPosition| [block.x as i64, block.y as i64, block.z as i64];
-    // A stable sort keeps the first search's blocks ahead at equal distances, as the merge does.
-    let mut ores: Vec<_> = terrain
-        .blocks(0, 256)
-        .into_iter()
-        .chain(terrain.blocks(1, 256))
-        .collect();
-    ores.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
-    ores.truncate(256);
-    let mut ores: Vec<_> = ores.iter().map(origin).collect();
-    ores.sort_unstable();
+    // The nearest 256 of both searches' blocks, from what the terrain last answered. A stable
+    // sort keeps the first search's blocks ahead at equal distances, as the merge does.
+    let ores = |terrain: &Ores| {
+        let mut ores: Vec<_> = terrain
+            .blocks(0, 256)
+            .into_iter()
+            .chain(terrain.blocks(1, 256))
+            .collect();
+        ores.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
+        ores.truncate(256);
+        let mut ores: Vec<_> = ores.iter().map(origin).collect();
+        ores.sort_unstable();
+        ores
+    };
     let expected = |terrain: &Ores| {
         let mut blocks: Vec<_> = terrain.debris.blocks(256).iter().map(origin).collect();
-        blocks.extend_from_slice(&ores);
+        blocks.extend(ores(terrain));
         blocks.sort_unstable();
         blocks
     };
@@ -1137,7 +1157,8 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         tints.sort_unstable_by_key(|(origin, _)| *origin);
         tints
     };
-    let check_tints = |host: &ModHost| {
+    let check_tints = |host: &ModHost, terrain: &Ores| {
+        let ores = ores(terrain);
         for (origin, tint) in tints(host) {
             let ore = ores.binary_search(&origin).is_ok();
             let color = if ore {
@@ -1156,14 +1177,16 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         "every non-Nether ore in two searches"
     );
     assert!(terrain.searches.iter().all(|search| search.len() == 8));
+    let gold = [0, -1, 2 + terrain.gold.expect("gold searched") as i64];
+    assert!(drawn_origins(&host).contains(&gold), "the gold block is drawn");
     assert_eq!(drawn_origins(&host), expected(&terrain));
-    check_tints(&host);
+    check_tints(&host, &terrain);
     let steady = run(&mut host, &mut terrain, 30);
     // Every debris block moves, while ore cubes stay.
     terrain.debris.shift = 1;
     let moving = run(&mut host, &mut terrain, 80);
     assert_eq!(drawn_origins(&host), expected(&terrain));
-    check_tints(&host);
+    check_tints(&host, &terrain);
 
     // Turning off gold ore changes the Overworld searches, so their cached lists rebuild.
     terrain.searches.clear();
@@ -1188,6 +1211,10 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         14,
         "seven Overworld ores"
     );
+    assert_eq!(terrain.gold, None);
+    assert!(!drawn_origins(&host).contains(&gold), "the gold cube is gone");
+    assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host, &terrain);
 
     // Disabling Ore ESP removes only its cubes; then the finder's.
     let mut clearing = 0;
@@ -1906,6 +1933,13 @@ fn combined_workload(
     if jump_reset {
         events.push(("jump_reset", 1.));
     }
+    // Ore ESP adds 256 cubes of its own, above the Finder's.
+    let ores = if stress == Stress::Ores {
+        events.push(("ore_esp", 1.));
+        256
+    } else {
+        0
+    };
     let mut most = metered_frame(&mut host, &budget, false, &events, GameplayFacts::default());
     // Supported non-modifier desktop keys, excluding the reserved menu key F7.
     let mut keys: Vec<String> =
@@ -2492,14 +2526,19 @@ fn combined_workload(
             if [290, 490, 590, 690, 790, 990].contains(&frame) {
                 assert_eq!(
                     drawn_instances(&host),
-                    261,
+                    261 + ores,
                     "drawing convergence at {frame}"
                 );
                 assert_eq!(shown_labels(&host), 6, "label convergence at {frame}");
                 assert_eq!(host.render().0.masks.len(), 1);
                 assert!(host.fullbright());
                 let origins = drawn_origins(&host);
-                for point in debris.blocks(256) {
+                let ore_blocks = if ores > 0 {
+                    debris.ores(0, 256)
+                } else {
+                    Vec::new()
+                };
+                for point in debris.blocks(256).into_iter().chain(ore_blocks) {
                     assert!(
                         origins.contains(&[point.x as i64, point.y as i64, point.z as i64]),
                         "terrain convergence at {frame}"
@@ -2579,7 +2618,7 @@ fn combined_workload(
         }
     }
     if !matches!(stress, Stress::Fair(_, _)) {
-        assert_eq!(drawn_instances(&host), 256 + 5);
+        assert_eq!(drawn_instances(&host), 256 + 5 + ores);
     }
     if stress == Stress::Churn {
         assert!(
@@ -2627,6 +2666,8 @@ enum Stress {
     MissingMesh,
     Shortcut(u64),
     Fair(Queue, u64),
+    /// Ore ESP with every ore selected joins the load, merging two full answers.
+    Ores,
 }
 impl Stress {
     /// Shift the stable input across every phase of the eight-callback schedule.
@@ -2650,15 +2691,20 @@ impl Stress {
     }
     /// Settings retain the byte cap when adding the reserved shortcut used by churn cases.
     fn settings(self) -> String {
-        if !self.recurring() {
+        if !self.recurring() && self != Self::Ores {
             return maximum_settings(matches!(
                 self,
                 Self::Maximum | Self::Tall | Self::MissingMesh
             ));
         }
         let mut settings: serde_json::Value =
-            serde_json::from_str(&maximum_settings(true)).unwrap();
-        settings["reach_key"] = "KeyJ".into();
+            serde_json::from_str(&maximum_settings(self.recurring())).unwrap();
+        if self == Self::Ores {
+            settings["ore_range"] = 128.into();
+            settings["ores"] = vec![true; 10].into();
+        } else {
+            settings["reach_key"] = "KeyJ".into();
+        }
         settings["padding"] = "".into();
         let mut json = serde_json::to_string(&settings).unwrap();
         let needed = mod_api::MAX_SETTINGS_BYTES - json.len();
@@ -2793,13 +2839,32 @@ impl StressTerrain {
                 .collect(),
         }
     }
+    /// The `search`th Ore ESP search's blocks: the Finder's, 40 or 80 blocks higher, so every
+    /// block of the first search is nearer the feet than any of the second's.
+    fn ores(&self, search: usize, limit: usize) -> Vec<TerrainPosition> {
+        let mut blocks = self.blocks(limit);
+        for block in &mut blocks {
+            block.y += 40 * (search as i32 + 1);
+        }
+        blocks
+    }
 }
 impl BlockSearchSource for StressTerrain {
     fn find(&mut self, search: &BlockSearch) -> Result<FoundBlocks, TerrainReadError> {
+        let limit = search.limit as usize;
+        let positions = if search
+            .identifiers
+            .contains(&"minecraft:ancient_debris".into())
+        {
+            self.blocks(limit)
+        } else {
+            let first = search.identifiers.contains(&"minecraft:diamond_ore".into());
+            self.ores(usize::from(!first), limit)
+        };
         Ok(FoundBlocks {
             session: 2,
             dimension: 0,
-            positions: self.blocks(search.limit as usize),
+            positions,
         })
     }
 }
@@ -2808,6 +2873,11 @@ impl BlockSearchSource for StressTerrain {
 #[test]
 fn maximum_everything_and_drawing_lifecycles_fit_with_headroom() {
     combined_workload(true, true, true, true, true, Stress::Maximum);
+}
+/// Ore ESP's two-answer merge fits beside every other module at maximum settings.
+#[test]
+fn ore_esp_fits_with_every_module() {
+    combined_workload(true, true, true, true, true, Stress::Ores);
 }
 /// Each independently reported boundary remains covered alongside all enabled modules.
 #[test]

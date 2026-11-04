@@ -333,6 +333,11 @@ fn applies_the_first_scanned_answer_after_changes_then_on_a_short_cadence() {
     assert!(!finder.due(1, 0, 64, true, -1.0));
     assert!(finder.due(1, 0, 64, true, REFRESH_SECONDS));
     assert!(!finder.due(1, 0, 64, true, 0.0));
+    // A postponed answer is due again on the next frame, then the cadence resumes.
+    assert!(finder.due(1, 0, 64, true, REFRESH_SECONDS));
+    finder.postpone();
+    assert!(finder.due(1, 0, 64, true, 0.0));
+    assert!(!finder.due(1, 0, 64, true, 0.0));
     // A new range, session, dimension or depth authority applies on the following frame.
     for (session, dimension, range, through_walls) in [
         (1, 0, 65, true),

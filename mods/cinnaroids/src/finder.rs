@@ -226,7 +226,6 @@ impl Finder {
     }
 
     /// Keeps a due answer for the next frame, for a frame with too little fuel left.
-    #[cfg(test)]
     pub fn postpone(&mut self) {
         self.elapsed = self.elapsed.max(REFRESH_SECONDS);
     }

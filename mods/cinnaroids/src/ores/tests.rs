@@ -71,6 +71,19 @@ fn answers_merge_nearest_first_up_to_the_limit() {
         keys,
         [(1, 64, 0), (0, 66, 0), (4, 64, 0), (0, 70, 0), (9, 64, 0)]
     );
+    // Either answer may run out first; the other's rest follows in order.
+    let swapped: Vec<_> = merge(vec![far.clone(), near.clone()], origin, 8)
+        .iter()
+        .map(|p| (p.x, p.y, p.z))
+        .collect();
+    assert_eq!(swapped, keys);
+    // At equal distances the first answer's block comes first.
+    let tie = merge(
+        vec![vec![position(0, 64, 1)], vec![position(1, 64, 0)]],
+        origin,
+        1,
+    );
+    assert_eq!((tie[0].x, tie[0].z), (0, 1));
     assert_eq!(merge(vec![near.clone(), far], origin, 2).len(), 2);
     // One answer is kept in its order, truncated; none is empty.
     assert_eq!(merge(vec![near.clone()], origin, 2).len(), 2);

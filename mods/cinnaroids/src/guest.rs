@@ -880,6 +880,8 @@ fn stale(error: &DrawError) -> bool {
 
 /// Netherite Finder's index in the finder tables.
 const NETHERITE: usize = 0;
+/// Fuel reserved for merging Ore ESP's two full answers into its nearest blocks.
+const ORE_MERGE_FUEL: u64 = 35_000;
 /// Each finder's cube colour, in [`finder::FINDERS`] order.
 const FINDER_COLORS: [[f32; 4]; finder::FINDERS] = [finder::COLOR, crate::ores::COLOR];
 
@@ -919,7 +921,7 @@ fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
         if let Some(frame) = frame {
             for (kind, finder) in finders.iter_mut().enumerate() {
                 if let Some(request) = requests[kind] {
-                    search(kind, finder, request, frame, through_walls);
+                    search(kind, finder, request, frame, through_walls, fuel);
                 }
             }
         }
@@ -952,14 +954,16 @@ fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
 }
 
 /// Renews one finder's searches, which every frame must do to keep them subscribed, and on its
-/// cadence queues the nearest-first answer. A denied search clears the finder and is reported
-/// once until the module is disabled.
+/// cadence queues the nearest-first answer. Ore ESP postpones a due answer to a frame with
+/// fuel for merging it. A denied search clears the finder and is reported once until the
+/// module is disabled.
 fn search(
     kind: usize,
     finder: &mut finder::Finder,
     request: (u8, u16),
     frame: &gameplay::Snapshot,
     through_walls: bool,
+    fuel: &FrameFuel,
 ) {
     let key = search_key(request);
     FINDER_ANSWERS.with(|answers| {
@@ -980,6 +984,11 @@ fn search(
         through_walls,
         frame.frame_seconds,
     );
+    let postponed = due && kind != NETHERITE && !fuel.allows(ORE_MERGE_FUEL);
+    if postponed {
+        finder.postpone();
+    }
+    let due = due && !postponed;
     let range = f32::from(request.0);
     let found = if kind == NETHERITE {
         FINDER_BLOCKS.with(|blocks| terrain::find_blocks(blocks, range, finder::LIMIT as u32))

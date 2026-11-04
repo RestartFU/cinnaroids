@@ -151,43 +151,50 @@ pub fn searches(mask: u16, dimension: i32) -> Vec<Vec<String>> {
     searches
 }
 
-/// Merges answers, each nearest first from `origin`, into the nearest `limit` blocks to it,
-/// comparing block centres. Takes at most `limit` steps, whatever the answers' lengths.
+/// Merges Ore ESP's answers, each nearest first from `origin`, into the nearest `limit` blocks
+/// to it, comparing block centres; ties keep the first answer's block. Takes at most `limit`
+/// steps, computing each block's distance once, whatever the answers' lengths.
 pub fn merge(mut answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) -> Vec<Position> {
-    if answers.len() <= 1 {
+    const { assert!(MAX_SEARCHES == 2) };
+    debug_assert!(answers.len() <= MAX_SEARCHES);
+    if answers.len() < 2 {
         let mut positions = answers.pop().unwrap_or_default();
         positions.truncate(limit);
         return positions;
     }
+    let mut answers = answers.into_iter();
+    let first = answers.next().unwrap_or_default();
+    let second = answers.next().unwrap_or_default();
+    let [x, y, z] = origin.map(f64::from);
     let distance = |position: &Position| {
-        [position.x, position.y, position.z]
-            .iter()
-            .zip(origin)
-            .map(|(block, origin)| {
-                let offset = f64::from(*block) + 0.5 - f64::from(origin);
-                offset * offset
-            })
-            .sum::<f64>()
+        let (dx, dy, dz) = (
+            f64::from(position.x) + 0.5 - x,
+            f64::from(position.y) + 0.5 - y,
+            f64::from(position.z) + 0.5 - z,
+        );
+        dx * dx + dy * dy + dz * dz
     };
-    // Each answer's cursor and the distance of the block under it, computed once per block.
-    let mut heads: Vec<_> = answers
-        .iter()
-        .map(|answer| (0, answer.first().map(distance)))
-        .collect();
+    let limit = limit.min(first.len() + second.len());
     let mut merged = Vec::with_capacity(limit);
+    let (mut i, mut j) = (0, 0);
+    let mut heads = (first.first().map(distance), second.first().map(distance));
     while merged.len() < limit {
-        let nearest = heads
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (_, head))| Some((index, (*head)?)))
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        let Some((index, _)) = nearest else {
-            break;
-        };
-        let (cursor, head) = &mut heads[index];
-        merged.push(answers[index][*cursor]);
-        *cursor += 1;
-        *head = answers[index].get(*cursor).map(distance);
+        let rest = limit - merged.len();
+        match heads {
+            (Some(a), Some(b)) if a <= b => {
+                merged.push(first[i]);
+                i += 1;
+                heads.0 = first.get(i).map(distance);
+            }
+            (Some(_), Some(_)) => {
+                merged.push(second[j]);
+                j += 1;
+                heads.1 = second.get(j).map(distance);
+            }
+            // Once one answer runs out, the rest of the other follows in order.
+            (Some(_), None) => merged.extend_from_slice(&first[i..i + rest]),
+            (None, _) => merged.extend_from_slice(&second[j..j + rest]),
+        }
     }
     merged
 }
