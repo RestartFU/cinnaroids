@@ -152,51 +152,127 @@ pub fn searches(mask: u16, dimension: i32) -> Vec<Vec<String>> {
 }
 
 /// Merges Ore ESP's answers, each nearest first from `origin`, into the nearest `limit` blocks
-/// to it, comparing block centres; ties keep the first answer's block. Takes at most `limit`
-/// steps, computing each block's distance once, whatever the answers' lengths.
-pub fn merge(mut answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) -> Vec<Position> {
-    const { assert!(MAX_SEARCHES == 2) };
-    debug_assert!(answers.len() <= MAX_SEARCHES);
-    if answers.len() < 2 {
-        let mut positions = answers.pop().unwrap_or_default();
-        positions.truncate(limit);
-        return positions;
+/// to it, comparing block centres; ties keep the first answer's block.
+#[cfg(test)]
+pub fn merge(answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) -> Vec<Position> {
+    let mut merge = Merge::new(answers, origin, limit);
+    while !merge.advance(usize::MAX) {}
+    merge.finish()
+}
+
+/// Ore ESP's answers being merged, nearest first from an origin, into the nearest `limit`
+/// blocks to it, a bounded number of blocks per [`Merge::advance`], so a full merge can span
+/// callbacks. Ties keep the first answer's block. A single answer needs no merging.
+pub struct Merge {
+    first: Vec<Position>,
+    second: Vec<Position>,
+    origin: [f64; 3],
+    merged: Vec<Position>,
+    next: (usize, usize),
+    heads: (Option<f64>, Option<f64>),
+    limit: usize,
+}
+
+impl Merge {
+    /// Starts merging up to [`MAX_SEARCHES`] answers; an empty answer is left out.
+    pub fn new(answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) -> Self {
+        const { assert!(MAX_SEARCHES == 2) };
+        debug_assert!(answers.len() <= MAX_SEARCHES);
+        let mut answers = answers.into_iter().filter(|answer| !answer.is_empty());
+        let first = answers.next().unwrap_or_default();
+        let second = answers.next().unwrap_or_default();
+        let limit = if second.is_empty() {
+            limit
+        } else {
+            limit.min(first.len() + second.len())
+        };
+        let mut merge = Self {
+            first,
+            second,
+            origin: origin.map(f64::from),
+            merged: Vec::new(),
+            next: (0, 0),
+            heads: (None, None),
+            limit,
+        };
+        if !merge.second.is_empty() {
+            merge.merged.reserve_exact(limit);
+            let origin = merge.origin;
+            merge.heads = (
+                Some(distance(origin, &merge.first[0])),
+                Some(distance(origin, &merge.second[0])),
+            );
+        }
+        merge
     }
-    let mut answers = answers.into_iter();
-    let first = answers.next().unwrap_or_default();
-    let second = answers.next().unwrap_or_default();
-    let [x, y, z] = origin.map(f64::from);
-    let distance = |position: &Position| {
-        let (dx, dy, dz) = (
-            f64::from(position.x) + 0.5 - x,
-            f64::from(position.y) + 0.5 - y,
-            f64::from(position.z) + 0.5 - z,
-        );
-        dx * dx + dy * dy + dz * dz
-    };
-    let limit = limit.min(first.len() + second.len());
-    let mut merged = Vec::with_capacity(limit);
-    let (mut i, mut j) = (0, 0);
-    let mut heads = (first.first().map(distance), second.first().map(distance));
-    while merged.len() < limit {
-        let rest = limit - merged.len();
-        match heads {
-            (Some(a), Some(b)) if a <= b => {
-                merged.push(first[i]);
-                i += 1;
-                heads.0 = first.get(i).map(distance);
-            }
-            (Some(_), Some(_)) => {
-                merged.push(second[j]);
-                j += 1;
-                heads.1 = second.get(j).map(distance);
-            }
-            // Once one answer runs out, the rest of the other follows in order.
-            (Some(_), None) => merged.extend_from_slice(&first[i..i + rest]),
-            (None, _) => merged.extend_from_slice(&second[j..j + rest]),
+
+    /// A complete merge of one nearest-first answer, which needs no merging.
+    pub fn single(answer: Vec<Position>, limit: usize) -> Self {
+        Self {
+            first: answer,
+            second: Vec::new(),
+            origin: [0.; 3],
+            merged: Vec::new(),
+            next: (0, 0),
+            heads: (None, None),
+            limit,
         }
     }
-    merged
+
+    /// Takes up to `blocks` more of the nearest blocks, computing each block's distance once.
+    /// Returns whether the merge is complete.
+    pub fn advance(&mut self, blocks: usize) -> bool {
+        let (first, second, origin) = (&self.first, &self.second, self.origin);
+        let (i, j) = &mut self.next;
+        let mut taken = 0;
+        while taken < blocks && self.merged.len() < self.limit && !second.is_empty() {
+            let rest = self.limit - self.merged.len();
+            match self.heads {
+                (Some(a), Some(b)) if a <= b => {
+                    self.merged.push(first[*i]);
+                    *i += 1;
+                    self.heads.0 = first.get(*i).map(|block| distance(origin, block));
+                }
+                (Some(_), Some(_)) => {
+                    self.merged.push(second[*j]);
+                    *j += 1;
+                    self.heads.1 = second.get(*j).map(|block| distance(origin, block));
+                }
+                // Once one answer runs out, the rest of the other follows in order.
+                (Some(_), None) => self.merged.extend_from_slice(&first[*i..*i + rest]),
+                (None, _) => self.merged.extend_from_slice(&second[*j..*j + rest]),
+            }
+            taken += 1;
+        }
+        self.done()
+    }
+
+    /// Whether every block of the merge is taken.
+    pub fn done(&self) -> bool {
+        self.second.is_empty() || self.merged.len() == self.limit
+    }
+
+    /// The nearest blocks of a complete merge, nearest first.
+    pub fn finish(self) -> Vec<Position> {
+        debug_assert!(self.done());
+        if self.second.is_empty() {
+            let mut positions = self.first;
+            positions.truncate(self.limit);
+            positions
+        } else {
+            self.merged
+        }
+    }
+}
+
+/// Squared distance from `origin` to a block's centre.
+fn distance([x, y, z]: [f64; 3], position: &Position) -> f64 {
+    let (dx, dy, dz) = (
+        f64::from(position.x) + 0.5 - x,
+        f64::from(position.y) + 0.5 - y,
+        f64::from(position.z) + 0.5 - z,
+    );
+    dx * dx + dy * dy + dz * dz
 }
 
 #[cfg(test)]

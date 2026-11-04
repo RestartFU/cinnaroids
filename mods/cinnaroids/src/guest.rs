@@ -50,8 +50,9 @@ type EspSample = (u64, i32, Vec<player_state::ObservedActor>, usize);
 /// Ore ESP's selected-ore mask and dimension, with the identifier list of each search.
 type OreSearches = ((u16, i32), Vec<Vec<String>>);
 
-/// A due search answer: session, dimension, search key, depth authority and blocks.
-type FinderAnswer = (u64, i32, u32, bool, Vec<terrain::Position>);
+/// A due search answer: session, dimension, search key, depth authority and its blocks, which
+/// Ore ESP may still be merging.
+type FinderAnswer = (u64, i32, u32, bool, crate::ores::Merge);
 
 thread_local! {
     static PANEL_BINDINGS_DIRTY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -880,8 +881,9 @@ fn stale(error: &DrawError) -> bool {
 
 /// Netherite Finder's index in the finder tables.
 const NETHERITE: usize = 0;
-/// Fuel reserved for merging Ore ESP's two full answers into its nearest blocks.
-const ORE_MERGE_FUEL: u64 = 35_000;
+/// Blocks of Ore ESP's answers merged per fuel check, and that check's fuel.
+const MERGE_BLOCKS: usize = 8;
+const MERGE_FUEL: u64 = 2_000;
 /// Each finder's cube colour, in [`finder::FINDERS`] order.
 const FINDER_COLORS: [[f32; 4]; finder::FINDERS] = [finder::COLOR, crate::ores::COLOR];
 
@@ -922,7 +924,7 @@ fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
         if let Some(frame) = frame {
             for (kind, finder) in finders.iter_mut().enumerate() {
                 if let Some(request) = requests[kind] {
-                    search(kind, finder, request, frame, through_walls, fuel);
+                    search(kind, finder, request, frame, through_walls);
                 }
             }
         }
@@ -955,16 +957,16 @@ fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
 }
 
 /// Renews one finder's searches, which every frame must do to keep them subscribed, and on its
-/// cadence queues the nearest-first answer. Ore ESP postpones a due answer to a frame with
-/// fuel for merging it. A denied search clears the finder and is reported once until the
-/// module is disabled.
+/// cadence queues the nearest-first answer, replacing one not yet taken. Ore ESP's answers are
+/// merged once the cubes show the last one, within fuel over as many callbacks as that takes;
+/// a due answer waits until that merge is done.
+/// A denied search clears the finder and is reported once until the module is disabled.
 fn search(
     kind: usize,
     finder: &mut finder::Finder,
     request: (u8, u16),
     frame: &gameplay::Snapshot,
     through_walls: bool,
-    fuel: &FrameFuel,
 ) {
     let key = search_key(request);
     FINDER_ANSWERS.with(|answers| {
@@ -985,27 +987,29 @@ fn search(
         through_walls,
         frame.frame_seconds,
     );
-    let postponed = due && kind != NETHERITE && !fuel.allows(ORE_MERGE_FUEL);
-    if postponed {
+    let merging = finder.synced()
+        && FINDER_ANSWERS.with(|answers| {
+            answers.borrow()[kind]
+                .as_ref()
+                .is_some_and(|(_, _, _, _, merge)| !merge.done())
+        });
+    if due && merging {
         finder.postpone();
     }
-    let due = due && !postponed;
+    let due = due && !merging;
     let range = f32::from(request.0);
     let found = if kind == NETHERITE {
-        FINDER_BLOCKS.with(|blocks| terrain::find_blocks(blocks, range, finder::LIMIT as u32))
+        FINDER_BLOCKS
+            .with(|blocks| terrain::find_blocks(blocks, range, finder::LIMIT as u32))
+            .map(|positions| crate::ores::Merge::single(positions, finder::LIMIT))
     } else {
         find_ores(request.1, range, frame, due)
     };
     match found {
-        Ok(positions) if due => {
+        Ok(merge) if due => {
             FINDER_ANSWERS.with(|answers| {
-                answers.borrow_mut()[kind] = Some((
-                    frame.session,
-                    frame.dimension,
-                    key,
-                    through_walls,
-                    positions,
-                ));
+                answers.borrow_mut()[kind] =
+                    Some((frame.session, frame.dimension, key, through_walls, merge));
             });
         }
         Err(terrain::ReadError::Denied) => {
@@ -1023,13 +1027,14 @@ fn search(
 }
 
 /// Renews Ore ESP's searches for the selected `ores` that generate in the player's dimension.
-/// When `due`, returns the nearest [`finder::LIMIT`] blocks of their answers; otherwise none.
+/// When `due`, starts merging their answers into the nearest [`finder::LIMIT`] blocks;
+/// otherwise returns an empty merge.
 fn find_ores(
     ores: u16,
     range: f32,
     frame: &gameplay::Snapshot,
     due: bool,
-) -> Result<Vec<terrain::Position>, terrain::ReadError> {
+) -> Result<crate::ores::Merge, terrain::ReadError> {
     ORE_SEARCHES.with(|cache| {
         let mut cache = cache.borrow_mut();
         let context = (ores, frame.dimension);
@@ -1051,15 +1056,28 @@ fn find_ores(
         }
         match failure {
             Some(error) => Err(error),
-            // Answers that all fit need no ordering, so no feet; otherwise, without the feet,
-            // a due answer waits for the next refresh.
-            None if due && answers.iter().map(Vec::len).sum::<usize>() <= finder::LIMIT => {
-                Ok(answers.concat())
+            // One answer is already nearest-first; two merge by distance from the feet, so cubes
+            // appear nearest first. Without the feet, answers that all fit are still taken
+            // whole, unordered; a larger due answer waits for the next refresh.
+            None if due => {
+                let fits = answers.iter().map(Vec::len).sum::<usize>() <= finder::LIMIT;
+                let origin = if answers.len() < 2 {
+                    Some([0.; 3])
+                } else {
+                    feet(frame)
+                };
+                let answers = match origin {
+                    Some(_) => answers,
+                    None if fits => vec![answers.concat()],
+                    None => return Err(terrain::ReadError::Unavailable),
+                };
+                Ok(crate::ores::Merge::new(
+                    answers,
+                    origin.unwrap_or_default(),
+                    finder::LIMIT,
+                ))
             }
-            None if due => feet(frame)
-                .map(|feet| crate::ores::merge(answers, feet, finder::LIMIT))
-                .ok_or(terrain::ReadError::Unavailable),
-            None => Ok(Vec::new()),
+            None => Ok(crate::ores::Merge::single(Vec::new(), 0)),
         }
     })
 }
@@ -1074,8 +1092,9 @@ fn feet(frame: &gameplay::Snapshot) -> Option<[f32; 3]> {
         .map(|world| world.position.into())
 }
 
-/// Takes a due answer as the selection once the cubes show the last one, then compares it
-/// with the cubes within fuel. Returns whether cube changes may follow this callback.
+/// Takes a due answer as the selection once the cubes show the last one, merging Ore ESP's
+/// within fuel first, then compares it with the cubes within fuel. Returns whether cube changes
+/// may follow this callback.
 fn select(
     kind: usize,
     finder: &mut finder::Finder,
@@ -1093,18 +1112,31 @@ fn select(
             FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind] = None);
             finder.pause();
         }
-        (Some(_), true) => {
-            if finder.synced() && FINDER_ANSWERS.with(|answers| answers.borrow()[kind].is_some()) {
+        // Merging waits until the cubes show the last answer, so it is never redone for an
+        // answer a newer one replaces.
+        (Some(_), true) if finder.synced() => {
+            let ready = FINDER_ANSWERS.with(|answers| {
+                let mut answers = answers.borrow_mut();
+                let Some((_, _, _, _, merge)) = &mut answers[kind] else {
+                    return false;
+                };
+                while !merge.done() && fuel.allows(MERGE_FUEL) {
+                    merge.advance(MERGE_BLOCKS);
+                }
+                merge.done()
+            });
+            if ready {
                 if !fuel.allows(5_000) {
                     return false;
                 }
-                if let Some((_, dimension, _, through_walls, positions)) =
+                if let Some((_, dimension, _, through_walls, merge)) =
                     FINDER_ANSWERS.with(|answers| answers.borrow_mut()[kind].take())
                 {
-                    finder.apply(dimension, through_walls, &positions);
+                    finder.apply(dimension, through_walls, &merge.finish());
                 }
             }
         }
+        (Some(_), true) => {}
     }
     if finder.comparing() {
         for _ in 0..finder::COMPARE_BLOCKS {

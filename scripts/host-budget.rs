@@ -2045,6 +2045,8 @@ fn combined_workload(
     let completed = (mod_api::MAX_INPUT_BINDINGS as u64).div_ceil(4) - 1;
     let frames = if stress == Stress::Maximum || stress.recurring() {
         1000
+    } else if stress == Stress::Ores {
+        600
     } else {
         160
     };
@@ -2155,7 +2157,8 @@ fn combined_workload(
                     (frame % 32) as i32
                 }
             } else {
-                (if stress == Stress::Maximum {
+                // Terrain settles before the toggle checks, so their blocks are exact.
+                (if matches!(stress, Stress::Maximum | Stress::Ores) {
                     frame.min(100)
                 } else if stress.recurring() {
                     frame.min(stress.settled())
@@ -2546,6 +2549,31 @@ fn combined_workload(
                 }
             }
         }
+        if stress == Stress::Ores {
+            // Disabling Ore ESP removes only its cubes; re-enabling searches and draws them again.
+            let ore_cubes = |host: &_| {
+                let origins = drawn_origins(host);
+                debris
+                    .ores(0, 256)
+                    .into_iter()
+                    .filter(|point| {
+                        origins.contains(&[point.x as i64, point.y as i64, point.z as i64])
+                    })
+                    .count()
+            };
+            if frame == ORE_ESP_OFF - 1 || frame == ORE_ESP_ON + ORE_ESP_REDRAW {
+                assert_eq!(
+                    drawn_instances(&host),
+                    261 + ores,
+                    "Ore ESP cubes at {frame}"
+                );
+                assert_eq!(ore_cubes(&host), 256, "Ore ESP search results at {frame}");
+            }
+            if frame == ORE_ESP_OFF + ORE_ESP_TEARDOWN {
+                assert_eq!(drawn_instances(&host), 261, "Ore ESP teardown at {frame}");
+                assert_eq!(ore_cubes(&host), 0, "Ore ESP teardown at {frame}");
+            }
+        }
         if frame == 80 {
             middle_cubes = drawn_origins(&host)
                 .into_iter()
@@ -2574,7 +2602,9 @@ fn combined_workload(
                     assert!(attack, "stable bindings deadline under continuous churn");
                 }
             }
-        } else if !matches!(stress, Stress::Maximum | Stress::Shortcut(_)) {
+        } else if !matches!(stress, Stress::Maximum | Stress::Shortcut(_))
+            && !stress.panel_toggled(frame)
+        {
             assert_eq!(attack, frame > completed);
             assert_eq!(
                 camera,
@@ -2587,6 +2617,7 @@ fn combined_workload(
         }
         let origins = drawn_origins(&host);
         if (!esp || frame >= completed)
+            && !stress.panel_toggled(frame)
             && !stress.collisions()
             && !matches!(stress, Stress::Fair(_, _) | Stress::Shortcut(_))
         {
@@ -2651,6 +2682,18 @@ fn combined_workload(
     );
 }
 
+/// The [`Stress::Ores`] callbacks that disable and re-enable Ore ESP from the panel.
+const ORE_ESP_OFF: u64 = 300;
+const ORE_ESP_ON: u64 = 420;
+/// Callbacks gameplay assists and the marker take to resume after a toggle closes the panel.
+const ORE_ESP_RESUME: u64 = 3;
+/// Callbacks Ore ESP has to remove its 256 cubes after it is disabled, at most 16 per callback
+/// and within the fuel the other modules leave.
+const ORE_ESP_TEARDOWN: u64 = 48;
+/// Callbacks Ore ESP has to search, merge and redraw its 256 cubes after it is re-enabled,
+/// with every module at maximum settings.
+const ORE_ESP_REDRAW: u64 = 120;
+
 /// Adversarial and lifecycle variants of the same full gameplay load.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Stress {
@@ -2666,7 +2709,8 @@ enum Stress {
     MissingMesh,
     Shortcut(u64),
     Fair(Queue, u64),
-    /// Ore ESP with every ore selected joins the load, merging two full answers.
+    /// Ore ESP with every ore selected joins the load, merging two full answers, and is
+    /// disabled and re-enabled from the panel midway.
     Ores,
 }
 impl Stress {
@@ -2752,8 +2796,24 @@ impl Stress {
             }
         }
     }
+    /// Whether an Ore ESP toggle opened the panel within the last few callbacks, pausing
+    /// gameplay assists and the FakeLag marker until gameplay resumes.
+    fn panel_toggled(self, frame: u64) -> bool {
+        self == Self::Ores
+            && [ORE_ESP_OFF, ORE_ESP_ON]
+                .iter()
+                .any(|toggle| (*toggle..*toggle + ORE_ESP_RESUME).contains(&frame))
+    }
     /// Actual panel control events toggle each drawing producer under the full input load.
     fn toggles(self, frame: u64) -> Vec<(&'static str, f32)> {
+        if self == Self::Ores {
+            return match frame {
+                ORE_ESP_OFF | ORE_ESP_ON => {
+                    vec![("ore_esp", if frame == ORE_ESP_ON { 1. } else { 0. })]
+                }
+                _ => Vec::new(),
+            };
+        }
         if self != Self::Maximum {
             return Vec::new();
         }

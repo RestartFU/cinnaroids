@@ -93,6 +93,29 @@ fn answers_merge_nearest_first_up_to_the_limit() {
 }
 
 #[test]
+fn a_merge_resumes_in_bounded_steps() {
+    let origin = [0.5, 64.5, 0.5];
+    let near: Vec<_> = (0..40).map(|x| position(x, 64, 0)).collect();
+    let far: Vec<_> = (0..40).map(|x| position(x, 65, 0)).collect();
+    let mut stepped = Merge::new(vec![near.clone(), far.clone()], origin, 50);
+    let mut steps = 0;
+    while !stepped.advance(8) {
+        steps += 1;
+        assert!(!stepped.done());
+    }
+    assert!(steps >= 50 / 8 - 1, "a step takes at most 8 blocks");
+    let stepped = stepped.finish();
+    assert_eq!(stepped.len(), 50);
+    let whole = merge(vec![near.clone(), far], origin, 50);
+    let keys = |blocks: &[Position]| blocks.iter().map(|p| (p.x, p.y, p.z)).collect::<Vec<_>>();
+    assert_eq!(keys(&stepped), keys(&whole));
+    // A single answer is complete at once, without merging.
+    let single = Merge::new(vec![Vec::new(), near.clone()], origin, 10);
+    assert!(single.done());
+    assert_eq!(keys(&single.finish()), keys(&near[..10]));
+}
+
+#[test]
 fn every_ore_block_identifier_is_pinned() {
     let blocks: Vec<&str> = ORES
         .iter()
