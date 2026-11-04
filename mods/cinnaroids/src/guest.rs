@@ -938,7 +938,14 @@ fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameF
                 frame.is_some(),
                 fuel,
             ) {
-                calls -= draw_cubes(kind, &mut finders[kind], calls, fuel);
+                let (made, stale) = draw_cubes(kind, &mut finders[kind], calls, fuel);
+                if stale {
+                    // The host revoked every drawing handle the component owns, so the other
+                    // finder's cubes are gone too, even if it has nothing to change.
+                    finders.iter_mut().for_each(finder::Finder::reset);
+                    break;
+                }
+                calls -= made;
             }
         }
     });
@@ -1034,13 +1041,24 @@ fn find_ores(
         }
         match failure {
             Some(error) => Err(error),
-            None if due => {
-                let eye = [frame.eye.x, frame.eye.y, frame.eye.z];
-                Ok(crate::ores::merge(answers, eye, finder::LIMIT))
-            }
+            None if due => Ok(crate::ores::merge(
+                answers,
+                search_origin(frame),
+                finder::LIMIT,
+            )),
             None => Ok(Vec::new()),
         }
     })
+}
+
+/// The point searches measure from: the player's feet when player state is granted, so
+/// merged answers keep the host's nearest-first order. Otherwise the eye stands in, which
+/// can only change which blocks are kept at the cube limit.
+fn search_origin(frame: &gameplay::Snapshot) -> [f32; 3] {
+    match player_state::read_world() {
+        Ok(Some(world)) if world.dimension == frame.dimension => world.position.into(),
+        _ => [frame.eye.x, frame.eye.y, frame.eye.z],
+    }
 }
 
 /// Takes a due answer as the selection once the cubes show the last one, then compares it
@@ -1089,17 +1107,23 @@ fn select(
 }
 
 /// Makes up to `calls` cube changes toward one finder's selection, uploading its cube first
-/// when needed. Returns the cube changes attempted.
-fn draw_cubes(kind: usize, finder: &mut finder::Finder, calls: usize, fuel: &FrameFuel) -> usize {
+/// when needed, and stops at the first failed change. Returns the cube changes attempted and
+/// whether the host reported its drawing handles stale.
+fn draw_cubes(
+    kind: usize,
+    finder: &mut finder::Finder,
+    calls: usize,
+    fuel: &FrameFuel,
+) -> (usize, bool) {
     if calls == 0 || !fuel.allows(5_000) {
-        return 0;
+        return (0, false);
     }
     let geometry = match finder.geometry {
         Some(geometry) => geometry,
-        None if !finder.places() => return 0,
+        None if !finder.places() => return (0, false),
         None => match drawing::create_geometry(&finder::cube()) {
             Ok(geometry) => *finder.geometry.insert(geometry),
-            Err(_) => return 0,
+            Err(_) => return (0, false),
         },
     };
     let (dimension, through_walls) = finder.placement();
@@ -1125,14 +1149,12 @@ fn draw_cubes(kind: usize, finder: &mut finder::Finder, calls: usize, fuel: &Fra
             }
             Change::Remove(handle) => drawing::remove(handle).map(|()| None),
         });
-        if let Err(error) = synced
-            && stale(&error)
-        {
-            finder.reset();
-            break;
+        if let Err(error) = synced {
+            // A failed change stays pending; retrying it would spend the other finder's calls.
+            return (made, stale(&error));
         }
     }
-    made
+    (made, false)
 }
 
 /// Draws FakeLag's last relayed position while the option is on and packets are delayed. A

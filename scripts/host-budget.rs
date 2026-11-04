@@ -94,7 +94,10 @@ fn drawing_host(grants: ModGrants, settings: &str) -> (tempfile::TempDir, ModHos
     (directory, host, budget)
 }
 
-/// One metered frame: the local player stands at the origin of world session 2, and `gameplay`
+/// The local player's feet in every metered frame, where terrain searches measure from.
+const FEET: (f32, f32, f32) = (0., 0., 0.);
+
+/// One metered frame: the local player stands at [`FEET`] in world session 2, and `gameplay`
 /// gives a focused gameplay frame, otherwise the panel is open with `events`. Returns the fuel
 /// the callback used.
 fn metered_frame(
@@ -109,7 +112,7 @@ fn metered_frame(
             session: 2,
             dimension: 0,
             world: "local-fixture".into(),
-            position: (0., 0., 0.),
+            position: FEET,
             alive: true,
             runtime_id: 99,
         }),
@@ -998,7 +1001,7 @@ fn netherite_finder_keeps_256_retained_cubes_within_the_frame_budget() {
     );
 }
 
-/// Loaded terrain answering Netherite Finder with [`Debris`] and each Ore ESP search with
+/// Loaded terrain answering Netherite Finder with [`Debris`] and each Ore ESP search from
 /// `ores` blocks of its own, in a slab south of the player.
 struct Ores {
     debris: Debris,
@@ -1008,16 +1011,31 @@ struct Ores {
 }
 
 impl Ores {
-    /// The blocks the `search`th ore search finds.
+    /// The blocks the `search`th ore search finds, nearest [`FEET`] first like the host.
     fn blocks(&self, search: usize, limit: usize) -> Vec<TerrainPosition> {
-        (0..self.ores.min(limit) as i32)
+        let mut blocks: Vec<_> = (0..self.ores as i32)
             .map(|index| TerrainPosition {
                 x: index % 32 - 16,
                 y: index / 32 % 16,
                 z: 2 + search as i32,
             })
-            .collect()
+            .collect();
+        blocks.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
+        blocks.truncate(limit);
+        blocks
     }
+}
+
+/// Squared distance from [`FEET`] to a block's centre, the host's search order.
+fn feet_distance(block: &TerrainPosition) -> f64 {
+    [
+        (block.x, FEET.0),
+        (block.y, FEET.1),
+        (block.z, FEET.2),
+    ]
+    .into_iter()
+    .map(|(block, feet)| (f64::from(block) + 0.5 - f64::from(feet)).powi(2))
+    .sum()
 }
 
 impl BlockSearchSource for Ores {
@@ -1046,6 +1064,7 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
             controls: true,
             settings: true,
             terrain: true,
+            player_state: true,
             world_draw: true,
             render_through_walls: true,
             ..Default::default()
@@ -1059,13 +1078,13 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         &[("netherite", 1.), ("ore_esp", 1.)],
         GameplayFacts::default(),
     );
-    // Each ore search finds 128 blocks, so both merge into Ore ESP's 256 cubes.
+    // Each ore search finds its nearest 256 of 512 blocks; Ore ESP keeps the nearest 256 of both.
     let mut terrain = Ores {
         debris: Debris {
             count: mod_api::MAX_FOUND_BLOCKS,
             shift: 0,
         },
-        ores: 128,
+        ores: 512,
         searches: Default::default(),
     };
     let run = |host: &mut ModHost, terrain: &mut Ores, frames: usize| {
@@ -1082,17 +1101,51 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
         }
         most
     };
+    let origin = |block: &TerrainPosition| [block.x as i64, block.y as i64, block.z as i64];
+    // A stable sort keeps the first search's blocks ahead at equal distances, as the merge does.
+    let mut ores: Vec<_> = terrain
+        .blocks(0, 256)
+        .into_iter()
+        .chain(terrain.blocks(1, 256))
+        .collect();
+    ores.sort_by(|a, b| feet_distance(a).total_cmp(&feet_distance(b)));
+    ores.truncate(256);
+    let mut ores: Vec<_> = ores.iter().map(origin).collect();
+    ores.sort_unstable();
     let expected = |terrain: &Ores| {
-        let mut blocks: Vec<_> = terrain
-            .debris
-            .blocks(256)
-            .into_iter()
-            .chain(terrain.blocks(0, 256))
-            .chain(terrain.blocks(1, 256))
-            .map(|block| [block.x as i64, block.y as i64, block.z as i64])
-            .collect();
+        let mut blocks: Vec<_> = terrain.debris.blocks(256).iter().map(origin).collect();
+        blocks.extend_from_slice(&ores);
         blocks.sort_unstable();
         blocks
+    };
+    // Ore ESP's cubes are cyan, Netherite Finder's pink.
+    let tints = |host: &ModHost| {
+        let mut tints: Vec<_> = host
+            .render()
+            .0
+            .retained
+            .iter()
+            .flat_map(|retained| retained.instances.values())
+            .map(|instance| match instance.anchor {
+                mod_render::retained::Anchor::World { origin, .. } => {
+                    (origin.map(|axis| axis as i64), instance.tint)
+                }
+                _ => panic!("world-anchored"),
+            })
+            .collect();
+        tints.sort_unstable_by_key(|(origin, _)| *origin);
+        tints
+    };
+    let check_tints = |host: &ModHost| {
+        for (origin, tint) in tints(host) {
+            let ore = ores.binary_search(&origin).is_ok();
+            let color = if ore {
+                [0.1, 0.8, 1.0, 1.0]
+            } else {
+                [1.0, 0.12, 0.55, 1.0]
+            };
+            assert_eq!(tint, color, "{origin:?}, ore: {ore}");
+        }
     };
     // 512 cubes at sixteen shared placements per frame, after each finder's comparison.
     let drawing = run(&mut host, &mut terrain, 80);
@@ -1103,11 +1156,13 @@ fn ore_esp_and_netherite_finder_share_the_frame_and_drawing_budgets() {
     );
     assert!(terrain.searches.iter().all(|search| search.len() == 8));
     assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host);
     let steady = run(&mut host, &mut terrain, 30);
     // Every debris block moves, while ore cubes stay.
     terrain.debris.shift = 1;
     let moving = run(&mut host, &mut terrain, 80);
     assert_eq!(drawn_origins(&host), expected(&terrain));
+    check_tints(&host);
 
     // Disabling Ore ESP removes only its cubes; then the finder's.
     let mut clearing = 0;

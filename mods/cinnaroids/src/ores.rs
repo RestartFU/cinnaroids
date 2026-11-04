@@ -169,20 +169,25 @@ pub fn merge(mut answers: Vec<Vec<Position>>, origin: [f32; 3], limit: usize) ->
             })
             .sum::<f64>()
     };
-    let mut cursors = vec![0; answers.len()];
+    // Each answer's cursor and the distance of the block under it, computed once per block.
+    let mut heads: Vec<_> = answers
+        .iter()
+        .map(|answer| (0, answer.first().map(distance)))
+        .collect();
     let mut merged = Vec::with_capacity(limit);
     while merged.len() < limit {
-        let nearest = answers
+        let nearest = heads
             .iter()
-            .zip(&cursors)
             .enumerate()
-            .filter_map(|(index, (answer, cursor))| Some((index, distance(answer.get(*cursor)?))))
+            .filter_map(|(index, (_, head))| Some((index, (*head)?)))
             .min_by(|a, b| a.1.total_cmp(&b.1));
         let Some((index, _)) = nearest else {
             break;
         };
-        merged.push(answers[index][cursors[index]]);
-        cursors[index] += 1;
+        let (cursor, head) = &mut heads[index];
+        merged.push(answers[index][*cursor]);
+        *cursor += 1;
+        *head = answers[index].get(*cursor).map(distance);
     }
     merged
 }
