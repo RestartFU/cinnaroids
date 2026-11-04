@@ -905,7 +905,8 @@ fn search_key((range, blocks): (u8, u16)) -> u32 {
 /// Updates every finder in one turn, with a single drawing-capability check. An enabled
 /// finder renews its searches before anything else, then takes a due answer and moves its
 /// retained cubes a bounded step toward it; a disabled finder removes its cubes. Outside
-/// focused gameplay, `frame` is none and the cubes stay as they are. Both finders share
+/// focused gameplay, `frame` is none: searches pause and no new answer is taken, while cube
+/// changes already queued still finish. Both finders share
 /// [`finder::SYNC_CALLS`] cube changes per callback; they alternate which goes first.
 fn finders(requests: Requests, frame: Option<&gameplay::Snapshot>, fuel: &FrameFuel) {
     let capabilities = drawing::capabilities();
@@ -1022,7 +1023,7 @@ fn search(
 }
 
 /// Renews Ore ESP's searches for the selected `ores` that generate in the player's dimension.
-/// When `due`, returns their answers merged nearest first; otherwise none.
+/// When `due`, returns the nearest [`finder::LIMIT`] blocks of their answers; otherwise none.
 fn find_ores(
     ores: u16,
     range: f32,
@@ -1050,7 +1051,11 @@ fn find_ores(
         }
         match failure {
             Some(error) => Err(error),
-            // Without the feet, a due answer waits for the next refresh.
+            // Answers that all fit need no ordering, so no feet; otherwise, without the feet,
+            // a due answer waits for the next refresh.
+            None if due && answers.iter().map(Vec::len).sum::<usize>() <= finder::LIMIT => {
+                Ok(answers.concat())
+            }
             None if due => feet(frame)
                 .map(|feet| crate::ores::merge(answers, feet, finder::LIMIT))
                 .ok_or(terrain::ReadError::Unavailable),

@@ -226,6 +226,30 @@ fn a_changed_selection_moves_spare_cubes_before_adding_or_removing() {
 }
 
 #[test]
+fn a_dimension_transfer_drops_released_cubes_and_redraws_them() {
+    let mut finder = Finder::default();
+    let mut drawn = Drawn::default();
+    let blocks = [position(1, 2, 3), position(4, 5, 6)];
+    finder.geometry = Some(handle());
+    finder.apply(0, true, &blocks);
+    settle(&mut finder, &mut drawn);
+    assert_eq!(finder.cubes(), 2);
+    // The same blocks in another dimension: the host released the old cubes and geometry.
+    let mut redrawn = Drawn::default();
+    assert!(finder.apply(1, true, &blocks));
+    assert_eq!(finder.cubes(), 0);
+    assert!(finder.geometry.is_none());
+    settle(&mut finder, &mut redrawn);
+    assert_eq!(redrawn.blocks(), [(1, 2, 3), (4, 5, 6)]);
+    assert_eq!(redrawn.calls, 2, "two creations, no removals");
+    // Depth authority alone keeps the handles.
+    finder.geometry = Some(handle());
+    finder.apply(1, false, &blocks);
+    assert_eq!(finder.cubes(), 2);
+    assert!(finder.geometry.is_some());
+}
+
+#[test]
 fn a_failed_call_keeps_the_changes_made_before_it() {
     let mut finder = Finder::default();
     let mut drawn = Drawn::default();

@@ -232,9 +232,15 @@ impl Finder {
 
     /// Takes a search answer, nearest first, as the selection: the nearest [`LIMIT`] blocks.
     /// Returns whether it differs from the last; [`Finder::compare`] then finds what changed
-    /// over the next frames. The cubes stay as they are until it has.
+    /// over the next frames. The cubes stay as they are until it has. A dimension transfer
+    /// has already released every drawing handle, so an answer from another dimension drops
+    /// the cubes and geometry without removing them.
     pub fn apply(&mut self, dimension: i32, through_walls: bool, positions: &[Position]) -> bool {
         let positions = &positions[..positions.len().min(LIMIT)];
+        if dimension != self.placement.0 {
+            self.cubes.0.clear();
+            self.geometry = None;
+        }
         if self.compared.is_none() && (dimension, through_walls) == self.placement && {
             let same = |a: &Position, b: &Position| (a.x, a.y, a.z) == (b.x, b.y, b.z);
             positions.len() == self.last.len()
