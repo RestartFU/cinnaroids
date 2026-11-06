@@ -63,7 +63,7 @@ MODULES = [
       ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
     ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
     ("omni_sprint", "Omni Sprint", "combat", 38, 40, 39, []),
-    ("nuker", "Nuker", "combat", 41, 44, 43, [("slider", 42, "Radius", "blk")]),
+    ("nuker", "Nuker", "combat", 41, 44, 43, [("slider", 42, "Radius", "blocks")]),
     ("ore_esp", "Ore ESP", "render", 45, 57, None,
      [("slider", 46, "Range", "blocks")]
      + [("toggle", 47 + offset, title) for offset, title in enumerate(ORES)]),
