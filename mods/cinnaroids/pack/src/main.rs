@@ -1,7 +1,8 @@
 //! Reproducible SDK packaging without ambient operating-system imports.
 
 use std::{borrow::Cow, error::Error, path::Path};
-use wasm_encoder::{ComponentNameSection, ComponentSection, CustomSection};
+use wasm_encoder::{ComponentSection, CustomSection};
+use wasm_metadata::{AddMetadata, AddMetadataField};
 use wasmparser::{Parser, Payload};
 
 /// Optional release discovery metadata, readable without granting mod network access.
@@ -15,13 +16,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("usage: cinnaroids-pack CORE.wasm COMPONENT.wasm NOTICES.txt".into());
     }
     let core = std::fs::read(&args[0])?;
-    let mut component = wit_component::ComponentEncoder::default()
+    let component = wit_component::ComponentEncoder::default()
         .module(&core)?
         .validate(true)
         .encode()?;
-    let mut name = ComponentNameSection::new();
-    name.component("Cinnaroids");
-    name.append_to_component(&mut component);
+    let mut component = set_component_name(&component, "Cinnaroids")?;
     let asset = Path::new(&args[1])
         .file_name()
         .and_then(|name| name.to_str())
@@ -92,6 +91,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Names the component inside the encoder's existing `component-name` section.
+/// Appending a second section makes registries reject the upload as duplicate metadata.
+fn set_component_name(component: &[u8], name: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut metadata = AddMetadata::default();
+    metadata.name = AddMetadataField::Set(name.to_owned());
+    Ok(metadata.to_wasm(component)?)
+}
+
 /// Adds the workspace version, update repository and exact latest-release asset at the root.
 fn append_release_metadata(component: &mut Vec<u8>, asset: &str) {
     append_section(component, "version", env!("CARGO_PKG_VERSION").as_bytes());
@@ -134,6 +141,31 @@ fn panel_bundle() -> Result<Vec<u8>, serde_json::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn component_name_merges_into_the_single_existing_name_section() {
+        let mut component = wasm_encoder::Component::new().finish();
+        let mut names = wasm_encoder::ComponentNameSection::new();
+        let mut instances = wasm_encoder::NameMap::new();
+        instances.append(0, "encoder-debug-name");
+        names.instances(&instances);
+        names.append_to_component(&mut component);
+        let component = set_component_name(&component, "Cinnaroids").unwrap();
+        let sections: Vec<_> = Parser::new(0)
+            .parse_all(&component)
+            .filter_map(|payload| match payload.unwrap() {
+                Payload::CustomSection(section) if section.name() == "component-name" => {
+                    Some(section.data().to_vec())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sections.len(), 1);
+        let data = &sections[0];
+        let contains = |needle: &[u8]| data.windows(needle.len()).any(|w| w == needle);
+        assert!(contains(b"Cinnaroids"));
+        assert!(contains(b"encoder-debug-name"));
+    }
 
     #[test]
     fn packaged_release_metadata_is_present_once_at_the_component_root() {
