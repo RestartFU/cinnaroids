@@ -125,6 +125,12 @@ impl Guest for Cinnaroids {
         let pressed = MODULES.with(|modules| {
             let modules = modules.borrow();
             let p = &modules.preferences;
+            // An open option list also follows its navigation keys.
+            let navigation = if modules.open_choice.is_some() {
+                crate::state::CHOICE_KEYS
+            } else {
+                &[]
+            };
             [
                 "MouseLeft",
                 "Escape",
@@ -137,6 +143,7 @@ impl Guest for Cinnaroids {
                 &p.reach_key,
             ]
             .into_iter()
+            .chain(navigation.iter().copied())
             .filter(|key| !key.is_empty())
             .map(str::to_owned)
             .collect()
@@ -463,7 +470,7 @@ fn mine_nearby(range: Option<u8>, snapshot: Option<&gameplay::Snapshot>, fuel: &
     });
 }
 
-/// Queries compact item matches and requests a swap only after a change or retry delay.
+/// Polls equipment revisions each frame and copies equipment only after a change or retry delay.
 fn auto_totem(enabled: bool, seconds: f32) {
     AUTO_TOTEM.with(|policy| {
         let mut policy = policy.borrow_mut();
@@ -471,7 +478,22 @@ fn auto_totem(enabled: bool, seconds: f32) {
             policy.reset();
             return;
         }
-        let equipment = match player_state::read_equipment_matches(crate::auto_totem::TOTEM) {
+        let revisions = match player_state::read_revisions() {
+            Ok(Some(revisions)) => revisions,
+            Ok(None) => {
+                policy.reset();
+                return;
+            }
+            Err(error) => {
+                policy.reset();
+                let _ = hud::set_label(&format!("AutoTotem: {error}"));
+                return;
+            }
+        };
+        if !policy.observe(revisions, seconds) {
+            return;
+        }
+        let equipment = match player_state::read_equipment() {
             Ok(Some(equipment)) => equipment,
             Ok(None) => {
                 policy.reset();
@@ -483,8 +505,7 @@ fn auto_totem(enabled: bool, seconds: f32) {
                 return;
             }
         };
-        if policy.observe(equipment.revisions, seconds)
-            && let Some(slot) = policy.select(&equipment)
+        if let Some(slot) = policy.select(&equipment)
             && let Err(error) = inventory::swap_offhand(slot)
         {
             let _ = hud::set_label(&format!("AutoTotem: {error}"));
@@ -506,16 +527,21 @@ fn assist_aim(
         AIM.with(|aim| aim.borrow_mut().reset());
         return;
     }
-    let players = snapshot
-        .players
+    // Rows arrive nearest first at the pose presented in this frame.
+    let Ok(actors) = player_state::read_actors_limited(crate::aim::MAX_TARGETS) else {
+        AIM.with(|aim| aim.borrow_mut().reset());
+        return;
+    };
+    let players = actors
         .iter()
-        .take(mod_api::MAX_GAMEPLAY_PLAYERS)
-        .map(|player| Player {
-            id: player.runtime_id,
+        .map(|observed| &observed.actor)
+        .filter(|actor| actor.player && actor.dimension == snapshot.dimension)
+        .map(|actor| Player {
+            id: actor.runtime_id,
             feet: Vec3 {
-                x: player.position.x,
-                y: player.position.y,
-                z: player.position.z,
+                x: actor.position.0,
+                y: actor.position.1,
+                z: actor.position.2,
             },
         });
     let frame = Frame {

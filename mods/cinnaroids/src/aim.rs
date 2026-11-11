@@ -3,6 +3,9 @@
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 const RANGE: f32 = 6.0;
+/// Nearest observed players copied per frame; ample for targets within `RANGE`
+/// while bounding the per-frame actor copy.
+pub const MAX_TARGETS: u32 = 4;
 #[cfg(test)]
 const CONE: f32 = PI / 6.0;
 const CONE_COSINE: f32 = 0.866_025_4;

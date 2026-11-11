@@ -132,7 +132,7 @@ Left-click toggles the row. On toggle, Coral Glow fades in, the 2x20 coral bar s
 
 ### Settings controls
 - **Slider:** an Ash title on the left and a value plus unit on the right; the value is a native typed editor. The track spans the full inset width. The coral fill carries a 6x6 knob.
-- **Dropdown:** a 16-high field with the value at x 6 and a chevron at the right. Selection uses the host dropdown.
+- **Dropdown:** a 16-high field with the value at x 6 and a chevron at the right. Cinnaroids draws its own option list: clicking the field opens a 3-radius list 2 units below it, with 16-high options between 2-unit insets, and later settings move down to make room. The selected option is coral with a 4x4 coral dot; the keyboard cursor uses the hover tint. The chevron turns 180 degrees while the list is open.
 - **Switch:** an 18x10 track whose coral layer fades with toggle progress. The same progress slides the knob across a 10-unit lane.
 - **Bind:** a 58x16 keycap with an edge border. During capture, an Ember cap with a coral border and a "Press a key" prompt fades in over it. Esc clears a module key and keeps the menu key.
 
@@ -143,7 +143,7 @@ The Settings column is visible alongside Combat, Network, and Render. It shares 
 Transitions run on bound scalars, with no delays or loops.
 - **Open:** the world eases in over 380ms in-out-cubic. Columns rise 10 units over 300, 345, 390, and 435ms expo, staggered by 45ms, and fade over 140ms plus 20ms per column.
 - **Close:** the same curves reverse from shorter distances (3 and 5). The world's symmetric curve keeps it dimmed until the columns have faded out.
-- **State:** height, row offset, and plate height take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. The header divider and a row keycap fade over 160ms out-cubic, while the row's value slides left over 220ms settle. Toggle progress (row wash, lift-bar alpha, coral legend, switch track and knob) eases over 100ms out-cubic. Hover and press tints switch without easing.
+- **State:** height, row offset, plate height, and an option list's height and the settings it moves take 260ms expo. Chevrons and the name indent take 220ms and 200ms settle (0.2, 0.9, 0.25, 1). The lift bar takes 240ms with overshoot (0.34, 1.36, 0.64, 1). Settings content fades over 220ms out-cubic. The header divider and a row keycap fade over 160ms out-cubic, while the row's value slides left over 220ms settle. Toggle progress (row wash, lift-bar alpha, coral legend, switch track and knob) eases over 100ms out-cubic. Hover and press tints switch without easing.
 - **Drag:** no easing, so the column tracks the pointer exactly.
 
 ### Delivery
@@ -151,9 +151,9 @@ Transitions run on bound scalars, with no delays or loops.
 
 The guest owns the menu shortcut: it reads the saved physical key and calls `panel::toggle()`. Panel JSON has no `toggle_key` metadata. Key capture and native text editing take priority over shortcuts; changing the menu key updates the controls and reservations without replacing the panel shell.
 
-Cinnabar routes the controls but no longer formats them, so `panel.rs` also publishes each control's feedback: `#c<index>_on` toggle progress (eased 0.1s), `#c<index>_text` values in the host's old format, and `#c<index>_fill` slider fractions. Hover and press tints are native button states. A row's trailing value is its first slider's number plus a fixed unit label measured from the embedded font. The surface allows 256 bindings and uses 132.
+Cinnabar routes the controls but no longer formats them, so `panel.rs` also publishes each control's feedback: `#c<index>_on` toggle progress (eased 0.1s), `#c<index>_text` values in the host's old format, and `#c<index>_fill` slider fractions. Hover and press tints are native button states. A row's trailing value is its first slider's number plus a fixed unit label measured from the embedded font. The surface allows 256 bindings and uses 246.
 
-Cinnabar still draws the slider value editor and the dropdown popup. The panel's `widget_colors` (`panel::WIDGET_COLORS`) keep them on the dark compact palette Cinnabar used for this panel before `dark` and `style` were removed.
+Cinnabar still draws the slider value editor. Chevrons are this panel's own `cinnabar_vector_path` strokes; Cinnabar no longer provides icons. The panel's `widget_colors` (`panel::WIDGET_COLORS`) keep it on the dark compact palette Cinnabar used for this panel before `dark` and `style` were removed.
 
 ## Do's and Don'ts
 

@@ -651,6 +651,13 @@ fn panel_exposes_all_controls_without_category_sections() {
             "ore_nether_gold",
             "ore_quartz",
             "expand_ore_esp",
+            "aim_mode_0",
+            "aim_mode_1",
+            "esp_color_0",
+            "esp_color_1",
+            "esp_color_2",
+            "esp_color_3",
+            "close_choices",
         ]
     );
 }
@@ -1377,10 +1384,16 @@ fn esp_preferences_round_trip_clamp_and_restore_enablement() {
     controls(
         &mut s,
         &[],
-        &[("esp_range", 0.), ("esp_color", -1.), ("esp_health", 0.)],
+        &[
+            ("esp_range", 0.),
+            ("esp_color", 1.),
+            ("esp_color_3", 1.),
+            ("esp_health", 0.),
+        ],
     );
     assert_eq!(s.preferences.esp_range, 1);
-    assert_eq!(s.preferences.esp_color, 0);
+    assert_eq!(s.preferences.esp_color, 3);
+    assert_eq!(s.open_choice, None);
     assert!(!s.preferences.esp_health);
     assert!(s.preferences_dirty);
 }
@@ -1569,4 +1582,89 @@ fn nuker_bindings_share_conflict_rules_and_leave_a_menu_fallback() {
     );
     assert_eq!(prefs.menu_key, "F1");
     assert_eq!(prefs.nuker_key, "F2");
+}
+
+#[test]
+fn option_lists_open_pick_and_close_from_the_pointer() {
+    let mut s = state();
+    assert_eq!(s.preferences.aim_mode, AimMode::WhileClicking);
+    controls(&mut s, &[], &[("aim_mode", 1.)]);
+    assert_eq!(
+        s.open_choice,
+        Some(OpenChoice {
+            choice: Choice::AimMode,
+            cursor: 1,
+        })
+    );
+    // An open list lets the panel handle Escape itself.
+    assert!(s.captures_keys());
+    s.preferences_dirty = false;
+    controls(&mut s, &[], &[("aim_mode_0", 1.)]);
+    assert_eq!(s.preferences.aim_mode, AimMode::Continuous);
+    assert_eq!(s.open_choice, None);
+    assert!(s.preferences_dirty && !s.captures_keys());
+
+    // The field closes its own list; another list or any other control replaces or closes it.
+    controls(&mut s, &[], &[("aim_mode", 1.)]);
+    controls(&mut s, &[], &[("aim_mode", 1.)]);
+    assert_eq!(s.open_choice, None);
+    controls(&mut s, &[], &[("aim_mode", 1.), ("esp_color", 1.)]);
+    assert_eq!(
+        s.open_choice.map(|open| open.choice),
+        Some(Choice::EspColor)
+    );
+    controls(&mut s, &[], &[("esp_names", 0.)]);
+    assert_eq!(s.open_choice, None);
+    assert!(!s.preferences.esp_names);
+
+    // Pressing outside the columns closes the list without changing anything.
+    controls(&mut s, &[], &[("aim_mode", 1.)]);
+    controls(&mut s, &[], &[(CLOSE_CHOICES, 1.)]);
+    assert_eq!(s.open_choice, None);
+    assert_eq!(s.preferences.aim_mode, AimMode::Continuous);
+
+    // Unknown option IDs are ignored.
+    controls(&mut s, &[], &[("esp_color_4", 1.), ("aim_mode_2", 1.)]);
+    assert_eq!(s.preferences.esp_color, 0);
+    assert_eq!(s.preferences.aim_mode, AimMode::Continuous);
+
+    // Closing the panel or losing focus closes the list.
+    controls(&mut s, &[], &[("esp_color", 1.)]);
+    s.controls(Controls {
+        focused: true,
+        panel_open: false,
+        keys: &[],
+        held: &[],
+        seconds: 0.0,
+        events: &[],
+    });
+    assert_eq!(s.open_choice, None);
+}
+
+#[test]
+fn option_lists_follow_the_keyboard_and_hold_back_shortcuts() {
+    let mut s = state_with_bindings();
+    controls(&mut s, &[], &[("esp_color", 1.)]);
+    controls(&mut s, &["ArrowDown", "ArrowDown"], &[]);
+    assert_eq!(s.open_choice.unwrap().cursor, 2);
+    controls(&mut s, &["End", "ArrowDown"], &[]);
+    assert_eq!(s.open_choice.unwrap().cursor, 3);
+    controls(&mut s, &["Home", "ArrowUp"], &[]);
+    assert_eq!(s.open_choice.unwrap().cursor, 0);
+    controls(&mut s, &["ArrowDown"], &[]);
+    // Module shortcuts wait while a list owns the keyboard.
+    controls(&mut s, &[BOUND_CLICKER_KEY], &[]);
+    assert!(!s.modules.clicker);
+    controls(&mut s, &["Enter"], &[]);
+    assert_eq!(s.preferences.esp_color, 1);
+    assert_eq!(s.open_choice, None);
+
+    // Escape closes without choosing; the cursor starts on the selection.
+    controls(&mut s, &[], &[("esp_color", 1.)]);
+    assert_eq!(s.open_choice.unwrap().cursor, 1);
+    controls(&mut s, &["ArrowDown", "Escape"], &[]);
+    assert_eq!(s.open_choice, None);
+    assert_eq!(s.preferences.esp_color, 1);
+    controls(&mut s, &[BOUND_CLICKER_KEY], &[]);
+    assert!(s.modules.clicker);
 }

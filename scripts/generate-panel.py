@@ -31,7 +31,13 @@ LIFT = [0.34, 1.36, 0.64, 1]
 # Control indices are declared in `State::panel_content`; tests assert both stay aligned.
 # The component publishes every control's feedback itself: `#c<index>_on` eases a toggle,
 # `#c<index>_text` shows a slider, keybind or choice value and `#c<index>_fill` sizes a slider.
+# A choice is drawn here rather than by the host: its field opens an option list beneath it.
+# `#c<field>_list` sizes the list, `#c<field>_below` moves the settings after it down,
+# `#c<field>_angle` turns the chevron, and each option's `#c<index>_on` marks the selection
+# and `#c<index>_hi` the keyboard cursor.
 MENU_KEY, RESET_LAYOUT = 0, 26
+# Follows every option; see `Choice::first_option`.
+CLOSE_CHOICES = 64
 # Every header shares one screen-fixed drag pad backed by the two hidden sliders 27 and 28.
 DRAG_PAD = 27
 COLUMNS = [
@@ -48,7 +54,8 @@ ORES = ["Diamond", "Emerald", "Gold", "Iron", "Redstone", "Lapis lazuli", "Coppe
 MODULES = [
     ("clicker", "Clicker", "combat", 1, 20, 3, [("slider", 2, "Clicks per second", "CPS")]),
     ("aim", "Aim assist", "combat", 4, 21, 7,
-     [("slider", 5, "Strength", "%"), ("choice", 6, "Activation"),
+     [("slider", 5, "Strength", "%"),
+      ("choice", 6, "Activation", 58, ["Continuous", "While clicking"]),
       ("toggle", 29, "Horizontal only")]),
     ("reach", "Reach", "combat", 8, 22, 10, [("slider", 9, "Distance", "blocks")]),
     ("jump_reset", "Auto Jump Reset", "combat", 11, 23, 13,
@@ -59,7 +66,8 @@ MODULES = [
      [("slider", 18, "Range", "blocks")]),
     ("fullbright", "Fullbright", "render", 19, None, None, []),
     ("player_esp", "Player ESP", "render", 30, 36, None,
-     [("slider", 31, "Range", "blocks"), ("choice", 32, "Outline color"),
+     [("slider", 31, "Range", "blocks"),
+      ("choice", 32, "Outline color", 60, ["Coral", "Pink", "Cyan", "White"]),
       ("toggle", 33, "Names"), ("toggle", 34, "Distance"), ("toggle", 35, "Health")]),
     ("auto_totem", "AutoTotem", "combat", 37, None, None, []),
     ("omni_sprint", "Omni Sprint", "combat", 38, 40, 39, []),
@@ -69,6 +77,18 @@ MODULES = [
      + [("toggle", 47 + offset, title) for offset, title in enumerate(ORES)]),
 ]
 HEIGHTS = {"slider": 30, "choice": 32, "toggle": 20, "key": 22}
+# One option row in an open choice list; matches `panel::OPTION_ROW`.
+OPTION = 16
+
+
+def option_list_height(options):
+    """An open list: its options between 2-unit insets. Matches `panel::list_height`."""
+    return OPTION * len(options) + 4
+
+
+def choice_extra(options):
+    """How far an open list pushes later settings down. Matches `panel::choice_extra`."""
+    return option_list_height(options) + 4
 
 
 def advances():
@@ -161,19 +181,24 @@ def rect(size, offset=(0, 0), radius=0, color=EDGE, **properties):
                 radius=radius, color=color, **properties)
 
 
-def label(text, size, offset=(0, 0), *, color=TEXT, scale=0.9, align="left"):
+def label(text, size, offset=(0, 0), *, color=TEXT, scale=0.9, align="left", **properties):
     """Use the component's embedded Inter face for every label and value."""
     result = node("label", size, offset, text=text, text_alignment=align, color=color,
                   shadow=False, clips_children=True, hide_hyphen=True, localize=False,
-                  font_type="mod_panel", font_scale_factor=scale)
+                  font_type="mod_panel", font_scale_factor=scale, **properties)
     if text.startswith("#"):
         result["bindings"] = [dict(binding_name=text)]
     return result
 
 
+# Stroked icon paths on a 16-unit box, stretched to each node like Cinnabar's former icons.
+ICONS = {"chevron": dict(stroke_width=3, paths=[[[2, 4], [8, 12], [14, 4]]])}
+
+
 def icon(name, size, offset, color=MUTED):
-    """Use Cinnabar's vector icons, including the rotating disclosure chevron."""
-    return node("custom", size, offset, renderer="cinnabar_vector_icon", icon=name, color=color)
+    """Draw one of this component's vector icons, including the rotating disclosure chevron."""
+    return node("custom", size, offset, renderer="cinnabar_vector_path", view_box=[0, 0, 16, 16],
+                closed=False, color=color, **ICONS[name])
 
 
 def states(size, radius=0):
@@ -248,16 +273,38 @@ def slider(index, title, unit, y):
                       track=rect([width, 2], [0, 4], 1, TRACK), fill=fill)))
 
 
-def choice(index, title, y):
-    """Use the host dropdown for keyboard and pointer choice selection."""
+def choice(index, title, y, first, options):
+    """A field that opens this component's own option list beneath it."""
     width = COLUMN - 2 * INSET
+    chevron = icon("chevron", [5, 3], [width - 11, 7])
+    chevron["cinnabar_transform"] = {"rotation": 0}
+    bind(chevron, (f"#c{index}_angle", "#cinnabar_rotation"))
+    rows = {}
+    for offset, option in enumerate(options):
+        control = first + offset
+        cursor = bind(rect([width, OPTION], radius=3, color=HOVER, alpha=0),
+                      (f"#c{control}_hi", "#alpha"))
+        selected = bind(label(option, [width - 24, 10], [8, 4], color=ACCENT, scale=0.78,
+                              alpha=0), (f"#c{control}_on", "#alpha"))
+        mark = bind(rect([4, 4], [width - 13, 6], radius=2, color=ACCENT, alpha=0),
+                    (f"#c{control}_on", "#alpha"))
+        rows[f"option_{offset}"] = button(
+            control, [width, OPTION], [0, 2 + OPTION * offset], feedback=False,
+            cursor=cursor, **states([width, OPTION], 3),
+            name=label(option, [width - 24, 10], [8, 4], scale=0.78),
+            selected=selected, mark=mark)
+    listing = bind(node("panel", [width, 0], [0, 30], clips_children=True, controls=children(
+        background=rect(["100%", "100%"], radius=3, color=FIELD, border_color=EDGE,
+                        border_width=0.5),
+        **rows)), (f"#c{index}_list", "#size_binding_y_absolute"))
     return node("panel", [width, 28], [INSET, y], controls=children(
         title=label(title, [width, 10], color=MUTED, scale=0.78),
         field=button(index, [width, 16], [0, 12], feedback=False,
                      background=rect([width, 16], radius=3, color=FIELD),
                      **states([width, 16], 3),
                      value=label(f"#c{index}_text", [width - 20, 10], [6, 4], scale=0.78),
-                     chevron=icon("chevron", [5, 3], [width - 11, 7]))))
+                     chevron=chevron),
+        options=listing))
 
 
 def toggle(index, title, y):
@@ -277,22 +324,32 @@ def binding_row(index, name, y):
 
 
 def details(module, settings, key):
-    """Lay out one module's settings and report the region's full height."""
+    """Lay out one module's settings and report the region's closed height.
+
+    Settings after a choice sit in one panel that its open list moves down."""
     controls, y = {}, 6
+    placed, below, extra = controls, None, 0
     for setting in settings:
         kind, index, title = setting[:3]
         if kind == "slider":
-            controls[f"slider_{index}"] = slider(index, title, setting[3], y)
+            placed[f"slider_{index}"] = slider(index, title, setting[3], y)
         elif kind == "choice":
-            controls[f"choice_{index}"] = choice(index, title, y)
+            assert below is None, "one choice per module"
+            placed[f"choice_{index}"] = choice(index, title, y, *setting[3:])
+            below, extra = index, choice_extra(setting[4])
+            placed = {}
         else:
-            controls[f"toggle_{index}"] = toggle(index, title, y)
+            placed[f"toggle_{index}"] = toggle(index, title, y)
         y += HEIGHTS[kind]
     if key is not None:
-        controls["bind"] = binding_row(key, module, y)
+        placed["bind"] = binding_row(key, module, y)
         y += HEIGHTS["key"]
     height = y + 2
-    content = bind(node("panel", [COLUMN, height], alpha=0, propagate_alpha=True,
+    if below is not None:
+        controls[f"below_{below}"] = bind(
+            node("panel", [COLUMN, height], controls=children(**placed)),
+            (f"#c{below}_below", "#offset"))
+    content = bind(node("panel", [COLUMN, height + extra], alpha=0, propagate_alpha=True,
                         controls=children(**controls)), (f"#{module}_detail", "#alpha"))
     region = node("panel", [COLUMN, 0], [0, ROW], clips_children=True, controls=children(
         background=rect(["100%", "100%"], color=DETAIL_FILL), content=content))
@@ -445,7 +502,10 @@ def document():
         columns[identifier], heights[identifier] = column(identifier, title, pad)
     desk = node("panel", [0, 0], controls=children(**columns))
     desk.update(anchor_from="center", anchor_to="top_left")
-    root = node("panel", ["100%", "100%"], controls=children(desk=desk))
+    # While an option list is open, a press anywhere outside the columns closes it.
+    dismiss = bind(button(CLOSE_CHOICES, ["100%", "100%"], feedback=False),
+                   ("#choice_open", "#visible"))
+    root = node("panel", ["100%", "100%"], controls=children(dismiss=dismiss, desk=desk))
     return dict(namespace="cinnaroids", panel=root), heights
 
 
@@ -488,6 +548,14 @@ def transitions():
     for module, _, _, toggle, _, _, settings in MODULES:
         for index in [toggle] + [s[1] for s in settings if s[0] == "toggle"]:
             result[f"#c{index}_on"] = dict(duration=0.1, easing="out_cubic")
+        # Option lists open with the same motion as module settings.
+        for _, index, _, first, options in (s for s in settings if s[0] == "choice"):
+            result[f"#c{index}_list"] = dict(duration=0.26, easing=EXPO)
+            result[f"#c{index}_below"] = dict(duration=0.26, easing=EXPO)
+            result[f"#c{index}_angle"] = dict(duration=0.22, easing=SETTLE)
+            for control in range(first, first + len(options)):
+                result[f"#c{control}_on"] = dict(duration=0.1, easing="out_cubic")
+                result[f"#c{control}_hi"] = dict(duration=0.1, easing="out_cubic")
     return result
 
 

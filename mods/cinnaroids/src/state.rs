@@ -350,6 +350,99 @@ pub struct Modules {
     pub ore_esp: bool,
 }
 
+/// A selector this component draws itself: a field that opens a list of options beneath it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Choice {
+    AimMode,
+    EspColor,
+}
+
+/// Aim assist activation options, in [`AimMode`] order after `Continuous`.
+pub const AIM_MODES: &[&str] = &["Continuous", "While clicking"];
+
+impl Choice {
+    pub const ALL: [Choice; 2] = [Choice::AimMode, Choice::EspColor];
+
+    /// The field's control ID; its options are `<id>_<option>`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Choice::AimMode => "aim_mode",
+            Choice::EspColor => "esp_color",
+        }
+    }
+
+    pub fn options(self) -> &'static [&'static str] {
+        match self {
+            Choice::AimMode => AIM_MODES,
+            Choice::EspColor => crate::esp::COLOR_NAMES,
+        }
+    }
+
+    /// Panel control index of the field.
+    pub fn field(self) -> usize {
+        match self {
+            Choice::AimMode => 6,
+            Choice::EspColor => 32,
+        }
+    }
+
+    /// Panel control index of the first option; the others follow it.
+    pub fn first_option(self) -> usize {
+        match self {
+            Choice::AimMode => 58,
+            Choice::EspColor => 60,
+        }
+    }
+
+    /// The module, in panel order, whose settings hold this choice.
+    pub fn module(self) -> usize {
+        match self {
+            Choice::AimMode => 1,
+            Choice::EspColor => 7,
+        }
+    }
+
+    /// Option control IDs, `<id>_<position>`, parallel to [`Choice::options`].
+    pub fn option_ids(self) -> &'static [&'static str] {
+        match self {
+            Choice::AimMode => &["aim_mode_0", "aim_mode_1"],
+            Choice::EspColor => &["esp_color_0", "esp_color_1", "esp_color_2", "esp_color_3"],
+        }
+    }
+
+    /// The choice an option control ID belongs to, and the option's position.
+    fn option(id: &str) -> Option<(Choice, usize)> {
+        Choice::ALL.into_iter().find_map(|choice| {
+            let option = choice
+                .option_ids()
+                .iter()
+                .position(|option| *option == id)?;
+            Some((choice, option))
+        })
+    }
+}
+
+/// The layer under the columns that closes an open option list when pressed.
+pub const CLOSE_CHOICES: &str = "close_choices";
+
+/// Keys an open option list handles besides Escape.
+pub const CHOICE_KEYS: &[&str] = &[
+    "ArrowUp",
+    "ArrowDown",
+    "Home",
+    "End",
+    "Enter",
+    "NumpadEnter",
+    "Space",
+];
+
+/// An open option list and the option its keyboard cursor is on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpenChoice {
+    pub choice: Choice,
+    pub cursor: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeybindTarget {
     Menu,
@@ -367,6 +460,8 @@ pub struct State {
     pub modules: Modules,
     pub access: crate::permissions::Access,
     pub capturing_key: Option<KeybindTarget>,
+    /// The option list open in the panel, if any; transient like disclosure state.
+    pub open_choice: Option<OpenChoice>,
     pub panel_dirty: bool,
     /// Transient disclosure state, independent from enabled flags and persisted settings.
     pub expanded: [bool; 12],
@@ -386,6 +481,7 @@ impl State {
             preferences,
             access: Default::default(),
             capturing_key: None,
+            open_choice: None,
             panel_dirty: true,
             expanded: [false; 12],
             drag: None,
@@ -408,6 +504,9 @@ impl State {
         }
         if self.drag.is_some() && (!controls.focused || !controls.panel_open) {
             self.end_drag(false);
+        }
+        if self.open_choice.is_some() && (!controls.focused || !controls.panel_open) {
+            self.close_choice();
         }
         if !controls.focused {
             return;
@@ -442,6 +541,11 @@ impl State {
             }
             if self.drag.is_some() && !controls.held.iter().any(|key| key == "MouseLeft") {
                 self.end_drag(true);
+            }
+            if self.open_choice.is_some() {
+                // An open list owns the keyboard, so module shortcuts wait until it closes.
+                self.choice_keys(controls.keys);
+                return;
             }
         }
         if let Some(target) = self.capturing_key {
@@ -579,9 +683,96 @@ impl State {
                     moved: false,
                 });
                 self.capturing_key = None;
+                self.open_choice = None;
                 self.panel_dirty = true;
             }
             None => {}
+        }
+    }
+
+    /// Whether the panel handles Escape and other keys itself: while capturing a shortcut or
+    /// while an option list is open.
+    pub fn captures_keys(&self) -> bool {
+        self.capturing_key.is_some() || self.open_choice.is_some()
+    }
+
+    /// The selected option of a choice.
+    pub fn choice_index(&self, choice: Choice) -> usize {
+        match choice {
+            Choice::AimMode => usize::from(self.preferences.aim_mode == AimMode::WhileClicking),
+            Choice::EspColor => {
+                usize::from(self.preferences.esp_color).min(crate::esp::COLOR_NAMES.len() - 1)
+            }
+        }
+    }
+
+    /// Selects an option and reports whether the preference changed.
+    fn choose(&mut self, choice: Choice, option: usize) -> bool {
+        match choice {
+            Choice::AimMode => replace(
+                &mut self.preferences.aim_mode,
+                if option == 0 {
+                    AimMode::Continuous
+                } else {
+                    AimMode::WhileClicking
+                },
+            ),
+            Choice::EspColor => replace(
+                &mut self.preferences.esp_color,
+                option.min(crate::esp::COLOR_NAMES.len() - 1) as u8,
+            ),
+        }
+    }
+
+    /// Opens a choice's list with the cursor on its selection, or closes it when open.
+    fn toggle_choice(&mut self, choice: Choice) {
+        self.open_choice = match self.open_choice {
+            Some(open) if open.choice == choice => None,
+            _ => Some(OpenChoice {
+                choice,
+                cursor: self.choice_index(choice),
+            }),
+        };
+        self.capturing_key = None;
+        self.panel_dirty = true;
+    }
+
+    fn close_choice(&mut self) {
+        if self.open_choice.take().is_some() {
+            self.panel_dirty = true;
+        }
+    }
+
+    /// Arrow, Home and End keys move an open list's cursor, Enter or Space picks the option
+    /// under it, and Escape closes the list.
+    fn choice_keys(&mut self, keys: &[String]) {
+        for key in keys {
+            let Some(mut open) = self.open_choice else {
+                return;
+            };
+            let last = open.choice.options().len() - 1;
+            match key.as_str() {
+                "Escape" => {
+                    self.close_choice();
+                    continue;
+                }
+                "Enter" | "NumpadEnter" | "Space" => {
+                    if self.choose(open.choice, open.cursor) {
+                        self.preferences_dirty = true;
+                    }
+                    self.close_choice();
+                    continue;
+                }
+                "ArrowUp" => open.cursor = open.cursor.saturating_sub(1),
+                "ArrowDown" => open.cursor = (open.cursor + 1).min(last),
+                "Home" => open.cursor = 0,
+                "End" => open.cursor = last,
+                _ => continue,
+            }
+            if self.open_choice != Some(open) {
+                self.open_choice = Some(open);
+                self.panel_dirty = true;
+            }
         }
     }
 
@@ -654,6 +845,30 @@ impl State {
                     requirement.id == event.id && !self.access.0[index].is_empty()
                 })
         {
+            return;
+        }
+        // Using any other control closes an open list.
+        if let Some(open) = self.open_choice
+            && !event.id.starts_with(open.choice.id())
+        {
+            self.close_choice();
+        }
+        if event.id == CLOSE_CHOICES {
+            return;
+        }
+        if let Some(choice) = Choice::ALL
+            .into_iter()
+            .find(|choice| choice.id() == event.id)
+        {
+            self.toggle_choice(choice);
+            return;
+        }
+        if let Some((choice, option)) = Choice::option(&event.id) {
+            self.close_choice();
+            if self.choose(choice, option) {
+                self.preferences_dirty = true;
+            }
+            self.panel_dirty = true;
             return;
         }
         let changed = match event.id.as_str() {
@@ -741,14 +956,6 @@ impl State {
                 &mut self.preferences.aim_strength,
                 value.round().clamp(0.0, 100.0) as u8,
             ),
-            "aim_mode" => replace(
-                &mut self.preferences.aim_mode,
-                if value >= 0.5 {
-                    AimMode::WhileClicking
-                } else {
-                    AimMode::Continuous
-                },
-            ),
             "reach" => replace(&mut self.modules.reach, value >= 0.5),
             "reach_blocks" => replace(
                 &mut self.preferences.reach_blocks,
@@ -775,12 +982,6 @@ impl State {
             "esp_range" => replace(
                 &mut self.preferences.esp_range,
                 value.round().clamp(1., crate::esp::MAX_RANGE) as u8,
-            ),
-            "esp_color" => replace(
-                &mut self.preferences.esp_color,
-                value
-                    .round()
-                    .clamp(0., (crate::esp::COLOR_NAMES.len() - 1) as f32) as u8,
             ),
             "esp_names" => replace(&mut self.preferences.esp_names, value >= 0.5),
             "esp_distance" => replace(&mut self.preferences.esp_distance, value >= 0.5),
@@ -975,11 +1176,9 @@ impl State {
                 max: 100.0,
                 step: 1.0,
             },
-            Control::Choice {
+            Control::Button {
                 id: "aim_mode",
                 label: "Mode",
-                index: u32::from(self.preferences.aim_mode == AimMode::WhileClicking),
-                options: &["Continuous", "While clicking"],
             },
             Control::Keybind {
                 id: "aim_key",
@@ -1122,11 +1321,9 @@ impl State {
                 max: crate::esp::MAX_RANGE,
                 step: 1.,
             },
-            Control::Choice {
+            Control::Button {
                 id: "esp_color",
                 label: "Outline color",
-                index: u32::from(self.preferences.esp_color),
-                options: crate::esp::COLOR_NAMES,
             },
             Control::Toggle {
                 id: "esp_names",
@@ -1224,9 +1421,24 @@ impl State {
             id: "expand_ore_esp",
             label: "Ore ESP settings",
         });
+        // Option buttons follow every earlier control so existing indices stay stable.
+        for choice in Choice::ALL {
+            debug_assert_eq!(controls.len(), choice.first_option());
+            controls.extend(
+                choice
+                    .option_ids()
+                    .iter()
+                    .zip(choice.options())
+                    .map(|(id, label)| Control::Button { id, label }),
+            );
+        }
+        controls.push(Control::Button {
+            id: CLOSE_CHOICES,
+            label: "Close options",
+        });
         let [background, surface, text, accent, border] = crate::panel::WIDGET_COLORS;
         let panel = Panel {
-            capture_key: self.capturing_key.is_some(),
+            capture_key: self.captures_keys(),
             reference_size: crate::panel::REFERENCE,
             motion: true,
             widget_colors: WidgetColors {
@@ -1396,12 +1608,6 @@ enum Control<'a> {
         label: &'a str,
         key: &'a str,
         capturing: bool,
-    },
-    Choice {
-        id: &'a str,
-        label: &'a str,
-        index: u32,
-        options: &'a [&'a str],
     },
 }
 

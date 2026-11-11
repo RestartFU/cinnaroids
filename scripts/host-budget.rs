@@ -144,7 +144,6 @@ fn metered_frame(
         pitch: 0.,
         attack_held: false,
         frame_seconds: 1. / 60.,
-        players: vec![],
     });
     metered_callback(host, budget, |host| {
         host.frame_with_controls(false, snapshot, controls)
@@ -291,7 +290,8 @@ fn saved_preferences_and_panel_updates_fit_the_real_wasm_callback_budget() {
             ("expand_netherite", 1.0),
             ("expand_esp", 1.0),
             ("esp_range", 128.0),
-            ("esp_color", 3.0),
+            ("esp_color", 1.0),
+            ("esp_color_3", 1.0),
             ("esp_names", 0.0),
             ("esp_distance", 0.0),
             ("esp_health", 0.0),
@@ -495,7 +495,6 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         pitch: 0.0,
         attack_held: false,
         frame_seconds: 1.0 / 120.0,
-        players: Vec::new(),
     };
     let movement = |tick, sequence, grounded| GameplayMovementSnapshot {
         session: 1,
@@ -535,7 +534,6 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
             host.frame_with_movement(
                 false,
                 Some(frame()),
-                Vec::new(),
                 None,
                 Some(movement(tick, sequence, grounded)),
                 controls,
@@ -558,7 +556,6 @@ fn jump_reset_uses_the_real_component_movement_imports_and_disables_in_the_panel
         host.frame_with_movement(
             false,
             Some(frame()),
-            Vec::new(),
             None,
             Some(movement(17, 4, true)),
             controls,
@@ -749,7 +746,6 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
             pitch: 0.,
             attack_held: false,
             frame_seconds: 1. / 120.,
-            players: vec![],
         };
         let observe = |host: &mut ModHost, non_players: usize| {
             // Connection generations and actor-store generations are different identity domains.
@@ -812,6 +808,7 @@ fn player_esp_uses_real_actor_masks_and_clears_retained_output() {
                             health: Some(10.),
                         },
                         max_health: Some(40.),
+                        unique_id: index as i64 + 1,
                     })
                     .collect(),
                 ..Default::default()
@@ -1401,6 +1398,7 @@ fn every_drawing_module_together_stays_within_the_frame_budget() {
                         health: Some(10. + generation as f32),
                     },
                     max_health: Some(40.),
+                    unique_id: index as i64 + 1,
                 })
                 .collect(),
             ..Default::default()
@@ -1456,6 +1454,45 @@ fn observe_bindings(host: &mut ModHost, attack: &str, revision: u64) {
     .unwrap();
 }
 
+/// Observes one remote player three blocks ahead of the eye for the next callback only.
+fn observe_aim_target(host: &mut ModHost) {
+    use mod_host::{
+        ActorObservation, ActorObservationBounds, ObservedActor,
+        module_observations::ModuleObservations,
+    };
+    host.observe_modules(ModuleObservations {
+        actors: vec![ObservedActor {
+            actor: ActorObservation {
+                session: 2,
+                dimension: 0,
+                runtime_id: 2,
+                player: true,
+                position: (-0.5, 0., -3.),
+                boxes: vec![ActorObservationBounds {
+                    min: (-0.8, 0., -3.3),
+                    max: (-0.2, 1.8, -2.7),
+                }],
+                name: "Target".into(),
+                identifier: "minecraft:player".into(),
+                yaw: 0.,
+                pitch: 0.,
+                pickable: true,
+                hittable: None,
+                look_origin: None,
+                look_direction: None,
+                invisible: false,
+                sneaking: false,
+                hurt: false,
+                health: Some(20.),
+            },
+            max_health: Some(20.),
+            unique_id: 2,
+        }],
+        ..Default::default()
+    })
+    .unwrap();
+}
+
 /// The real component follows a rebound key, releases on UI ownership and never pulses merely
 /// because an unrelated old default is down. Host-only attack evidence still enforces requests.
 #[test]
@@ -1490,14 +1527,6 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         yaw: 0.,
         pitch: 0.,
         frame_seconds: 0.05,
-        players: vec![mod_host::GameplayPlayer {
-            runtime_id: 2,
-            position: GameplayVector3 {
-                x: -0.5,
-                y: 0.,
-                z: -3.,
-            },
-        }],
         attack_held: gate,
     };
     for (key, panel, gate, expected) in [
@@ -1515,6 +1544,7 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         controls.panel_open = panel;
         controls.keys_held = vec![key.into()];
         controls.keys_admitted = if panel { vec![] } else { vec![key.into()] };
+        observe_aim_target(&mut host);
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, Some(snapshot(gate)), controls)
                 .unwrap();
@@ -1553,6 +1583,7 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         controls.gameplay = true;
         controls.keys_held = vec!["MouseLeft".into(), "KeyK".into()];
         controls.keys_admitted = admitted.into_iter().map(String::from).collect();
+        observe_aim_target(&mut host);
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, Some(snapshot(gate)), controls)
                 .unwrap();
@@ -1573,6 +1604,7 @@ fn rebound_attack_resolves_in_the_guest_within_the_callback_budget() {
         controls.focused = reason != "focus loss";
         controls.gameplay = true;
         controls.keys_held = vec!["KeyK".into()];
+        observe_aim_target(&mut host);
         most = most.max(metered_callback(&mut host, &budget, |host| {
             host.frame_with_controls(false, Some(snapshot(false)), controls)
                 .unwrap();
@@ -1618,7 +1650,6 @@ fn refused_attack_stays_latched_while_bindings_refresh() {
         yaw: 0.,
         pitch: 0.,
         frame_seconds: 0.05,
-        players: Vec::new(),
         attack_held: gate,
     };
     // More rows than one page, so the changed revision takes two callbacks to complete.
@@ -1819,7 +1850,6 @@ fn maximum_observed_chords_resolve_without_a_quadratic_frame_scan() {
             yaw: 0.,
             pitch: 0.,
             frame_seconds: 0.05,
-            players: Vec::new(),
             attack_held: false,
         };
         most = most.max(metered_callback(&mut host, &budget, |host| {
@@ -2068,7 +2098,8 @@ fn combined_workload(
             }))
             .unwrap();
         }
-        if esp {
+        // Aim reads the same observed rows as ESP.
+        if esp || aim {
             use mod_host::{
                 ActorObservation, ActorObservationBounds, ObservedActor,
                 module_observations::ModuleObservations,
@@ -2109,14 +2140,28 @@ fn combined_workload(
                                 index as u64 + 1
                             },
                             player: true,
-                            position: (index as f32 + frame as f32 * 0.05, 0., -4.),
+                            // Aim targets stand three blocks ahead, where the former frame
+                            // player rows placed them; ESP-only runs keep moving actors.
+                            position: if aim {
+                                (-0.5 + index as f32 * 0.001, 0., -3.)
+                            } else {
+                                (index as f32 + frame as f32 * 0.05, 0., -4.)
+                            },
                             boxes: vec![
                                 ActorObservationBounds {
-                                    min: (index as f32 - 0.3, 0., -4.3),
+                                    min: if aim {
+                                        (-0.8 + index as f32 * 0.001, 0., -3.3)
+                                    } else {
+                                        (index as f32 - 0.3, 0., -4.3)
+                                    },
                                     max: (
-                                        index as f32 + 0.3,
+                                        if aim {
+                                            -0.2 + index as f32 * 0.001
+                                        } else {
+                                            index as f32 + 0.3
+                                        },
                                         if stress == Stress::Tall { 256. } else { 1.8 },
-                                        -3.7
+                                        if aim { -2.7 } else { -3.7 }
                                     )
                                 };
                                 mod_api::MAX_OBSERVED_ACTOR_BOXES
@@ -2143,6 +2188,7 @@ fn combined_workload(
                             }),
                         },
                         max_health: Some(if stress.rich() { f32::MAX } else { 40. }),
+                        unique_id: index as i64 + 1,
                     })
                     .collect(),
                 ..Default::default()
@@ -2310,23 +2356,8 @@ fn combined_workload(
                     yaw: 0.,
                     pitch: 0.,
                     frame_seconds: 0.05,
-                    players: if aim {
-                        (0..mod_api::MAX_GAMEPLAY_PLAYERS)
-                            .map(|index| mod_host::GameplayPlayer {
-                                runtime_id: index as u64 + 200,
-                                position: GameplayVector3 {
-                                    x: -0.5 + index as f32 * 0.001,
-                                    y: 0.,
-                                    z: -3.,
-                                },
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    },
                     attack_held: true,
                 }),
-                Vec::new(),
                 Some(totem_equipment(2, frame as u32)),
                 Some(mod_host::GameplayMovementSnapshot {
                     session: 2,
@@ -3141,9 +3172,7 @@ fn auto_totem_uses_inventory_authority_and_replenishes_after_consumption() {
                     pitch: 0.,
                     attack_held: false,
                     frame_seconds: 0.3,
-                    players: Vec::new(),
                 }),
-                Vec::new(),
                 Some(equipment.clone()),
                 controls,
             )
@@ -3205,9 +3234,7 @@ fn auto_totem_cannot_enable_without_inventory_and_equipment_permissions() {
                     pitch: 0.,
                     attack_held: false,
                     frame_seconds: 0.3,
-                    players: Vec::new(),
                 }),
-                Vec::new(),
                 Some(totem_equipment(1, 0)),
                 controls,
             )
@@ -3360,7 +3387,6 @@ fn mining_frame(host: &mut ModHost, budget: &CallbackBudget, angles: [f32; 2]) -
                 pitch: angles[1],
                 attack_held: true,
                 frame_seconds: 1. / 60.,
-                players: Vec::new(),
             }),
             controls,
         )

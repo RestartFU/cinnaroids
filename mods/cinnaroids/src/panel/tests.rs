@@ -75,7 +75,7 @@ fn every_control_is_reachable_from_the_floating_columns() {
     }
     assert_eq!(controls[27]["id"], "drag_x");
     assert_eq!(controls[28]["id"], "drag_y");
-    assert_eq!(controls.len(), 58);
+    assert_eq!(controls.len(), 65);
     let pads = routes
         .iter()
         .filter(|route| route.starts_with("mod.vector:"))
@@ -202,15 +202,39 @@ fn every_value_control_publishes_its_own_feedback() {
                 let key = control["key"].as_str().unwrap();
                 assert_eq!(bindings[name("text")], super::key_label(key), "{id}");
             }
-            "choice" => {
-                let option = &control["options"][control["index"].as_u64().unwrap() as usize];
-                assert_eq!(&bindings[name("text")], option, "{id}");
-            }
             _ => continue,
         }
         checked += 1;
     }
-    assert_eq!(checked, 27 + 9 + 7 + 2);
+    assert_eq!(checked, 27 + 9 + 7);
+    for choice in crate::state::Choice::ALL {
+        let selected = state.choice_index(choice);
+        let field = choice.field();
+        assert_eq!(
+            panel["controls"][field]["id"],
+            choice.id(),
+            "{choice:?} field index"
+        );
+        assert_eq!(
+            bindings[format!("#c{field}_text")],
+            choice.options()[selected]
+        );
+        for (option, id) in choice.option_ids().iter().enumerate() {
+            let index = choice.first_option() + option;
+            assert_eq!(panel["controls"][index]["id"], *id);
+            assert_eq!(panel["controls"][index]["label"], choice.options()[option]);
+            assert_eq!(
+                bindings[format!("#c{index}_on")],
+                u8::from(option == selected)
+            );
+            assert_eq!(bindings[format!("#c{index}_hi")], 0);
+        }
+        assert_eq!(bindings[format!("#c{field}_list")], 0);
+        assert_eq!(
+            bindings[format!("#c{field}_below")],
+            serde_json::json!([0, 0])
+        );
+    }
     assert_eq!(bindings["#c3_text"], "RShift");
     assert_eq!(bindings["#c7_text"], "Num7");
     assert_eq!(bindings["#c9_text"], "4.2");
@@ -297,8 +321,9 @@ fn hover_and_press_are_native_button_states() {
     }
     let mut count = 0;
     visit(&document["panel"], &mut count);
-    // Twelve rows, ten disclosure arrows, seven keycaps, two dropdowns and Reset layout.
-    assert_eq!(count, 12 + 10 + 7 + 2 + 1);
+    // Twelve rows, ten disclosure arrows, seven keycaps, two choice fields with six options,
+    // and Reset layout.
+    assert_eq!(count, 12 + 10 + 7 + 2 + 6 + 1);
 }
 
 #[test]
@@ -342,7 +367,16 @@ fn generated_settings_heights_match_the_row_layout() {
         }
         let details = child(row, "details");
         assert_eq!(details["clips_children"], true);
-        assert_eq!(child(details, "content")["size"][1], height, "{module}");
+        // Content also has room for an open option list below its closed settings.
+        let list = crate::state::Choice::ALL
+            .into_iter()
+            .find(|choice| super::MODULES[choice.module()].0 == module)
+            .map_or(0, |choice| super::choice_extra(choice.options().len()));
+        assert_eq!(
+            child(details, "content")["size"][1],
+            height + list,
+            "{module}"
+        );
     }
 }
 
@@ -585,14 +619,9 @@ fn retained_patches_match_all_live_controls_without_replacing_the_surface() {
             for entry in patch["control_values"].as_array().unwrap() {
                 let index = entry[0].as_u64().unwrap() as usize;
                 let control = &expected["controls"][index];
-                let field = if control["kind"] == "choice" {
-                    "index"
-                } else {
-                    "value"
-                };
                 assert_eq!(
                     normalize(entry[1].clone()),
-                    normalize(control[field].clone()),
+                    normalize(control["value"].clone()),
                     "{}",
                     control["id"]
                 );
@@ -684,4 +713,53 @@ fn denied_module_rows_expose_disabled_state_and_missing_permission_explanations(
                 .starts_with("Requires: ")
         );
     }
+}
+
+#[test]
+fn an_open_option_list_pushes_later_settings_and_modules_down() {
+    use crate::state::{Choice, OpenChoice, State};
+    let mut state = State::permitted(Default::default());
+    state.expanded[1] = true;
+    let (closed, _) = panel(&state);
+    state.open_choice = Some(OpenChoice {
+        choice: Choice::AimMode,
+        cursor: 0,
+    });
+    let (open, document) = panel(&state);
+    let (closed, open) = (&closed["surface"]["bindings"], &open["surface"]["bindings"]);
+    let extra = super::choice_extra(2);
+    assert_eq!(open["#c6_list"], super::list_height(2));
+    assert_eq!(open["#c6_below"], serde_json::json!([0, extra]));
+    assert_eq!(open["#c6_angle"], 180);
+    assert_eq!(open["#choice_open"], true);
+    assert_eq!(closed["#choice_open"], false);
+    assert_eq!(closed["#c6_angle"], 0);
+    assert_eq!(
+        open["#aim_h"],
+        closed["#aim_h"].as_i64().unwrap() + i64::from(extra)
+    );
+    // The cursor shows on its option; the selection keeps its own mark.
+    assert_eq!(open["#c58_hi"], 1);
+    assert_eq!(open["#c59_hi"], 0);
+    assert_eq!(open["#c59_on"], 1);
+    assert_eq!(
+        open["#col_combat_h"],
+        closed["#col_combat_h"].as_i64().unwrap() + i64::from(extra)
+    );
+    let below = |bindings: &Value| bindings["#reach_y"][1].as_i64().unwrap();
+    assert_eq!(below(open), below(closed) + i64::from(extra));
+    // The list sits under its field and fits the content's reserved room.
+    let aim = find(&document["panel"], "choice_6").unwrap();
+    let list = child(aim, "options");
+    assert_eq!(list["size"][1], 0);
+    assert_eq!(list["clips_children"], true);
+    let rows = list["controls"].as_array().unwrap();
+    assert_eq!(rows.len(), 1 + 2);
+    let mut routes = Vec::new();
+    actions(list, &mut routes);
+    assert_eq!(routes, ["mod.control:58", "mod.control:59"]);
+    // A collapsed module keeps its list's height out of the column.
+    state.expanded[1] = false;
+    let (collapsed, _) = panel(&state);
+    assert_eq!(collapsed["surface"]["bindings"]["#aim_h"], 0);
 }

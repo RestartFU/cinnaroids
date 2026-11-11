@@ -29,6 +29,7 @@ fn actor() -> ObservedActor {
             health: Some(10.),
         },
         max_health: Some(40.),
+        unique_id: 8,
     }
 }
 

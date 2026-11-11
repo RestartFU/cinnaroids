@@ -1,12 +1,12 @@
 # Install Cinnaroids
 
-1. Update Cinnabar to a build containing the [batch block-destruction API](https://github.com/cinnabar-mc/cinnabar/pull/2696) and **Settings → Mods → Import**. The SDK revision is pinned in the source manifest.
+1. Update Cinnabar to a build containing the [revised actor and equipment reads](https://github.com/cinnabar-mc/cinnabar/pull/2989) and **Settings → Mods → Import**. The SDK revision is pinned in the source manifest.
 2. Download `cinnaroids.wasm` from the [latest release](https://github.com/RestartFU/cinnaroids/releases/latest). The same file works on all Cinnabar desktop platforms.
 3. In Cinnabar, open **Settings → Mods → Import** and select the WASM file.
 4. Review and approve its requested permissions, then select **Enable**.
 5. Press **F7** to open the Cinnaroids panel.
 
-This component requires the updated host API even when Nuker is disabled.
+This component requires the updated host API whichever modules are enabled.
 
 The release includes `cinnaroids.wasm.sha256` for verification. For example, put both downloads in the same directory and run `sha256sum --check cinnaroids.wasm.sha256` on Linux or `shasum -a 256 --check cinnaroids.wasm.sha256` on macOS. Copyright and license notices are embedded in the WASM.
 

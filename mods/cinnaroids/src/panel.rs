@@ -5,7 +5,7 @@
 //! `#c<index>_text` values and `#c<index>_fill` slider fractions. Hover and press tints are
 //! native button states in the document.
 
-use crate::state::{KeybindTarget, State};
+use crate::state::{Choice, KeybindTarget, State};
 
 /// Logical box the columns may be dragged within; the host fits it to small viewports.
 pub const REFERENCE: [f32; 2] = [760.0, 420.0];
@@ -39,6 +39,26 @@ pub const DEFAULT_COLUMNS: [[f32; 2]; 4] = [
     [230.0, -166.0],
 ];
 const MENU_BODY: i32 = 52;
+/// One option row in an open choice list.
+pub const OPTION_ROW: i32 = 16;
+
+/// An open choice list's height: its options between 2-unit insets.
+pub fn list_height(options: usize) -> i32 {
+    OPTION_ROW * options as i32 + 4
+}
+
+/// How far an open choice list pushes the settings after it down.
+pub fn choice_extra(options: usize) -> i32 {
+    list_height(options) + 4
+}
+
+/// Extra settings height while a module's choice list is open.
+fn open_list_extra(state: &State, module: usize) -> i32 {
+    state
+        .open_choice
+        .filter(|open| open.choice.module() == module)
+        .map_or(0, |open| choice_extra(open.choice.options().len()))
+}
 
 /// Module binding prefix, owning column and the height of its generated settings region.
 /// A column's first module never moves and so has no `_y` binding.
@@ -79,7 +99,7 @@ const SLIDER_END: usize = SLIDER_START + SLIDER_COUNT - 1;
 const KEY_START: usize = SLIDER_END + 1;
 const KEY_END: usize = KEY_START + KEYBINDS.len() - 1;
 const CHOICE_START: usize = KEY_END + 1;
-const CHOICE_END: usize = CHOICE_START + 1;
+const CHOICE_END: usize = CHOICE_START + Choice::ALL.len() - 1;
 const FINISH_STEP: usize = CHOICE_END + 1;
 
 /// Copy pre-serialized geometry and append only the changing bindings within callback fuel.
@@ -109,7 +129,7 @@ pub(crate) fn shell(json: &mut String, state: &State) {
     let m = &state.modules;
     let capturing = |target| state.capturing_key == Some(target);
     json.push_str(r#"{"capture_key":"#);
-    flag(json, state.capturing_key.is_some());
+    flag(json, state.captures_keys());
     json.push_str(r#","reference_size":[760,420],"motion":true,"#);
     json.push_str(WIDGET_COLORS_JSON);
     json.push_str(r#","controls":["#);
@@ -141,13 +161,7 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         f32::from(p.aim_strength),
         "0,\"max\":100,\"step\":1",
     );
-    json.push_str(r#",{"kind":"choice","id":"aim_mode","label":"Mode","index":"#);
-    json.push(if p.aim_mode == crate::state::AimMode::WhileClicking {
-        '1'
-    } else {
-        '0'
-    });
-    json.push_str(r#","options":["Continuous","While clicking"]}"#);
+    json.push_str(r#",{"kind":"button","id":"aim_mode","label":"Mode"}"#);
     keybind(
         json,
         "aim_key",
@@ -238,9 +252,7 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         f32::from(p.esp_range),
         "1,\"max\":128,\"step\":1",
     );
-    json.push_str(r#",{"kind":"choice","id":"esp_color","label":"Outline color","index":"#);
-    integer(json, i32::from(p.esp_color));
-    json.push_str(r#","options":["Coral","Pink","Cyan","White"]}"#);
+    json.push_str(r#",{"kind":"button","id":"esp_color","label":"Outline color"}"#);
     toggle(json, "esp_names", "Names", p.esp_names);
     toggle(json, "esp_distance", "Distance", p.esp_distance);
     toggle(json, "esp_health", "Health", p.esp_health);
@@ -281,6 +293,18 @@ pub(crate) fn shell(json: &mut String, state: &State) {
         toggle(json, ore.id, ore.label, value);
     }
     json.push_str(r#",{"kind":"button","id":"expand_ore_esp","label":"Ore ESP settings"}"#);
+    for choice in Choice::ALL {
+        for (id, label) in choice.option_ids().iter().zip(choice.options()) {
+            json.push_str(r#",{"kind":"button","id":""#);
+            json.push_str(id);
+            json.push_str(r#"","label":""#);
+            json.push_str(label);
+            json.push_str(r#""}"#);
+        }
+    }
+    json.push_str(r#",{"kind":"button","id":""#);
+    json.push_str(crate::state::CLOSE_CHOICES);
+    json.push_str(r#"","label":"Close options"}"#);
     json.push_str("] }");
     append_shell(json);
 }
@@ -344,7 +368,7 @@ pub(crate) fn route_update(state: &State) -> Result<String, serde_json::Error> {
 pub(crate) fn control_patch(state: &State) -> String {
     let mut json = String::with_capacity(4096);
     json.push_str(r#"{"capture_key":"#);
-    flag(&mut json, state.capturing_key.is_some());
+    flag(&mut json, state.captures_keys());
     json.push_str(r#","control_values":["#);
     let mut first = true;
     for (index, value) in toggles(state) {
@@ -366,19 +390,6 @@ pub(crate) fn control_patch(state: &State) -> String {
         integer(&mut json, index as i32);
         json.push(',');
         decimal(&mut json, value);
-        json.push(']');
-    }
-    for (index, value) in [
-        (
-            6,
-            i32::from(state.preferences.aim_mode == crate::state::AimMode::WhileClicking),
-        ),
-        (32, i32::from(state.preferences.esp_color)),
-    ] {
-        json.push_str(",[");
-        integer(&mut json, index);
-        json.push(',');
-        integer(&mut json, value);
         json.push(']');
     }
     json.push_str(r#"],"controls":["#);
@@ -578,27 +589,6 @@ const KEYBINDS: [(usize, KeybindTarget); 7] = [
     (43, KeybindTarget::Nuker),
 ];
 
-/// The selected option of each choice control, by panel index.
-fn choices(state: &State) -> [(usize, &'static str); 2] {
-    let p = &state.preferences;
-    [
-        (
-            6,
-            if p.aim_mode == crate::state::AimMode::WhileClicking {
-                "While clicking"
-            } else {
-                "Continuous"
-            },
-        ),
-        (
-            32,
-            crate::esp::COLOR_NAMES
-                [usize::from(p.esp_color).min(crate::esp::COLOR_NAMES.len() - 1)],
-        ),
-    ]
-}
-
-/// A slider value as Cinnabar's controls showed it: at most two decimals, trailing zeros dropped.
 fn slider_text(json: &mut String, value: f32) {
     let hundredths = (value * 100.0).round() as i32;
     json.push('"');
@@ -816,19 +806,26 @@ impl Bindings {
                 json.push_str(if on { "[1,1]" } else { "[1,0]" });
                 name_parts(json, &[module, "_indent"]);
                 json.push_str(if on { "[13,6]" } else { "[10,6]" });
-                if *details > 0 {
+                let details = if expanded {
+                    *details + open_list_extra(state, index)
+                } else {
+                    0
+                };
+                if MODULES[index].2 > 0 {
                     name_parts(json, &[module, "_h"]);
-                    integer(json, if expanded { *details } else { 0 });
+                    integer(json, details);
                     name_parts(json, &[module, "_detail"]);
                     integer(json, expanded.into());
                     name_parts(json, &[module, "_angle"]);
                     integer(json, if expanded { 0 } else { -90 });
                 }
-                heights[*column] += ROW + if expanded { *details } else { 0 };
+                heights[*column] += ROW + details;
             }
             META_STEP => {
                 // Other rows reuse their first slider's text; Reach keeps one fixed decimal.
                 let tenths = (state.preferences.reach_blocks * 10.0).round() as i32;
+                name(json, "#choice_open");
+                flag(json, state.open_choice.is_some());
                 name(json, "#reach_value");
                 json.push('"');
                 integer(json, tenths / 10);
@@ -908,9 +905,30 @@ impl Bindings {
                 escaped(json, key_label(state.key_for(target)));
             }
             CHOICE_START..=CHOICE_END => {
-                let (index, option) = choices(state)[self.step - CHOICE_START];
-                control(json, index, "_text");
-                text(json, option);
+                let choice = Choice::ALL[self.step - CHOICE_START];
+                let field = choice.field();
+                let options = choice.options();
+                let selected = state.choice_index(choice);
+                let cursor = state
+                    .open_choice
+                    .filter(|open| open.choice == choice)
+                    .map(|open| open.cursor);
+                control(json, field, "_text");
+                text(json, options[selected]);
+                control(json, field, "_angle");
+                integer(json, if cursor.is_some() { 180 } else { 0 });
+                control(json, field, "_list");
+                integer(json, cursor.map_or(0, |_| list_height(options.len())));
+                control(json, field, "_below");
+                json.push_str("[0,");
+                integer(json, cursor.map_or(0, |_| choice_extra(options.len())));
+                json.push(']');
+                for option in 0..options.len() {
+                    control(json, choice.first_option() + option, "_on");
+                    integer(json, (option == selected).into());
+                    control(json, choice.first_option() + option, "_hi");
+                    integer(json, (cursor == Some(option)).into());
+                }
             }
             FINISH_STEP => json.push('}'),
             _ => return true,
